@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { ROLE_LABELS, ROLE_NAV_ITEMS } from '../config/permissions.js'
 import { authRepository } from '../repositories/authRepository.js'
+import { NOTIFICATIONS_CHANGED_EVENT, notificationRepository } from '../repositories/notificationRepository.js'
 import { profileRepository } from '../repositories/profileRepository.js'
 import { BrandLogo } from './Brand.jsx'
 
@@ -47,7 +48,7 @@ export function AppShell({ children, currentPath, navigate, role, routeTitle }) 
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [viewerProfile, setViewerProfile] = useState({ name: 'Usuário', role: 'Usuário do Sistema' })
-  const notifications = []
+  const [notifications, setNotifications] = useState([])
 
   const pageTitle = useMemo(() => {
     if (currentPath.startsWith('/pacientes/') && routeTitle) {
@@ -118,6 +119,25 @@ export function AppShell({ children, currentPath, navigate, role, routeTitle }) 
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
   }, [notificationsOpen, profileMenuOpen])
+
+  useEffect(() => {
+    let active = true
+
+    async function loadNotifications() {
+      const data = await notificationRepository.getForCurrentUser().catch(() => [])
+      if (active) setNotifications(data)
+    }
+
+    loadNotifications()
+    window.addEventListener(NOTIFICATIONS_CHANGED_EVENT, loadNotifications)
+    window.addEventListener('storage', loadNotifications)
+
+    return () => {
+      active = false
+      window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, loadNotifications)
+      window.removeEventListener('storage', loadNotifications)
+    }
+  }, [])
 
   function goTo(path) {
     setMenuOpen(false)
@@ -232,15 +252,19 @@ export function AppShell({ children, currentPath, navigate, role, routeTitle }) 
                   aria-label="Notificações"
                   className="relative grid size-8 place-items-center text-[#a3a3a3] transition hover:text-[#e5e5e5]"
                   onClick={() => {
-                    setNotificationsOpen((open) => !open)
+                    setNotificationsOpen((open) => {
+                      const nextOpen = !open
+                      if (nextOpen) notificationRepository.markAllReadForCurrentUser().catch(() => null)
+                      return nextOpen
+                    })
                     setProfileMenuOpen(false)
                   }}
                   type="button"
                 >
                   <BellIcon className="size-5" />
-                  {notifications.length ? (
+                  {notifications.some((notification) => !notification.read) ? (
                     <span className="absolute right-0 top-0 grid size-4 place-items-center rounded-full bg-[#ef4444] text-[10px] font-bold leading-none text-white">
-                      {notifications.length}
+                      {notifications.filter((notification) => !notification.read).length}
                     </span>
                   ) : null}
                 </button>
@@ -267,7 +291,7 @@ export function AppShell({ children, currentPath, navigate, role, routeTitle }) 
                               <span className="block text-sm font-semibold text-[#e5e5e5]">{notification.title}</span>
                               <span className="mt-0.5 block text-xs leading-5 text-[#a3a3a3]">{notification.detail}</span>
                             </span>
-                            <span className="shrink-0 text-[10px] font-semibold text-[#51a2ff]">{notification.time}</span>
+                            <span className="shrink-0 text-[10px] font-semibold text-[#51a2ff]">{formatNotificationTime(notification.createdAt)}</span>
                           </span>
                         </button>
                       )) : (
@@ -528,4 +552,18 @@ function getInitials(name) {
     .map((part) => part[0])
     .join('')
     .toUpperCase()
+}
+
+function formatNotificationTime(value) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+
+  const diffMinutes = Math.max(0, Math.floor((Date.now() - date.getTime()) / 60000))
+  if (diffMinutes < 1) return 'agora'
+  if (diffMinutes < 60) return `${diffMinutes} min`
+
+  const diffHours = Math.floor(diffMinutes / 60)
+  if (diffHours < 24) return `${diffHours} h`
+
+  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(date)
 }

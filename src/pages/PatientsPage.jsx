@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { hasCapability } from '../config/permissions.js'
 import { patientRepository } from '../repositories/patientRepository.js'
 import { isValidPersonName } from '../utils/brFormatters.js'
+import { sanitizeFieldValue } from '../utils/inputSanitizers.js'
 const ITEMS_PER_PAGE = 25
 
 const darkInput =
@@ -78,6 +79,7 @@ export function PatientsPage({ navigate, role }) {
   const editingPatient = rows.find((patient) => patient.id === editingId)
   const hasAdvancedFilters = city || state || ageMin || ageMax || lastVisitSince
   const canEditPatients = hasCapability(role, 'canEditPatients')
+  const canHardDeletePatients = hasCapability(role, 'hardDeletePatients')
 
   const filteredPatients = useMemo(() => {
     return rows.filter((patient) => {
@@ -219,6 +221,22 @@ export function PatientsPage({ navigate, role }) {
   setPage(1)
   setView('list')
 }
+
+  async function deletePatient(patient) {
+    if (!canHardDeletePatients) return
+
+    if (!window.confirm(`Tem certeza que deseja excluir ${patient.name}? Esta aÃ§Ã£o nÃ£o poderÃ¡ ser desfeita.`)) {
+      return
+    }
+
+    try {
+      await patientRepository.remove(patient.detailId || patient.id)
+      setRows((currentRows) => currentRows.filter((item) => item.id !== patient.id))
+      setOpenMenuId(null)
+    } catch (err) {
+      window.alert(`Erro ao excluir paciente: ${err.message}`)
+    }
+  }
 
   function openDetail(patient) {
     setOpenMenuId(null)
@@ -423,9 +441,12 @@ export function PatientsPage({ navigate, role }) {
                               label="Marcar consulta"
                               onClick={() => {
                                 setOpenMenuId(null)
-                                navigate('/agenda')
+                                navigate(`/agenda?new=1&patientId=${encodeURIComponent(patient.detailId || patient.id)}`)
                               }}
                             />
+                            {canHardDeletePatients ? (
+                              <ActionItem danger icon="trash" label="Excluir" onClick={() => deletePatient(patient)} />
+                            ) : null}
                           </div>
                         </>
                       ) : null}
@@ -538,23 +559,7 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
 
   function handleChange(event) {
     const { checked, name, type, value } = event.target
-    let nextValue = type === 'checkbox' ? checked : value
-
-    if (name === 'cpf') {
-      nextValue = maskCPF(value)
-    }
-
-    if (name === 'phone') {
-      nextValue = maskPhone(value)
-    }
-
-    if (name === 'phoneSecondary') {
-      nextValue = maskPhone(value)
-    }
-
-    if (name === 'zipCode') {
-      nextValue = maskCEP(value)
-    }
+    const nextValue = type === 'checkbox' ? checked : sanitizeFieldValue(name, value)
 
     setFormData((currentData) => ({ ...currentData, [name]: nextValue }))
   }
@@ -680,7 +685,7 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
                 <input className={`${darkInput} [color-scheme:dark]`} name="birthDate" onChange={handleChange} required={isNewPatient} type="date" value={formData.birthDate} />
               </DarkField>
               <DarkField className="md:col-span-3" label="Aniversário">
-                <input className={darkInput} maxLength={5} name="birthday" onChange={handleChange} placeholder="07/04" value={formData.birthday} />
+                <input className={darkInput} maxLength={5} name="birthday" onChange={handleChange} placeholder="0704" value={formData.birthday} />
               </DarkField>
               <DarkField className="md:col-span-3" label="Etnia">
                 <select className={darkInput} name="ethnicity" onChange={handleChange} value={formData.ethnicity}>
@@ -703,9 +708,6 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
               <DarkField className="md:col-span-6" label="Nome do pai">
                 <input className={darkInput} name="fatherName" onChange={handleChange} value={formData.fatherName} />
               </DarkField>
-              <DarkField className="md:col-span-12" label="Observacoes">
-                <textarea className={`${darkInput} min-h-24 py-2`} name="notesText" onChange={handleChange} value={formData.notesText} />
-              </DarkField>
               <div className="md:col-span-12">
                 <button
                   className="flex w-full items-center justify-between rounded-lg border border-[#404040] bg-[#1a1a1a] p-4 text-left text-sm font-medium text-[#e5e5e5] transition hover:bg-[#333333]"
@@ -720,6 +722,21 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
                 </button>
                 {attachmentsOpen ? <UploadDropzone /> : null}
               </div>
+            </div>
+          </section>
+
+          <section className={darkCard}>
+            <h2 className="mb-6 text-lg font-semibold text-[#e5e5e5]">Informações Médicas</h2>
+            <div className="grid grid-cols-1 gap-x-6 gap-y-6 md:grid-cols-12">
+              <DarkField className="md:col-span-6" label="Condição principal">
+                <input className={darkInput} name="condition" onChange={handleChange} value={formData.condition} />
+              </DarkField>
+              <DarkField className="md:col-span-3" label="Última consulta">
+                <input className={`${darkInput} [color-scheme:dark]`} name="lastVisitIso" onChange={handleChange} type="date" value={formData.lastVisitIso || ''} />
+              </DarkField>
+              <DarkField className="md:col-span-3" label="Aniversário">
+                <input className={darkInput} maxLength={5} name="birthday" onChange={handleChange} placeholder="0704" value={formData.birthday} />
+              </DarkField>
             </div>
           </section>
 
@@ -770,7 +787,7 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
           </section>
 
           <section className={darkCard}>
-            <h2 className="mb-6 text-lg font-semibold text-[#e5e5e5]">Informações de convenio</h2>
+            <h2 className="mb-6 text-lg font-semibold text-[#e5e5e5]">Convênio</h2>
             <div className="grid grid-cols-1 gap-x-6 gap-y-6 md:grid-cols-12">
               <DarkField className="md:col-span-6" label="Convênio">
                 <select className={darkInput} name="insurance" onChange={handleChange} value={formData.insurance}>
@@ -790,6 +807,13 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
                 Paciente VIP
               </label>
             </div>
+          </section>
+
+          <section className={darkCard}>
+            <h2 className="mb-6 text-lg font-semibold text-[#e5e5e5]">Observações</h2>
+            <DarkField label="Observações gerais">
+              <textarea className={`${darkInput} min-h-32 py-2`} name="notesText" onChange={handleChange} value={formData.notesText} />
+            </DarkField>
           </section>
 
           <div className="flex justify-end gap-3 pt-4">
@@ -885,9 +909,7 @@ export function PatientDetailPage({ navigate, patient, role }) {
           >
             <PatientIcon className="size-5" name="chevron-left" />
           </button>
-          {localPatient.avatarUrl ? (
-            <img alt="" className="mt-1 size-12 rounded-full border border-[#3b82f6]/30 object-cover" src={localPatient.avatarUrl} />
-          ) : null}
+          <PatientAvatar patient={localPatient} />
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#3b82f6]">Dados do Paciente</p>
             <h1 className="mt-1 text-2xl font-bold tracking-tight text-[#f5f5f5]">{localPatient.name}</h1>
@@ -1035,6 +1057,15 @@ function PatientSummary({ patient }) {
         />
       </div>
       <div className="rounded-xl border border-[#404040] bg-[#171717] p-4">
+        <div className="mb-5 border-b border-[#404040] pb-5">
+          <h3 className="font-bold text-[#f5f5f5]">Foto do paciente</h3>
+          <div className="mt-4 flex items-center gap-4">
+            <PatientAvatar className="size-24" patient={patient} />
+            <p className="text-sm leading-5 text-[#a3a3a3]">
+              {patient.avatarUrl ? 'Imagem cadastrada no perfil do paciente.' : 'Nenhuma foto cadastrada.'}
+            </p>
+          </div>
+        </div>
         <h3 className="font-bold text-[#f5f5f5]">Contato e equipe</h3>
         <dl className="mt-4 grid gap-3 text-sm">
           <InfoRow label="Telefone" value={patient.phone} />
@@ -1046,6 +1077,34 @@ function PatientSummary({ patient }) {
       </div>
     </div>
   )
+}
+
+function PatientAvatar({ className = 'mt-1 size-12', patient }) {
+  if (patient.avatarUrl) {
+    return (
+      <img
+        alt={`Foto de ${patient.name || 'paciente'}`}
+        className={`${className} shrink-0 rounded-full border border-[#3b82f6]/30 object-cover`}
+        src={patient.avatarUrl}
+      />
+    )
+  }
+
+  return (
+    <span className={`${className} grid shrink-0 place-items-center rounded-full border border-[#404040] bg-[#262626] text-lg font-bold text-[#a3a3a3]`}>
+      {getPatientInitials(patient.name)}
+    </span>
+  )
+}
+
+function getPatientInitials(name) {
+  return String(name || 'P')
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase()
 }
 
 function PatientMessageShortcutModal({ onClose, patient }) {
@@ -1086,7 +1145,7 @@ function PatientMessageShortcutModal({ onClose, patient }) {
 function PatientAppointmentShortcutModal({ onClose, patient }) {
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
-  const [type, setType] = useState('Retorno')
+  const [notes, setNotes] = useState('')
 
   function handleSubmit(event) {
     event.preventDefault()
@@ -1107,8 +1166,13 @@ function PatientAppointmentShortcutModal({ onClose, patient }) {
             <input className={`${darkInput} [color-scheme:dark]`} onChange={(event) => setTime(event.target.value)} type="time" value={time} />
           </DarkField>
         </div>
-        <DarkField label="Tipo">
-          <input className={darkInput} onChange={(event) => setType(event.target.value)} value={type} />
+        <DarkField label="Observações">
+          <textarea
+            className={`${darkInput} min-h-24 py-2`}
+            onChange={(event) => setNotes(event.target.value)}
+            placeholder="Observações para o retorno"
+            value={notes}
+          />
         </DarkField>
         <ShortcutActions disabled={!date || !time} onClose={onClose} submitLabel="Salvar" />
       </form>
@@ -1704,30 +1768,6 @@ function slugify(value) {
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
-}
-
-function maskCPF(value) {
-  return value
-    .replace(/\D/g, '')
-    .replace(/(\d{3})(\d)/, '$1.$2')
-    .replace(/(\d{3})(\d)/, '$1.$2')
-    .replace(/(\d{3})(\d{1,2})/, '$1-$2')
-    .replace(/(-\d{2})\d+?$/, '$1')
-}
-
-function maskPhone(value) {
-  return value
-    .replace(/\D/g, '')
-    .replace(/(\d{2})(\d)/, '($1) $2')
-    .replace(/(\d{5})(\d)/, '$1-$2')
-    .replace(/(-\d{4})\d+?$/, '$1')
-}
-
-function maskCEP(value) {
-  return value
-    .replace(/\D/g, '')
-    .replace(/(\d{5})(\d)/, '$1-$2')
-    .replace(/(-\d{3})\d+?$/, '$1')
 }
 
 function formatBirthday(birthDate) {

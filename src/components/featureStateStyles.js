@@ -11,12 +11,6 @@ export const featureStateStyles = {
     title: 'feature-title-partial text-sky-300',
     label: 'Parcial',
   },
-  mock: {
-    badge: 'feature-badge-mock border-amber-500/40 bg-amber-500/15 text-amber-300',
-    panel: 'feature-panel-mock border-amber-500/35 bg-amber-500/8',
-    title: 'feature-title-mock text-amber-300',
-    label: 'Mockado',
-  },
   wip: {
     badge: 'feature-badge-wip border-rose-500/40 bg-rose-500/15 text-rose-300',
     panel: 'feature-panel-wip border-rose-500/35 bg-rose-500/8',

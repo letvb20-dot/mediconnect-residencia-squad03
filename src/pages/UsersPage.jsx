@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { StethoscopeIcon } from '../components/Brand.jsx'
 import { ADMIN_CREATABLE_ROLES, GESTOR_CREATABLE_ROLES, hasCapability, normalizeRole, ROLE_LABELS } from '../config/permissions.js'
 import { userRepository } from '../repositories/userRepository.js'
+import { sanitizeFieldValue } from '../utils/inputSanitizers.js'
 
 const darkInput =
   'h-10 w-full rounded-lg border border-[#404040] bg-[#1a1a1a] px-3 text-sm text-[#e5e5e5] outline-none transition placeholder:text-[#737373] focus:border-[#3b82f6] focus:ring-1 focus:ring-[#3b82f6]'
@@ -48,6 +49,7 @@ export function UsersPage({ role: currentRole }) {
   const [editingUserId, setEditingUserId] = useState(null)
   const [selectedUser, setSelectedUser] = useState(null)
   const [form, setForm] = useState(initialUserForm)
+  const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState('Todos')
 
   const normalizedRole = normalizeRole(currentRole)
@@ -57,8 +59,18 @@ export function UsersPage({ role: currentRole }) {
   const isDoctorForm = normalizeRole(form.role) === 'medico'
   const filterableRoles = normalizedRole === 'admin' ? ADMIN_CREATABLE_ROLES : GESTOR_CREATABLE_ROLES
   const filteredUsers = users.filter((user) => {
-    if (roleFilter === 'Todos') return true
-    return normalizeRole(getUserRole(user)) === roleFilter
+    const query = normalizeSearch(search)
+    const matchesSearch =
+      !query ||
+      [user.full_name, user.name, user.email, user.phone, user.phone_mobile, user.cpf]
+        .filter(Boolean)
+        .join(' ')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .includes(query)
+    const matchesRole = roleFilter === 'Todos' || normalizeRole(getUserRole(user)) === roleFilter
+    return matchesSearch && matchesRole
   })
 
   useEffect(() => {
@@ -80,7 +92,8 @@ export function UsersPage({ role: currentRole }) {
 
   function handleFormChange(event) {
     const { checked, name, type, value } = event.target
-    setForm((current) => ({ ...current, [name]: type === 'checkbox' ? checked : value }))
+    const nextValue = type === 'checkbox' ? checked : sanitizeFieldValue(name, value)
+    setForm((current) => ({ ...current, [name]: nextValue }))
   }
 
   function openCreateModal() {
@@ -223,6 +236,17 @@ export function UsersPage({ role: currentRole }) {
                 {filteredUsers.length} de {users.length} usuários exibidos
               </p>
             </div>
+            <div className="flex flex-col gap-3 sm:flex-row">
+            <label className="grid gap-1.5 text-xs font-semibold text-[#a3a3a3] sm:min-w-72">
+              <span>Pesquisa</span>
+              <input
+                className={darkInput}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Nome, email, telefone ou CPF"
+                type="search"
+                value={search}
+              />
+            </label>
             <label className="grid gap-1.5 text-xs font-semibold text-[#a3a3a3] sm:min-w-56">
               <span>Perfil</span>
               <select
@@ -238,6 +262,7 @@ export function UsersPage({ role: currentRole }) {
                 ))}
               </select>
             </label>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full whitespace-nowrap text-left text-sm">
@@ -315,7 +340,7 @@ export function UsersPage({ role: currentRole }) {
       {modalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setModalOpen(false)}>
           <div
-            className="flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-[#404040] bg-[#242424] shadow-2xl"
+            className="user-modal-shell flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-[#404040] bg-[#242424] shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-[#404040] px-6 py-4">
@@ -628,6 +653,14 @@ function RoleBadge({ role }) {
       {ROLE_LABELS[role] || 'Sem perfil'}
     </span>
   )
+}
+
+function normalizeSearch(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
 }
 
 function getNormalizedUserRole(user) {

@@ -6,9 +6,11 @@ import { RichTextEditor } from '../components/RichTextEditor.jsx'
 import { DarkField, appCardClass as cardClass, appInputClass as inputClass, appLabelClass as labelClass } from '../components/ui.jsx'
 import { reportTemplates } from '../data/reportTemplates.js'
 import { patientRepository } from '../repositories/patientRepository.js'
+import { notificationRepository } from '../repositories/notificationRepository.js'
 import { professionalRepository } from '../repositories/professionalRepository.js'
 import { profileRepository } from '../repositories/profileRepository.js'
 import { reportRepository } from '../repositories/reportRepository.js'
+import { sanitizePlainText } from '../utils/inputSanitizers.js'
 
 const ITEMS_PER_PAGE = 25
 
@@ -288,8 +290,22 @@ export function ReportsPage({ role }) {
     try {
       if (editor.id) {
         await reportRepository.update(editor.id, payload)
+        notificationRepository.notifyCurrentUser({
+          domain: 'reports',
+          title: 'RelatÃ³rio atualizado',
+          detail: `${payload.exam} de ${patientNameById[String(payload.patientId)] || 'paciente selecionado'} foi atualizado.`,
+          patientId: payload.patientId,
+          relatedUserIds: [payload.updatedBy, payload.createdBy, viewerProfile?.id, currentProfessional?.id, currentProfessional?.userId],
+        }).catch(() => null)
       } else {
         await reportRepository.create(payload)
+        notificationRepository.notifyCurrentUser({
+          domain: 'reports',
+          title: 'RelatÃ³rio criado',
+          detail: `${payload.exam} de ${patientNameById[String(payload.patientId)] || 'paciente selecionado'} foi registrado.`,
+          patientId: payload.patientId,
+          relatedUserIds: [payload.createdBy, payload.updatedBy, viewerProfile?.id, currentProfessional?.id, currentProfessional?.userId],
+        }).catch(() => null)
       }
 
       setEditorOpen(false)
@@ -547,13 +563,15 @@ function ReportEditorModalV3({
   const [templateSearch, setTemplateSearch] = useState('')
   const [templatesOpen, setTemplatesOpen] = useState(false)
   const isValid = isReportEditorValid(editor)
+  const requesterQuery = normalizeSearch(requesterSearch)
+  const selectedRequesterQuery = normalizeSearch(editor.requestedBy)
   const filteredPatients = patientOptions.filter((patient) => {
     const query = normalizeSearch(patientSearch)
     return query && normalizeSearch(patient.name).includes(query)
   })
   const filteredProfessionals = professionalOptions.filter((professional) => {
-    const query = normalizeSearch(requesterSearch)
-    return query && normalizeSearch(professional.name).includes(query)
+    const professionalName = normalizeSearch(professional.name)
+    return requesterQuery && requesterQuery !== selectedRequesterQuery && professionalName.includes(requesterQuery)
   })
   const filteredTemplates = reportTemplates.filter((template) => {
     const query = normalizeSearch(templateSearch)
@@ -579,6 +597,11 @@ function ReportEditorModalV3({
   function selectRequester(professional) {
     setRequesterSearch(professional.name)
     updateField('requestedBy', professional.name)
+  }
+
+  function handleRequesterSearch(value) {
+    setRequesterSearch(sanitizePlainText(value))
+    updateField('requestedBy', '')
   }
 
   function applyTemplate(template) {
@@ -706,15 +729,14 @@ function ReportEditorModalV3({
                     disabled={isDoctorRole}
                     onChange={(event) => {
                       if (isDoctorRole) return
-                      setRequesterSearch(event.target.value)
-                      updateField('requestedBy', event.target.value)
+                      handleRequesterSearch(event.target.value)
                     }}
                     placeholder="Digite o nome do médico solicitante"
                     readOnly={isDoctorRole}
                     type="search"
                     value={isDoctorRole ? doctorRequesterName : requesterSearch}
                   />
-                  {!isDoctorRole && requesterSearch ? (
+                  {!isDoctorRole && requesterQuery && requesterQuery !== selectedRequesterQuery ? (
                     <SearchMenu
                       emptyText="Nenhum médico encontrado."
                       items={filteredProfessionals.slice(0, 6)}
@@ -725,19 +747,19 @@ function ReportEditorModalV3({
               </DarkField>
 
               <DarkField label="Exame *">
-                <input className={inputClass} onChange={(event) => updateField('exam', event.target.value)} value={editor.exam} />
+                <input className={inputClass} onChange={(event) => updateField('exam', sanitizePlainText(event.target.value))} value={editor.exam} />
               </DarkField>
 
               <DarkField label="CID-10 *">
-                <input className={inputClass} onChange={(event) => updateField('cidCode', event.target.value)} value={editor.cidCode} />
+                <input className={inputClass} onChange={(event) => updateField('cidCode', sanitizePlainText(event.target.value))} value={editor.cidCode} />
               </DarkField>
 
               <DarkField label="Diagnóstico *">
-                <input className={inputClass} onChange={(event) => updateField('diagnosis', event.target.value)} value={editor.diagnosis} />
+                <input className={inputClass} onChange={(event) => updateField('diagnosis', sanitizePlainText(event.target.value))} value={editor.diagnosis} />
               </DarkField>
 
               <DarkField label="Conclusão *">
-                <input className={inputClass} onChange={(event) => updateField('conclusion', event.target.value)} value={editor.conclusion} />
+                <input className={inputClass} onChange={(event) => updateField('conclusion', sanitizePlainText(event.target.value))} value={editor.conclusion} />
               </DarkField>
             </div>
 
@@ -988,14 +1010,25 @@ function normalizeSearch(value) {
 }
 
 function printReportAsPdf(report, status) {
-  const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=900,height=1100')
+  const iframe = document.createElement('iframe')
+  iframe.setAttribute('title', 'ImpressÃ£o do relatÃ³rio')
+  iframe.style.position = 'fixed'
+  iframe.style.right = '0'
+  iframe.style.bottom = '0'
+  iframe.style.width = '0'
+  iframe.style.height = '0'
+  iframe.style.border = '0'
+  iframe.style.visibility = 'hidden'
+  document.body.appendChild(iframe)
 
-  if (!printWindow) {
-    window.print()
+  const printDocument = iframe.contentWindow?.document
+  if (!printDocument) {
+    document.body.removeChild(iframe)
     return
   }
 
-  printWindow.document.write(`
+  printDocument.open()
+  printDocument.write(`
     <!doctype html>
     <html lang="pt-BR">
       <head>
@@ -1011,7 +1044,8 @@ function printReportAsPdf(report, status) {
           .label { color: #525252; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
           .value { font-size: 13px; margin-top: 6px; white-space: pre-wrap; }
           .section { margin-top: 20px; }
-          @media print { body { margin: 24mm; } button { display: none; } }
+          @page { margin: 18mm; }
+          @media print { body { margin: 0; } }
         </style>
       </head>
       <body>
@@ -1044,9 +1078,13 @@ function printReportAsPdf(report, status) {
       </body>
     </html>
   `)
-  printWindow.document.close()
-  printWindow.focus()
-  printWindow.print()
+  printDocument.close()
+
+  window.setTimeout(() => {
+    iframe.contentWindow?.focus()
+    iframe.contentWindow?.print()
+    window.setTimeout(() => iframe.remove(), 1000)
+  }, 100)
 }
 
 function printDetail(label, value) {

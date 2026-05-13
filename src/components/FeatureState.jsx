@@ -32,7 +32,6 @@ export function FeatureLegend() {
       <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Legenda</span>
       <FeatureBadge status="live" />
       <FeatureBadge status="partial" />
-      <FeatureBadge status="mock" />
       <FeatureBadge status="wip" />
     </div>
   )

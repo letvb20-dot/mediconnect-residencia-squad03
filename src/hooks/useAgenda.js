@@ -3,6 +3,7 @@ import { isSameDay } from 'date-fns'
 
 import { appointmentRepository } from '../repositories/appointmentRepository.js'
 import { availabilityRepository } from '../repositories/availabilityRepository.js'
+import { notificationRepository } from '../repositories/notificationRepository.js'
 import { patientRepository } from '../repositories/patientRepository.js'
 import { professionalRepository } from '../repositories/professionalRepository.js'
 import { profileRepository } from '../repositories/profileRepository.js'
@@ -15,6 +16,7 @@ const initialForm = {
   time: '',
   mode: 'Teleconsulta',
   status: 'Aguardando',
+  highPriority: false,
   notes: '',
 }
 
@@ -214,7 +216,7 @@ export function useAgenda() {
     setForm((current) => ({ ...current, [field]: value }))
   }
 
-  function openCreateModal({ date, time } = {}) {
+  function openCreateModal({ date, patientId, time } = {}) {
     if (date) {
       const parsedDate = parseLocalDate(date)
       if (parsedDate) setBaseDate(parsedDate)
@@ -225,7 +227,7 @@ export function useAgenda() {
     setSlotsError('')
     setForm((current) => ({
       ...initialForm,
-      patientId: current.patientId || patients[0]?.id || '',
+      patientId: patientId || current.patientId || patients[0]?.id || '',
       professionalId:
         agendaScope === 'doctor'
           ? currentProfessional?.id || ''
@@ -249,6 +251,7 @@ export function useAgenda() {
       time: appointment.time || initialForm.time,
       mode: appointment.mode || initialForm.mode,
       status: appointment.status || initialForm.status,
+      highPriority: Boolean(appointment.highPriority || appointment.priority === 'Alta'),
       notes: appointment.notes || '',
     })
     setModalOpen(true)
@@ -277,6 +280,7 @@ export function useAgenda() {
     try {
       const created = await appointmentRepository.create(payload)
       setLocalAppointments((current) => sortAppointmentsByTime([...current, enrichAppointment(created, payload, patients, professionals)]))
+      notifyAppointmentAction('Consulta marcada', `Consulta de ${getPatientName(payload.patientId, patients)} marcada para ${formatAppointmentDate(payload.date)} as ${payload.time}.`, payload)
       closeAppointmentModal()
     } catch (createError) {
       alert(createError.message || 'Erro ao criar agendamento.')
@@ -300,6 +304,7 @@ export function useAgenda() {
           ),
         ),
       )
+      notifyAppointmentAction('Agendamento atualizado', `Consulta de ${getPatientName(payload.patientId, patients)} atualizada para ${formatAppointmentDate(payload.date)} as ${payload.time}.`, payload)
       closeAppointmentModal()
     } catch (updateError) {
       alert(updateError.message || 'Erro ao atualizar agendamento.')
@@ -324,6 +329,7 @@ export function useAgenda() {
           ),
         ),
       )
+      notifyAppointmentAction('Consulta cancelada', `Consulta de ${getPatientName(payload.patientId, patients)} foi cancelada.`, payload)
       closeAppointmentModal()
     } catch (cancelError) {
       alert(cancelError.message || 'Erro ao cancelar agendamento.')
@@ -345,6 +351,9 @@ export function useAgenda() {
       return null
     }
 
+    const highPriority = Boolean(form.highPriority)
+    const notes = formatPriorityNotes(form.notes, highPriority)
+
     return {
       patientId: form.patientId,
       date: formatLocalDateInput(baseDate),
@@ -352,7 +361,9 @@ export function useAgenda() {
       type: form.type,
       mode: form.mode,
       status: form.status,
-      notes: form.notes,
+      highPriority,
+      priority: highPriority ? 'Alta' : 'Média',
+      notes,
       room: form.mode === 'Teleconsulta' ? 'Virtual' : 'Consultório 1',
       professionalId: targetProfessionalId,
       createdBy: editingAppointment?.createdBy || viewerProfile?.id || '',
@@ -398,6 +409,16 @@ export function useAgenda() {
   }
 }
 
+function notifyAppointmentAction(title, detail, payload) {
+  notificationRepository.notifyCurrentUser({
+    domain: 'agenda',
+    title,
+    detail,
+    patientId: payload.patientId,
+    relatedUserIds: [payload.professionalId, payload.createdBy],
+  }).catch(() => null)
+}
+
 function filterAppointmentsByProfessional(appointments, professionalId) {
   const normalizedProfessionalId = normalizeValue(professionalId)
 
@@ -421,11 +442,29 @@ function enrichAppointment(appointment, payload, patients, professionals) {
     type: payload.type,
     mode: payload.mode,
     status: payload.status,
+    highPriority: payload.highPriority,
+    priority: payload.priority,
     notes: payload.notes,
     room: payload.room,
     createdBy: appointment.createdBy || payload.createdBy,
     createdByName: appointment.createdByName || payload.createdByName,
   }
+}
+
+function getPatientName(patientId, patients) {
+  const patient = patients.find((item) => String(item.id) === String(patientId))
+  return patient?.name || patient?.full_name || patient?.nome || 'paciente selecionado'
+}
+
+function formatAppointmentDate(value) {
+  const [year, month, day] = String(value || '').split('-')
+  return year && month && day ? `${day}/${month}/${year}` : value
+}
+
+function formatPriorityNotes(notes, highPriority) {
+  const cleanNotes = String(notes || '').replace(/^\[Prioridade alta\]\s*/i, '').trim()
+  if (!highPriority) return cleanNotes
+  return cleanNotes ? `[Prioridade alta] ${cleanNotes}` : '[Prioridade alta]'
 }
 
 function normalizeValue(value) {

@@ -288,22 +288,6 @@ button:disabled {
   color: #075985;
 }
 
-[data-theme='light'] .feature-badge-mock {
-  border-color: #d97706;
-  background: #fff2c2;
-  color: #92400e;
-  box-shadow: inset 0 0 0 1px rgba(217, 119, 6, 0.14);
-}
-
-[data-theme='light'] .feature-panel-mock {
-  border-color: #f59e0b;
-  background: #fff8db;
-}
-
-[data-theme='light'] .feature-title-mock {
-  color: #92400e;
-}
-
 [data-theme='light'] .feature-badge-wip {
   border-color: #e11d48;
   background: #ffe4e8;
@@ -368,6 +352,55 @@ button:disabled {
 [data-theme='light'] .report-rich-toolbar button[aria-pressed='true'],
 [data-theme='light'] .report-rich-toolbar button:hover {
   color: #2563eb;
+}
+
+[data-theme='light'] .agenda-modal-shell,
+[data-theme='light'] .message-modal-shell,
+[data-theme='light'] .user-modal-shell {
+  border-color: #c8d4e2;
+  background: #ffffff;
+  color: #333333;
+}
+
+[data-theme='light'] .agenda-modal-shell input,
+[data-theme='light'] .agenda-modal-shell select,
+[data-theme='light'] .agenda-modal-shell textarea,
+[data-theme='light'] .message-modal-shell input,
+[data-theme='light'] .message-modal-shell select,
+[data-theme='light'] .message-modal-shell textarea,
+[data-theme='light'] .user-modal-shell input,
+[data-theme='light'] .user-modal-shell select,
+[data-theme='light'] .user-modal-shell textarea {
+  border-color: #c8d4e2;
+  background: #f8fbff;
+  color: #333333;
+  caret-color: #000000;
+}
+
+.settings-animations-off *,
+.settings-animations-off *::before,
+.settings-animations-off *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 0.01ms !important;
+}
+
+.settings-high-contrast {
+  filter: contrast(1.12);
+}
+
+.settings-compact main {
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
+
+.settings-compact :where(section, article, form, .rounded-2xl, .rounded-xl) {
+  --tw-space-y-reverse: 0;
+}
+
+.settings-compact :where(input, select, button) {
+  min-height: 2rem;
 }
 
 .report-rich-surface {

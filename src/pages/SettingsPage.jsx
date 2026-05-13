@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { settingsRepository } from '../repositories/settingsRepository.js'
 import { getStoredTheme, setStoredTheme } from '../utils/theme.js'
 
-
+const SETTINGS_UI_KEY = 'mediconnect.settings.ui'
 const cardClass = 'rounded-2xl border border-[#404040] bg-[#262626] shadow-sm'
 const rowClass = 'flex items-center justify-between gap-6 border-b border-[#404040] py-4 last:border-0'
 const inputClass =
@@ -46,6 +46,9 @@ export function SettingsPage() {
 
         <section className={`${cardClass} min-w-0 flex-1 p-6 lg:p-8`}>
           {activeSection === 'aparencia' ? <AppearanceSection /> : null}
+          {activeSection === 'notificacoes' ? <NotificationsSection /> : null}
+          {activeSection === 'conta' ? <AccountSection /> : null}
+          {activeSection === 'integracoes' ? <IntegrationsSection /> : null}
           {activeSection === 'privacidade' ? <PrivacySection /> : null}
           {activeSection === 'dados' ? <DataSection /> : null}
         </section>
@@ -56,18 +59,27 @@ export function SettingsPage() {
 
 function AppearanceSection() {
   const [theme, setTheme] = useState(() => getStoredTheme())
-  const [compact, setCompact] = useState(false)
-  const [contrast, setContrast] = useState(false)
-  const [animations, setAnimations] = useState(true)
+  const [ui, setUi] = useState(() => getStoredUiSettings())
+
+  useEffect(() => {
+    localStorage.setItem(SETTINGS_UI_KEY, JSON.stringify(ui))
+    document.documentElement.classList.toggle('settings-animations-off', !ui.animations)
+    document.documentElement.classList.toggle('settings-high-contrast', ui.contrast)
+    document.documentElement.classList.toggle('settings-compact', ui.compact)
+  }, [ui])
 
   function handleThemeChange(nextTheme) {
     setTheme(setStoredTheme(nextTheme))
   }
 
+  function updateUi(field, value) {
+    setUi((current) => ({ ...current, [field]: value }))
+  }
+
   return (
     <SectionFrame description="Personalize a interface do MediConnect." title="Aparência e Acessibilidade">
       <div className="mb-8">
-        <p className="mb-4 text-sm font-semibold text-[#e5e5e5]">Tema da Interface</p>
+        <p className="mb-4 text-sm font-semibold text-[#e5e5e5]">Tema da interface</p>
         <div className="grid max-w-xl gap-4 sm:grid-cols-2">
           {[
             { id: 'dark', label: 'Escuro', preview: 'bg-[#0a0a0a]' },
@@ -102,19 +114,13 @@ function AppearanceSection() {
             </button>
           ))}
         </div>
-        <p className="mt-3 text-xs text-[#a3a3a3]">A preferência de tema é salva localmente neste protótipo.</p>
+        <p className="mt-3 text-xs text-[#a3a3a3]">A preferência de tema é salva localmente.</p>
       </div>
 
       <SettingsGroup>
-        <SettingRow description="Transições suaves entre telas e componentes" label="Animações de interface">
-          <ToggleSwitch checked={animations} onChange={setAnimations} />
-        </SettingRow>
-        <SettingRow description="Aumenta o contraste dos elementos para melhor acessibilidade" label="Modo de alto contraste">
-          <ToggleSwitch checked={contrast} onChange={setContrast} />
-        </SettingRow>
-        <SettingRow description="Reduz o espaçamento para exibir mais informações na tela" label="Densidade compacta">
-          <ToggleSwitch checked={compact} onChange={setCompact} />
-        </SettingRow>
+        <ToggleRow checked={ui.animations} description="Transições suaves entre telas e componentes" label="Animações de interface" onChange={(value) => updateUi('animations', value)} />
+        <ToggleRow checked={ui.contrast} description="Aumenta o contraste dos elementos para melhor acessibilidade" label="Modo de alto contraste" onChange={(value) => updateUi('contrast', value)} />
+        <ToggleRow checked={ui.compact} description="Reduz o espaçamento para exibir mais informações na tela" label="Densidade compacta" onChange={(value) => updateUi('compact', value)} />
         <SettingRow label="Idioma do sistema">
           <select className={inputClass} defaultValue="pt-br">
             <option value="pt-br">Português (BR)</option>
@@ -123,6 +129,62 @@ function AppearanceSection() {
           </select>
         </SettingRow>
       </SettingsGroup>
+    </SectionFrame>
+  )
+}
+
+function NotificationsSection() {
+  const [agenda, setAgenda] = useState(true)
+  const [communication, setCommunication] = useState(true)
+  const [records, setRecords] = useState(true)
+  const [reports, setReports] = useState(true)
+
+  return (
+    <SectionFrame description="Escolha quais eventos aparecem no sino de notificações." title="Notificações">
+      <SettingsGroup>
+        <ToggleRow checked={agenda} description="Marcações, alterações e cancelamentos de consulta" label="Agenda" onChange={setAgenda} />
+        <ToggleRow checked={communication} description="Mensagens e contatos registrados" label="Comunicação" onChange={setCommunication} />
+        <ToggleRow checked={records} description="Criação e edição de prontuários" label="Prontuário" onChange={setRecords} />
+        <ToggleRow checked={reports} description="Criação e edição de relatórios" label="Relatórios" onChange={setReports} />
+      </SettingsGroup>
+    </SectionFrame>
+  )
+}
+
+function AccountSection() {
+  return (
+    <SectionFrame description="Atalhos de conta do usuário logado." title="Conta & Perfil">
+      <SettingsGroup>
+        <SettingRow description="Nome, telefone, foto e unidade padrão" label="Dados do perfil">
+          <a className="h-9 rounded-sm border border-[#404040] bg-[#303030] px-3 py-2 text-sm font-semibold text-[#e5e5e5]" href="/perfil">
+            Abrir perfil
+          </a>
+        </SettingRow>
+        <SettingRow description="Preferências locais desta sessão" label="Preferências">
+          <span className="text-sm text-[#a3a3a3]">Ativas</span>
+        </SettingRow>
+      </SettingsGroup>
+    </SectionFrame>
+  )
+}
+
+function IntegrationsSection() {
+  return (
+    <SectionFrame description="Configure integrações externas usadas pela operação." title="Integrações">
+      <div className="grid gap-4 md:grid-cols-2">
+        {[
+          ['WhatsApp', 'Envio de mensagens para pacientes'],
+          ['E-mail', 'Envio de PDFs e comunicados'],
+          ['SMS', 'Lembretes transacionais'],
+          ['Armazenamento', 'Avatares e documentos'],
+        ].map(([title, description]) => (
+          <div className="rounded-xl border border-[#404040] bg-[#171717] p-4" key={title}>
+            <p className="text-sm font-semibold text-[#f5f5f5]">{title}</p>
+            <p className="mt-1 text-xs leading-5 text-[#a3a3a3]">{description}</p>
+            <span className="mt-3 inline-flex rounded bg-emerald-500/20 px-2 py-1 text-xs font-bold text-emerald-400">Disponível</span>
+          </div>
+        ))}
+      </div>
     </SectionFrame>
   )
 }
@@ -137,15 +199,13 @@ function PrivacySection() {
       <div className="mb-6 flex gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
         <SettingsIcon className="mt-0.5 size-5 shrink-0 text-amber-400" name="alert" />
         <div>
-          <p className="text-sm font-semibold text-amber-400">Conformidade LGPD Ativa</p>
-          <p className="mt-1 text-xs leading-5 text-[#a3a3a3]">
-            Dados de pacientes são tratados com finalidade legítima e armazenados com segurança neste protótipo.
-          </p>
+          <p className="text-sm font-semibold text-amber-400">Conformidade LGPD ativa</p>
+          <p className="mt-1 text-xs leading-5 text-[#a3a3a3]">Dados de pacientes são tratados com finalidade legítima e armazenados com segurança.</p>
         </div>
       </div>
 
-      <Subsection title="Segurança de Acesso">
-        <ToggleRow checked={twoFactor} description="Adiciona uma camada extra de segurança ao login" label="Autenticação de Dois Fatores (2FA)" onChange={setTwoFactor} />
+      <Subsection title="Segurança de acesso">
+        <ToggleRow checked={twoFactor} description="Adiciona uma camada extra de segurança ao login" label="Autenticação de dois fatores (2FA)" onChange={setTwoFactor} />
         <SettingRow description="Desconectar automaticamente após inatividade" label="Tempo de sessão">
           <select className={inputClass} defaultValue="30">
             <option value="30">30 minutos</option>
@@ -156,7 +216,7 @@ function PrivacySection() {
         <ToggleRow checked={audit} description="Registrar todas as ações realizadas no sistema" label="Log de auditoria" onChange={setAudit} />
       </Subsection>
 
-      <Subsection title="Dados dos Pacientes">
+      <Subsection title="Dados dos pacientes">
         <ToggleRow checked={anonymous} description="Ocultar dados pessoais identificáveis nos relatórios exportados" label="Anonimizar em relatórios" onChange={setAnonymous} />
         <SettingRow description="Período de armazenamento de dados inativos" label="Retenção de dados">
           <select className={inputClass} defaultValue="5">
@@ -167,9 +227,7 @@ function PrivacySection() {
           </select>
         </SettingRow>
         <SettingRow description="Gerar relatório completo para atender solicitação de titular" label="Exportar dados do paciente">
-          <button className="h-9 rounded-sm border border-[#404040] bg-[#303030] px-3 text-sm font-semibold text-[#e5e5e5]" type="button">
-            Exportar
-          </button>
+          <button className="h-9 rounded-sm border border-[#404040] bg-[#303030] px-3 text-sm font-semibold text-[#e5e5e5]" type="button">Exportar</button>
         </SettingRow>
       </Subsection>
     </SectionFrame>
@@ -179,12 +237,12 @@ function PrivacySection() {
 function DataSection() {
   return (
     <SectionFrame description="Exporte, importe e gerencie backups do sistema." title="Dados & Backup">
-      <Subsection title="Exportação de Dados">
+      <Subsection title="Exportação de dados">
         <div className="grid gap-4 sm:grid-cols-2">
           {[
             ['Pacientes (CSV)', 'Lista completa com dados cadastrais'],
             ['Prontuários (PDF)', 'Registros médicos do período'],
-            ['Relatório Geral (PDF)', 'Dashboard executivo completo'],
+            ['Relatório geral (PDF)', 'Dashboard executivo completo'],
           ].map(([label, desc]) => (
             <button className="flex items-center gap-3 rounded-xl border border-[#404040] bg-[#171717] p-4 text-left transition hover:border-[#3b82f6]/40" key={label} type="button">
               <span className="grid size-9 place-items-center rounded-lg bg-[#3b82f6]/10 text-[#3b82f6]">
@@ -199,7 +257,7 @@ function DataSection() {
         </div>
       </Subsection>
 
-      <Subsection title="Backup Automático">
+      <Subsection title="Backup automático">
         <SettingRow description="Salvar snapshot diário dos dados" label="Backup automático">
           <ToggleSwitch checked onChange={() => {}} />
         </SettingRow>
@@ -211,9 +269,7 @@ function DataSection() {
           </select>
         </SettingRow>
         <SettingRow description="30/03/2026 às 00:15" label="Último backup">
-          <button className="h-9 rounded-sm border border-[#404040] bg-[#303030] px-3 text-sm font-semibold text-[#e5e5e5]" type="button">
-            Baixar
-          </button>
+          <button className="h-9 rounded-sm border border-[#404040] bg-[#303030] px-3 text-sm font-semibold text-[#e5e5e5]" type="button">Baixar</button>
         </SettingRow>
       </Subsection>
     </SectionFrame>
@@ -279,6 +335,14 @@ function ToggleSwitch({ checked, onChange }) {
   )
 }
 
+function getStoredUiSettings() {
+  try {
+    return { animations: true, contrast: false, compact: false, ...JSON.parse(localStorage.getItem(SETTINGS_UI_KEY) || '{}') }
+  } catch {
+    return { animations: true, contrast: false, compact: false }
+  }
+}
+
 function SettingsIcon({ className = 'size-4', name }) {
   const common = {
     className,
@@ -290,44 +354,13 @@ function SettingsIcon({ className = 'size-4', name }) {
     viewBox: '0 0 24 24',
   }
 
-  if (name === 'shield') {
-    return (
-      <svg {...common}>
-        <path d="M12 3 5 6v5c0 4 3 7.5 7 10 4-2.5 7-6 7-10V6l-7-3Z" />
-      </svg>
-    )
-  }
+  if (name === 'shield') return <svg {...common}><path d="M12 3 5 6v5c0 4 3 7.5 7 10 4-2.5 7-6 7-10V6l-7-3Z" /></svg>
+  if (name === 'database') return <svg {...common}><ellipse cx="12" cy="5" rx="7" ry="3" /><path d="M5 5v14c0 1.7 3.1 3 7 3s7-1.3 7-3V5M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3" /></svg>
+  if (name === 'download') return <svg {...common}><path d="M12 3v12M7 10l5 5 5-5M5 21h14" /></svg>
+  if (name === 'bell') return <svg {...common}><path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></svg>
+  if (name === 'user') return <svg {...common}><path d="M20 21a8 8 0 0 0-16 0" /><circle cx="12" cy="7" r="4" /></svg>
+  if (name === 'plug') return <svg {...common}><path d="M9 7V3M15 7V3M7 11h10M8 7h8v5a4 4 0 0 1-8 0V7ZM12 16v5" /></svg>
+  if (name === 'alert') return <svg {...common}><path d="M12 3 2 21h20L12 3Z" /><path d="M12 9v5M12 18h.01" /></svg>
 
-  if (name === 'database') {
-    return (
-      <svg {...common}>
-        <ellipse cx="12" cy="5" rx="7" ry="3" />
-        <path d="M5 5v14c0 1.7 3.1 3 7 3s7-1.3 7-3V5M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3" />
-      </svg>
-    )
-  }
-
-  if (name === 'download') {
-    return (
-      <svg {...common}>
-        <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
-      </svg>
-    )
-  }
-
-  if (name === 'alert') {
-    return (
-      <svg {...common}>
-        <path d="M12 3 2 21h20L12 3Z" />
-        <path d="M12 9v5M12 18h.01" />
-      </svg>
-    )
-  }
-
-  return (
-    <svg {...common}>
-      <path d="M12 3v3M12 18v3M4.9 4.9 7 7M17 17l2.1 2.1M3 12h3M18 12h3M4.9 19.1 7 17M17 7l2.1-2.1" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  )
+  return <svg {...common}><path d="M12 3v3M12 18v3M4.9 4.9 7 7M17 17l2.1 2.1M3 12h3M18 12h3M4.9 19.1 7 17M17 7l2.1-2.1" /><circle cx="12" cy="12" r="3" /></svg>
 }

@@ -46,6 +46,11 @@ function mapQueueStatus(status) {
 }
 
 function inferPriority(appointment) {
+  if (appointment.highPriority) return 'Alta'
+
+  const explicitPriority = normalizePriority(appointment.priority)
+  if (explicitPriority) return explicitPriority
+
   const text = [appointment.status, appointment.notes, appointment.type]
     .filter(Boolean)
     .join(' ')
@@ -56,6 +61,19 @@ function inferPriority(appointment) {
   if (/urgente|alta|risco|prioridade/.test(text)) return 'Alta'
   if (/retorno|rotina|baixa/.test(text)) return 'Baixa'
   return 'Média'
+}
+
+function normalizePriority(priority) {
+  const normalized = String(priority || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+
+  if (!normalized) return ''
+  if (normalized.includes('alta') || normalized.includes('urgente')) return 'Alta'
+  if (normalized.includes('baixa')) return 'Baixa'
+  if (normalized.includes('media') || normalized.includes('normal')) return 'MÃ©dia'
+  return ''
 }
 
 function calculateWait(appointment) {

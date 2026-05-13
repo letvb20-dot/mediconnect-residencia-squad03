@@ -156,7 +156,6 @@ export function ProfilePage({ navigate }) {
           <dl className="mt-5 grid gap-4 text-sm">
             <Info label="Perfil" value={profile.role} />
             <Info label="E-mail principal" value={profile.email} />
-            <Info label="Permissões" value="Agenda, pacientes, comunicação e configurações" />
           </dl>
           <div className="mt-8 border-t border-[#404040] pt-6">
             <button

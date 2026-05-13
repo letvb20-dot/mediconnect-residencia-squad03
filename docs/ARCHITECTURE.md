@@ -5,7 +5,7 @@ Este documento estabelece as regras canônicas de arquitetura para este projeto.
 O objetivo desta arquitetura é manter o ecossistema React amigável para desenvolvedores com mentalidade de Backend, priorizando a Separação de Conceitos (Separation of Concerns) e a previsibilidade dos dados.
 
 ## 1. A API é a Única Fonte da Verdade (Fim dos Mocks)
-- **Regra:** Não crie, não mantenha e não faça fallback para dados mockados (falsos) em produção ou na integração.
+- **Regra:** Não crie, não mantenha e não faça fallback para dados locais inventados em produção ou na integração.
 - **Motivo:** O banco de dados (Supabase) dita as regras. Se a API falhar, o front-end deve exibir um estado de erro elegante, e não mascarar a falha com dados locais inventados.
 - **Ação:** Repositórios (`*Repository.js`) devem apenas fazer o `fetch` seguro para a API e repassar a resposta.
 

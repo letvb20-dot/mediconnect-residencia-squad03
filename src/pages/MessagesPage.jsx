@@ -3,7 +3,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { normalizeRole } from '../config/permissions.js'
 import { StethoscopeIcon } from '../components/Brand.jsx'
 import { communicationRepository } from '../repositories/communicationRepository.js'
+import { notificationRepository } from '../repositories/notificationRepository.js'
 import { patientRepository } from '../repositories/patientRepository.js'
+import { maskBrazilianPhone, sanitizePlainText } from '../utils/inputSanitizers.js'
 
 const channels = {
   whatsapp: { label: 'WhatsApp', className: 'bg-emerald-500/20 text-emerald-400', icon: 'message' },
@@ -218,6 +220,12 @@ export function MessagesPage({ role }) {
       },
       ...current,
     ])
+    notificationRepository.notifyCurrentUser({
+      domain: 'communication',
+      title: 'ComunicaÃ§Ã£o registrada',
+      detail: `${channels[composer.channel].label} para ${composer.patient.trim()} foi ${composer.channel === 'sms' && smsSent ? 'enviado' : 'registrado'}.`,
+      patientId: composer.patientId,
+    }).catch(() => null)
     setComposer(emptyMessage)
     setComposerOpen(false)
     setActiveTab('historico')
@@ -627,6 +635,7 @@ function MessageComposer({ allowedChannelKeys, draft, onChange, onClose, onSubmi
               type="search"
               value={patientSearch}
             />
+            {!draft.patientId ? (
             <div className="max-h-44 overflow-y-auto rounded-md border border-[#404040] bg-[#1f1f1f]">
               {filteredPatients.length ? (
                 filteredPatients.slice(0, 8).map((patient) => {
@@ -651,18 +660,11 @@ function MessageComposer({ allowedChannelKeys, draft, onChange, onClose, onSubmi
                 <p className="px-3 py-2 text-xs text-[#737373]">Nenhum paciente encontrado.</p>
               )}
             </div>
+            ) : null}
           </div>
         </DarkField>
 
         <div className="grid gap-4 md:grid-cols-2">
-          <DarkField label="Paciente selecionado">
-            <input
-              className={inputClass}
-              onChange={(event) => update('patient', event.target.value)}
-              readOnly
-              value={draft.patient}
-            />
-          </DarkField>
           <DarkField label="Canal">
             <select className={inputClass} onChange={(event) => update('channel', event.target.value)} value={draft.channel}>
               {allowedChannelKeys.map((key) => (
@@ -676,7 +678,7 @@ function MessageComposer({ allowedChannelKeys, draft, onChange, onClose, onSubmi
           <DarkField label="Telefone">
             <input
               className={inputClass}
-              onChange={(event) => update('phone', event.target.value)}
+              onChange={(event) => update('phone', maskBrazilianPhone(event.target.value))}
               placeholder="(81) 99999-9999"
               value={draft.phone}
             />
@@ -697,7 +699,7 @@ function MessageComposer({ allowedChannelKeys, draft, onChange, onClose, onSubmi
         <DarkField label="Mensagem">
           <textarea
             className={`${textareaClass} min-h-44`}
-            onChange={(event) => update('content', event.target.value)}
+            onChange={(event) => update('content', sanitizePlainText(event.target.value))}
             placeholder="Escreva a mensagem"
             value={draft.content}
           />
@@ -766,7 +768,7 @@ function TemplateEditor({ allowedChannelKeys, draft, onChange, onClose, onSubmit
 function ModalFrame({ branded = false, children, onClose, title }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className={`flex max-h-[94vh] w-full ${branded ? 'max-w-6xl' : 'max-w-2xl'} flex-col overflow-hidden rounded-xl border border-[#404040] bg-[#242424] shadow-2xl`}>
+      <div className={`message-modal-shell flex max-h-[94vh] w-full ${branded ? 'max-w-6xl' : 'max-w-2xl'} flex-col overflow-hidden rounded-xl border border-[#404040] bg-[#242424] shadow-2xl`}>
         <div className="flex items-center justify-between border-b border-[#404040] px-5 py-4">
           <div className="flex items-center gap-3">
             {branded ? (

@@ -41,6 +41,14 @@ export const appointmentMapper = {
       mode = apiData.appointment_type === 'telemedicina' ? 'Teleconsulta' : 'Presencial'
     }
 
+    const notes = apiData.notes || apiData.observations || apiData.observacoes || apiData.observacao || apiData.description || ''
+    const highPriority = Boolean(
+      apiData.highPriority ||
+      apiData.high_priority ||
+      normalizePriority(apiData.priority) === 'Alta' ||
+      /urgente|alta|risco|prioridade/i.test(removeAccents(notes)),
+    )
+
     return {
       id: apiData.id || apiData.agendamento_id,
       patientId: apiData.patientId || apiData.patient_id || apiData.paciente_id || patient.id,
@@ -66,7 +74,9 @@ export const appointmentMapper = {
       type: apiData.type || apiData.tipo || apiData.tipo_consulta || 'Consulta',
       mode: mode,
       status: mappedStatus,
-      notes: apiData.notes || apiData.observations || apiData.observacoes || apiData.observacao || apiData.description || '',
+      highPriority,
+      priority: highPriority ? 'Alta' : normalizePriority(apiData.priority) || 'Média',
+      notes,
       room: apiData.room || apiData.sala || apiData.local || 'Consultório 1',
       createdBy: apiData.createdBy || apiData.created_by || '',
       createdByName:
@@ -83,6 +93,8 @@ export const appointmentMapper = {
     if (dialect === 'supabase') {
       // Monta o scheduled_at no formato ISO assumindo fuso local
       const scheduledAt = new Date(`${uiData.date}T${uiData.time}:00`).toISOString()
+      const highPriority = Boolean(uiData.highPriority)
+      const notes = withPriorityMarker(uiData.notes, highPriority)
 
       return {
         patient_id: uiData.patientId,
@@ -90,12 +102,15 @@ export const appointmentMapper = {
         scheduled_at: scheduledAt,
         appointment_type: uiData.mode === 'Teleconsulta' ? 'telemedicina' : 'presencial',
         status: toApiStatus(uiData.status),
-        notes: emptyToUndefined(uiData.notes),
-        observations: emptyToUndefined(uiData.notes),
+        notes: emptyToUndefined(notes),
+        observations: emptyToUndefined(notes),
         duration_minutes: 30, // Padrao
         created_by: emptyToUndefined(uiData.createdBy),
       }
     }
+
+    const highPriority = Boolean(uiData.highPriority)
+    const notes = withPriorityMarker(uiData.notes, highPriority)
 
     return {
       patient_id: uiData.patientId,
@@ -106,7 +121,9 @@ export const appointmentMapper = {
       mode: uiData.mode,
       status: uiData.status || 'Confirmada',
       room: uiData.room,
-      notes: uiData.notes,
+      high_priority: highPriority,
+      priority: highPriority ? 'Alta' : uiData.priority,
+      notes,
       created_by: uiData.createdBy,
     }
   },
@@ -114,6 +131,25 @@ export const appointmentMapper = {
 
 function emptyToUndefined(value) {
   return value === '' || value === null ? undefined : value
+}
+
+function withPriorityMarker(notes, highPriority) {
+  const cleanNotes = String(notes || '').replace(/^\[Prioridade alta\]\s*/i, '').trim()
+  if (!highPriority) return cleanNotes
+  return cleanNotes ? `[Prioridade alta] ${cleanNotes}` : '[Prioridade alta]'
+}
+
+function normalizePriority(value) {
+  const normalized = removeAccents(value).toLowerCase()
+  if (!normalized) return ''
+  if (normalized.includes('alta') || normalized.includes('urgente')) return 'Alta'
+  if (normalized.includes('baixa')) return 'Baixa'
+  if (normalized.includes('media') || normalized.includes('normal')) return 'Média'
+  return ''
+}
+
+function removeAccents(value) {
+  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 }
 
 function toApiStatus(status) {

@@ -71,22 +71,61 @@ export const medicalRecordRepository = {
 
     throw new Error(await getResponseError(lastResponse, 'API de prontuários não encontrada.'))
   },
+
+  async getById(recordId) {
+    for (const table of MEDICAL_RECORD_TABLES) {
+      const query = new URLSearchParams()
+      query.set('select', '*,patients(full_name),doctors(full_name)')
+      query.set('id', `eq.${recordId}`)
+      query.set('limit', '1')
+
+      const response = await fetch(`${apiConfig.restUrl}/${table}?${query.toString()}`, {
+        headers: getAuthenticatedHeaders(),
+      }).catch(() => null)
+
+      if (!response) continue
+      if (response.ok) {
+        const data = await response.json()
+        const record = normalizeItem(data)
+        return record ? mapMedicalRecord(record) : null
+      }
+
+      if (![400, 404, 406].includes(response.status)) {
+        throw new Error(await getResponseError(response, 'Erro ao buscar prontuÃ¡rio.'))
+      }
+    }
+
+    return null
+  },
+
+  async update(recordId, data) {
+    let lastResponse = null
+
+    for (const table of MEDICAL_RECORD_TABLES) {
+      const response = await fetch(`${apiConfig.restUrl}/${table}?id=eq.${recordId}`, {
+        method: 'PATCH',
+        headers: getAuthenticatedHeaders({ Prefer: 'return=representation' }),
+        body: JSON.stringify(buildRecordPayload(data)),
+      }).catch(() => null)
+
+      if (!response) continue
+      lastResponse = response
+
+      if (response.ok) {
+        return mapMedicalRecord(normalizeItem(await response.json()))
+      }
+
+      if (![400, 404, 406].includes(response.status)) {
+        throw new Error(await getResponseError(response, 'Erro ao atualizar prontuÃ¡rio.'))
+      }
+    }
+
+    throw new Error(await getResponseError(lastResponse, 'API de prontuÃ¡rios nÃ£o encontrada.'))
+  },
 }
 
 function buildCreatePayloads(data) {
-  const basePayload = cleanPayload({
-    patient_id: data.patientId,
-    consultation_date: data.date || null,
-    record_type: data.type,
-    cid_code: data.cid,
-    anamnesis: data.anamnesis,
-    physical_exam: data.physicalExam,
-    conduct: data.conduct,
-    prescriptions: data.prescriptions,
-    return_date: data.returnDate || null,
-    status: toApiStatus(data.status),
-    summary: data.conduct || data.anamnesis,
-  })
+  const basePayload = buildRecordPayload(data)
 
   return uniquePayloads([
     basePayload,
@@ -99,6 +138,29 @@ function buildCreatePayloads(data) {
     }),
     pickFields(basePayload, ['patient_id', 'consultation_date', 'record_type', 'cid_code', 'summary', 'status']),
   ])
+}
+
+function buildRecordPayload(data) {
+  return cleanPayload({
+    patient_id: data.patientId,
+    consultation_date: data.date || null,
+    consultation_time: data.time || null,
+    record_type: data.type,
+    cid_code: data.cid,
+    anamnesis: data.contentHtml || data.anamnesis,
+    physical_exam: data.physicalExam,
+    diagnosis: data.diagnosis,
+    diagnostic_reasoning: data.diagnosticReasoning,
+    conduct: data.conduct,
+    prescriptions: data.prescriptions,
+    procedures: data.procedures,
+    exam_results: data.examResults,
+    content_html: data.contentHtml,
+    signed_by: data.signedBy,
+    return_date: data.returnDate || null,
+    status: toApiStatus(data.status),
+    summary: data.diagnosis || data.conduct || data.anamnesis || data.contentHtml,
+  })
 }
 
 function mapMedicalRecord(record) {
@@ -115,6 +177,8 @@ function mapMedicalRecord(record) {
       record.patient ||
       'Paciente não identificado',
     date: formatDisplayDate(date),
+    rawDate: date,
+    time: record.consultation_time || record.time || '',
     doctor:
       record.doctor_name ||
       record.doctors?.full_name ||
@@ -124,6 +188,14 @@ function mapMedicalRecord(record) {
     type: record.record_type || record.type || record.tipo || 'Consulta',
     cid: record.cid_code || record.cid || 'CID não informado',
     status,
+    diagnosis: record.diagnosis || record.diagnostic_reasoning || '',
+    diagnosticReasoning: record.diagnostic_reasoning || '',
+    conduct: record.conduct || '',
+    prescriptions: record.prescriptions || '',
+    procedures: record.procedures || '',
+    examResults: record.exam_results || record.examResults || '',
+    contentHtml: record.content_html || record.anamnesis || '',
+    signedBy: record.signed_by || record.signature || '',
     summary:
       record.summary ||
       record.conduct ||

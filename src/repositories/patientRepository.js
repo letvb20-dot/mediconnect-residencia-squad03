@@ -126,8 +126,9 @@ export const patientRepository = {
 
     const extension = file.name?.split('.').pop() || 'jpg'
     const objectPath = `patients/${patientId}/avatar.${extension}`
-    const avatarUrl = `${apiConfig.storageUrl}/object/avatars/${objectPath}`
-    const response = await fetch(avatarUrl, {
+    const uploadUrl = `${apiConfig.storageUrl}/object/avatars/${objectPath}`
+    const avatarUrl = getPublicAvatarUrl(objectPath)
+    const response = await fetch(uploadUrl, {
       method: 'POST',
       headers: getAuthenticatedHeaders({
         'Content-Type': file.type || 'application/octet-stream',
@@ -395,7 +396,11 @@ function normalizeAvatarUrl(value) {
   const avatar = String(value || '').trim()
   if (!avatar) return ''
   if (/^https?:\/\//i.test(avatar)) return avatar
-  return `${apiConfig.storageUrl}/object/avatars/${avatar.replace(/^\/+/, '')}`
+  return getPublicAvatarUrl(avatar)
+}
+
+function getPublicAvatarUrl(path) {
+  return `${apiConfig.storageUrl}/object/public/avatars/${String(path || '').replace(/^\/+/, '')}`
 }
 
 function buildPatientBody(data, { includeCreatedBy = false } = {}) {

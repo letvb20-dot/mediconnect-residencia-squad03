@@ -10,7 +10,7 @@ import {
   subWeeks,
 } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { AgendaDailyView } from '../components/calendar/AgendaDailyView.jsx'
 import { AgendaMonthlyView } from '../components/calendar/AgendaMonthlyView.jsx'
@@ -36,7 +36,8 @@ const viewFilters = [
 const appointmentTypeOptions = ['Retorno', 'Primeira consulta', 'Exame', 'Avaliação pre-op']
 const appointmentStatusOptions = ['Confirmada', 'Em triagem', 'Aguardando']
 
-export function AgendaPage() {
+export function AgendaPage({ navigate }) {
+  const shortcutHandledRef = useRef(false)
   const [modalPatientSearch, setModalPatientSearch] = useState('')
   const [modalDoctorSearch, setModalDoctorSearch] = useState('')
   const {
@@ -73,6 +74,18 @@ export function AgendaPage() {
     slotsLoading,
     slotsError,
   } = useAgenda()
+
+  useEffect(() => {
+    if (loading || shortcutHandledRef.current) return
+
+    const params = new URLSearchParams(window.location.search)
+    const patientId = params.get('patientId')
+    const shouldOpenNew = params.get('new') === '1'
+    if (!shouldOpenNew || !patientId) return
+
+    shortcutHandledRef.current = true
+    openCreateModal({ patientId })
+  }, [loading, openCreateModal])
 
   if (loading) {
     return (
@@ -171,6 +184,13 @@ export function AgendaPage() {
             type="button"
           >
             Hoje
+          </button>
+          <button
+            className="h-9 rounded-sm border border-[#404040] bg-[#262626] px-4 text-sm font-medium text-[#e5e5e5] transition hover:bg-[#303030]"
+            onClick={() => navigate('/consultas')}
+            type="button"
+          >
+            Fila de consultas
           </button>
           <button
             className="h-9 rounded-sm border border-[#3b82f6] bg-[#3b82f6] px-4 text-sm font-semibold text-white shadow-[0_10px_15px_rgba(59,130,246,0.16)] transition hover:bg-[#3478ed] disabled:cursor-not-allowed disabled:border-[#404040] disabled:bg-[#303030] disabled:text-[#737373] disabled:shadow-none"
@@ -344,8 +364,6 @@ export function AgendaPage() {
                     }}
                     selectedId={form.patientId}
                   />
-                ) : selectedPatient ? (
-                  <SelectedHint label={getPatientLabel(selectedPatient)} />
                 ) : null}
               </DarkField>
 
@@ -381,8 +399,6 @@ export function AgendaPage() {
                         }}
                         selectedId={form.professionalId}
                       />
-                    ) : selectedProfessional ? (
-                      <SelectedHint label={selectedProfessional.name} />
                     ) : null}
                   </>
                 )}
@@ -459,6 +475,16 @@ export function AgendaPage() {
                 </DarkField>
               </div>
 
+              <label className="flex h-12 items-center justify-between gap-4 rounded-md border border-[#404040] bg-[#303030] px-3 text-sm font-semibold text-[#e5e5e5]">
+                <span>Alta prioridade</span>
+                <input
+                  checked={Boolean(form.highPriority)}
+                  className="size-5 accent-[#3b82f6]"
+                  onChange={(event) => updateForm('highPriority', event.target.checked)}
+                  type="checkbox"
+                />
+              </label>
+
               <DarkField label="Tipo de consulta">
                 <select
                   className="h-11 rounded-md border border-[#404040] bg-[#303030] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#3b82f6]"
@@ -475,7 +501,7 @@ export function AgendaPage() {
 
               <DarkField label="Observações">
                 <textarea
-                  className="min-h-24 resize-y rounded-md border border-[#404040] bg-[#303030] px-3 py-2 text-sm leading-5 text-[#e5e5e5] outline-none transition placeholder:text-[#737373] focus:border-[#3b82f6]"
+                  className="min-h-36 w-full resize-y rounded-md border border-[#404040] bg-[#303030] px-3 py-2 text-sm leading-5 text-[#e5e5e5] outline-none transition placeholder:text-[#737373] focus:border-[#3b82f6]"
                   onChange={(event) => updateForm('notes', event.target.value)}
                   placeholder="Observações sobre o agendamento"
                   value={form.notes}
@@ -526,9 +552,9 @@ export function AgendaPage() {
   )
 }
 
-function DarkField({ children, label }) {
+function DarkField({ children, className = '', label }) {
   return (
-    <label className="grid gap-2 text-sm font-semibold text-[#a3a3a3]">
+    <label className={`grid gap-2 text-sm font-semibold text-[#a3a3a3] ${className}`}>
       <span>{label}</span>
       {children}
     </label>
@@ -540,7 +566,7 @@ function DarkModal({ children, onClose, open, title }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center">
-      <div className="flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-[#404040] bg-[#242424] shadow-2xl">
+      <div className="agenda-modal-shell flex max-h-[96vh] min-h-[620px] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-[#404040] bg-[#242424] shadow-2xl">
         <div className="flex items-center justify-between gap-4 border-b border-[#404040] px-5 py-4">
           <div className="flex items-center gap-3">
             <span className="grid size-9 place-items-center rounded-sm bg-[#3b82f6] text-white">
@@ -560,14 +586,6 @@ function DarkModal({ children, onClose, open, title }) {
         <div className="min-h-0 overflow-y-auto p-5">{children}</div>
       </div>
     </div>
-  )
-}
-
-function SelectedHint({ label }) {
-  return (
-    <span className="rounded-md border border-[#404040] bg-[#1f1f1f] px-3 py-2 text-xs font-semibold text-[#a3a3a3]">
-      Selecionado: {label}
-    </span>
   )
 }
 

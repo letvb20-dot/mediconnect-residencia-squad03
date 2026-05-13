@@ -11,6 +11,7 @@ export function LoginPage({ navigate }) {
     password: '',
   })
   const [showPassword, setShowPassword] = useState(false)
+  const [devCredentialsOpen, setDevCredentialsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -149,6 +150,32 @@ export function LoginPage({ navigate }) {
                 {loading ? 'Entrando...' : 'Entrar'}
               </button>
             </form>
+
+            <div className="mt-5 rounded-[6px] border border-white/10 bg-white/[0.03] p-3">
+              <button
+                className="flex w-full items-center justify-between text-left text-xs font-semibold text-white/60 transition hover:text-white"
+                onClick={() => setDevCredentialsOpen((open) => !open)}
+                type="button"
+              >
+                Credenciais dev
+                <span>{devCredentialsOpen ? '-' : '+'}</span>
+              </button>
+              {devCredentialsOpen ? (
+                <div className="mt-3 grid gap-2">
+                  {getDevCredentials().map((credential) => (
+                    <button
+                      className="rounded border border-white/10 px-3 py-2 text-left text-xs text-white/70 transition hover:border-[#3b82f6]/50 hover:text-white"
+                      key={credential.email}
+                      onClick={() => setForm({ email: credential.email, password: credential.password })}
+                      type="button"
+                    >
+                      <span className="block font-semibold text-white">{getCredentialLabel(credential)}</span>
+                      <span className="mt-0.5 block">{credential.email}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           </div>
         </section>
       </div>
@@ -350,6 +377,39 @@ function LoginMetric({ label, value }) {
       <dd className="mt-0.5 text-[11px] leading-4 text-white/50 xl:text-xs">{label}</dd>
     </div>
   )
+}
+
+function getDevCredentials() {
+  return [
+    {
+      label: 'Administrador',
+      email: import.meta.env.VITE_DEV_ADMIN_EMAIL || 'hugo@popcode.com.br',
+      password: import.meta.env.VITE_DEV_ADMIN_PASSWORD || 'hdoria',
+    },
+    {
+      label: 'Gestão',
+      email: import.meta.env.VITE_DEV_DOCTOR_EMAIL || 'medico@mediconnect.com',
+      password: import.meta.env.VITE_DEV_DOCTOR_PASSWORD || 'Senha@123',
+    },
+    {
+      label: 'Médico',
+      email: import.meta.env.VITE_DEV_SECRETARY_EMAIL || 'recepcao@mediconnect.com',
+      password: import.meta.env.VITE_DEV_SECRETARY_PASSWORD || 'demo12345',
+    },
+    {
+      label: 'Gestor',
+      email: import.meta.env.VITE_DEV_MANAGER_EMAIL || 'gestao@mediconnect.com',
+      password: import.meta.env.VITE_DEV_MANAGER_PASSWORD || '12345678',
+    },
+  ]
+}
+
+function getCredentialLabel(credential) {
+  if (credential.email === 'hugo@popcode.com.br') return 'Administrador'
+  if (credential.email === 'medico@mediconnect.com') return 'Médico'
+  if (credential.email === 'recepcao@mediconnect.com') return 'Secretária'
+  if (credential.email === 'gestao@mediconnect.com') return 'Gestor'
+  return credential.label
 }
 
 function EyeIcon() {

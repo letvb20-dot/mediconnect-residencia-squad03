@@ -1,0 +1,398 @@
+import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+
+import { AppShell } from './components/AppShell.jsx'
+import { canAccess } from './config/permissions.js'
+import { useAuth } from './hooks/useAuth.js'
+import { ForgotPasswordPage, LoginPage, RegisterPage } from './pages/AuthPages.jsx'
+import { NotFoundPage } from './pages/NotFoundPage.jsx'
+import { patientRepository } from './repositories/patientRepository.js'
+
+const AgendaPage = lazyPage(() => import('./pages/AgendaPage.jsx'), 'AgendaPage')
+const AnalyticsPage = lazyPage(() => import('./pages/AnalyticsPage.jsx'), 'AnalyticsPage')
+const HomePage = lazyPage(() => import('./pages/HomePage.jsx'), 'HomePage')
+const MedicalRecordsPage = lazyPage(() => import('./pages/MedicalRecordsPage.jsx'), 'MedicalRecordsPage')
+const MessagesPage = lazyPage(() => import('./pages/MessagesPage.jsx'), 'MessagesPage')
+const PatientDetailPage = lazyPage(() => import('./pages/PatientsPage.jsx'), 'PatientDetailPage')
+const PatientsPage = lazyPage(() => import('./pages/PatientsPage.jsx'), 'PatientsPage')
+const ProfilePage = lazyPage(() => import('./pages/ProfilePage.jsx'), 'ProfilePage')
+const ReportsPage = lazyPage(() => import('./pages/ReportsPage.jsx'), 'ReportsPage')
+const SettingsPage = lazyPage(() => import('./pages/SettingsPage.jsx'), 'SettingsPage')
+const UsersPage = lazyPage(() => import('./pages/UsersPage.jsx'), 'UsersPage')
+const VisitsPage = lazyPage(() => import('./pages/VisitsPage.jsx'), 'VisitsPage')
+
+const PANEL_PATHS = ['/inicio', '/home', '/dashboard']
+const ROLE_HOME_PATHS = {
+  medico: '/agenda',
+  secretaria: '/agenda',
+}
+
+function lazyPage(loader, exportName) {
+  return lazy(() => loader().then((module) => ({ default: module[exportName] })))
+}
+
+function App() {
+  const [location, setLocation] = useState(() => readLocation())
+  const { isAuthenticated, role, loading: authLoading, profile, user } = useAuth()
+
+  const navigate = useCallback((to, options = {}) => {
+    if (options.replace) {
+      window.history.replaceState({}, '', to)
+    } else {
+      window.history.pushState({}, '', to)
+    }
+
+    setLocation(readLocation())
+    const hash = to.split('#')[1]
+    window.requestAnimationFrame(() => {
+      if (hash) {
+        document.getElementById(hash)?.scrollIntoView({ block: 'start' })
+      } else {
+        window.scrollTo({ left: 0, top: 0 })
+      }
+    })
+  }, [])
+
+  useEffect(() => {
+    function handlePopState() {
+      setLocation(readLocation())
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
+  const route = useMemo(
+    () => resolveRoute(location.pathname, navigate, role, profile, user),
+    [location.pathname, navigate, profile, role, user],
+  )
+
+  // Tela de carregamento enquanto busca o role do usuário
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#0a0a0a]">
+        <p className="text-sm text-[#a3a3a3]">Carregando...</p>
+      </div>
+    )
+  }
+
+  // Rotas públicas (sem shell)
+  if (!route.withShell) {
+    return <RouteSuspense resetKey={location.pathname}>{route.element}</RouteSuspense>
+  }
+
+  // Usuário não autenticado
+  if (!isAuthenticated) {
+    return <LoginPage navigate={navigate} />
+  }
+
+  // Usuário autenticado mas sem permissão para a rota
+  if (!role || !canAccess(role, location.pathname)) {
+    const roleHomePath = ROLE_HOME_PATHS[role]
+    if (roleHomePath && PANEL_PATHS.includes(location.pathname)) {
+      navigate(roleHomePath, { replace: true })
+      return null
+    }
+
+    return (
+      <AppShell currentPath={location.pathname} navigate={navigate} role={role} routeTitle="Sem acesso">
+        <UnauthorizedPage navigate={navigate} />
+      </AppShell>
+    )
+  }
+
+  return (
+    <AppShell currentPath={location.pathname} navigate={navigate} role={role} routeTitle={route.title}>
+      <RouteSuspense resetKey={location.pathname}>{route.element}</RouteSuspense>
+    </AppShell>
+  )
+}
+
+class RouteErrorBoundary extends Component {
+  state = { error: null }
+
+  static getDerivedStateFromError(error) {
+    return { error }
+  }
+
+  componentDidUpdate(previousProps) {
+    if (previousProps.resetKey !== this.props.resetKey && this.state.error) {
+      this.setState({ error: null })
+    }
+  }
+
+  render() {
+    if (this.state.error) {
+      return <RouteErrorFallback />
+    }
+
+    return this.props.children
+  }
+}
+
+function RouteSuspense({ children, resetKey }) {
+  return (
+    <RouteErrorBoundary resetKey={resetKey}>
+      <Suspense fallback={<RouteFallback />}>
+        {children}
+      </Suspense>
+    </RouteErrorBoundary>
+  )
+}
+
+function RouteFallback() {
+  return (
+    <div className="flex min-h-[40vh] items-center justify-center px-4">
+      <div className="w-full max-w-xl rounded-2xl border border-[#404040] bg-[#262626] p-5 shadow-sm">
+        <div className="h-4 w-36 animate-pulse rounded bg-[#404040]" />
+        <div className="mt-4 grid gap-3">
+          <div className="h-20 animate-pulse rounded-xl bg-[#1a1a1a]" />
+          <div className="h-20 animate-pulse rounded-xl bg-[#1a1a1a]" />
+        </div>
+        <p className="mt-4 text-sm text-[#a3a3a3]">Carregando modulo...</p>
+      </div>
+    </div>
+  )
+}
+
+function RouteErrorFallback() {
+  return (
+    <div className="flex min-h-[40vh] items-center justify-center px-4">
+      <div className="max-w-xl rounded-2xl border border-red-500/40 bg-[#262626] p-6 text-center shadow-sm">
+        <h2 className="text-lg font-bold text-[#e5e5e5]">NÃ£o foi possÃ­vel carregar esta tela</h2>
+        <p className="mt-2 text-sm leading-6 text-[#a3a3a3]">
+          Ocorreu um erro ao abrir o modulo. Recarregue a pagina e tente novamente.
+        </p>
+        <button
+          className="mt-5 rounded-lg bg-[#3b82f6] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#2563eb]"
+          onClick={() => window.location.reload()}
+          type="button"
+        >
+          Recarregar
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function resolveRoute(pathname, navigate, role, profile, user) {
+  if (pathname === '/' || pathname === '/login') {
+    return {
+      element: <LoginPage navigate={navigate} />,
+      title: 'Login',
+      withShell: false,
+    }
+  }
+
+  if (pathname === '/cadastro') {
+    return {
+      element: <RegisterPage navigate={navigate} />,
+      title: 'Cadastro',
+      withShell: false,
+    }
+  }
+
+  if (pathname === '/recuperar-senha') {
+    return {
+      element: <ForgotPasswordPage navigate={navigate} />,
+      title: 'Recuperar senha',
+      withShell: false,
+    }
+  }
+
+  if (pathname === '/inicio' || pathname === '/home' || pathname === '/dashboard') {
+    return {
+      element: <HomePage navigate={navigate} profile={profile} user={user} />,
+      title: 'Painel',
+      withShell: true,
+    }
+  }
+
+  if (pathname === '/agenda') {
+    return {
+      element: <AgendaPage navigate={navigate} role={role} />,
+      title: 'Agenda',
+      withShell: true,
+    }
+  }
+
+  if (pathname === '/pacientes') {
+    return {
+      element: <PatientsPage navigate={navigate} role={role} />,
+      title: 'Pacientes',
+      withShell: true,
+    }
+  }
+
+  if (pathname === '/prontuario') {
+    return {
+      element: <MedicalRecordsPage navigate={navigate} />,
+      title: 'Prontuário',
+      withShell: true,
+    }
+  }
+
+  if (pathname === '/prontuario/novo') {
+    return {
+      element: <MedicalRecordsPage mode="new" navigate={navigate} />,
+      title: 'Novo prontuário',
+      withShell: true,
+    }
+  }
+
+  if (pathname.startsWith('/prontuario/')) {
+    const [, , recordId, action] = pathname.split('/')
+    return {
+      element: <MedicalRecordsPage mode={action === 'editar' ? 'edit' : 'detail'} navigate={navigate} recordId={recordId} />,
+      title: action === 'editar' ? 'Editar prontuário' : 'Prontuário',
+      withShell: true,
+    }
+  }
+
+  if (pathname.startsWith('/pacientes/')) {
+    const patientId = pathname.split('/')[2]
+    return {
+      element: <PatientDetailRoute navigate={navigate} patientId={patientId} role={role} />,
+      title: 'Paciente',
+      withShell: true,
+    }
+  }
+
+  if (pathname === '/consultas') {
+    return {
+      element: <VisitsPage navigate={navigate} />,
+      title: 'Consultas',
+      withShell: true,
+    }
+  }
+
+  if (pathname === '/laudos') {
+    return {
+      element: <ReportsPage navigate={navigate} role={role} />,
+      title: 'Relatórios',
+      withShell: true,
+    }
+  }
+
+  if (pathname === '/relatorios') {
+    return {
+      element: <AnalyticsPage />,
+      title: 'Analytics',
+      withShell: true,
+    }
+  }
+
+  if (pathname === '/camunicacao') {
+    navigate('/comunicacao', { replace: true })
+    return {
+      element: <MessagesPage navigate={navigate} role={role} />,
+      title: 'Comunicação',
+      withShell: true,
+    }
+  }
+
+  if (pathname === '/comunicacao' || pathname === '/mensagens') {
+    return {
+      element: <MessagesPage navigate={navigate} role={role} />,
+      title: 'Comunicação',
+      withShell: true,
+    }
+  }
+
+  if (pathname === '/usuarios') {
+    return {
+      element: <UsersPage role={role} />,
+      title: 'Usuários',
+      withShell: true,
+    }
+  }
+
+  if (pathname === '/perfil') {
+    return {
+      element: <ProfilePage navigate={navigate} />,
+      title: 'Perfil',
+      withShell: true,
+    }
+  }
+
+  if (pathname === '/configuracoes' || pathname === '/config') {
+    return {
+      element: <SettingsPage navigate={navigate} />,
+      title: 'Configurações',
+      withShell: true,
+    }
+  }
+
+  return {
+    element: <NotFoundPage navigate={navigate} />,
+    title: 'Página não encontrada',
+    withShell: true,
+  }
+}
+
+function PatientDetailRoute({ navigate, patientId, role }) {
+  const [patient, setPatient] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let active = true
+
+    patientRepository
+      .getById(patientId)
+      .then((data) => {
+        if (active) setPatient(data)
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [patientId])
+
+  if (loading) {
+    return <div className="pt-10 text-sm text-[#a3a3a3]">Carregando paciente...</div>
+  }
+
+  return patient ? (
+    <PatientDetailPage navigate={navigate} patient={patient} role={role} />
+  ) : (
+    <NotFoundPage navigate={navigate} />
+  )
+}
+
+function UnauthorizedPage({ navigate }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 text-center">
+      <p className="text-5xl">🔒</p>
+      <h1 className="mt-4 text-2xl font-bold text-[#e5e5e5]">Acesso não permitido</h1>
+      <p className="mt-2 text-sm text-[#a3a3a3]">
+        Você não tem permissão para acessar esta página.
+      </p>
+      <button
+        className="mt-6 rounded-lg bg-[#3b82f6] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#2563eb]"
+        onClick={() => navigate('/inicio')}
+        type="button"
+      >
+        Voltar ao painel
+      </button>
+    </div>
+  )
+}
+
+function readLocation() {
+  return {
+    pathname: normalizePath(window.location.pathname),
+    search: window.location.search,
+  }
+}
+
+function normalizePath(pathname) {
+  if (!pathname || pathname === '/') {
+    return '/'
+  }
+
+  return pathname.replace(/\/+$/, '')
+}
+
+export default App

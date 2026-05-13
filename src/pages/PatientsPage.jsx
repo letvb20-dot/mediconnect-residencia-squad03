@@ -1,0 +1,1750 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+
+import { hasCapability } from '../config/permissions.js'
+import { patientRepository } from '../repositories/patientRepository.js'
+import { isValidPersonName } from '../utils/brFormatters.js'
+const ITEMS_PER_PAGE = 25
+
+const darkInput =
+  'h-10 w-full rounded-lg border border-[#404040] bg-[#1a1a1a] px-3 text-sm text-[#e5e5e5] outline-none transition placeholder:text-[#737373] focus:border-[#3b82f6] focus:ring-1 focus:ring-[#3b82f6]'
+const darkLabel = 'mb-1.5 block text-xs font-medium text-[#e5e5e5]'
+const darkCard = 'rounded-2xl border border-[#404040] bg-[#262626] p-6 shadow-sm'
+
+const patientTabs = [
+  { label: 'Resumo', value: 'resumo' },
+  { label: 'Consultas', value: 'consultas' },
+  { label: 'Documentos', value: 'documentos' },
+]
+
+const BRAZILIAN_STATES = [
+  { value: 'AC', label: 'Acre' },
+  { value: 'AL', label: 'Alagoas' },
+  { value: 'AP', label: 'Amapá' },
+  { value: 'AM', label: 'Amazonas' },
+  { value: 'BA', label: 'Bahia' },
+  { value: 'CE', label: 'Ceará' },
+  { value: 'DF', label: 'Distrito Federal' },
+  { value: 'ES', label: 'Espírito Santo' },
+  { value: 'GO', label: 'Goiás' },
+  { value: 'MA', label: 'Maranhão' },
+  { value: 'MT', label: 'Mato Grosso' },
+  { value: 'MS', label: 'Mato Grosso do Sul' },
+  { value: 'MG', label: 'Minas Gerais' },
+  { value: 'PA', label: 'Pará' },
+  { value: 'PB', label: 'Paraíba' },
+  { value: 'PR', label: 'Paraná' },
+  { value: 'PE', label: 'Pernambuco' },
+  { value: 'PI', label: 'Piauí' },
+  { value: 'RJ', label: 'Rio de Janeiro' },
+  { value: 'RN', label: 'Rio Grande do Norte' },
+  { value: 'RS', label: 'Rio Grande do Sul' },
+  { value: 'RO', label: 'Rondônia' },
+  { value: 'RR', label: 'Roraima' },
+  { value: 'SC', label: 'Santa Catarina' },
+  { value: 'SP', label: 'São Paulo' },
+  { value: 'SE', label: 'Sergipe' },
+  { value: 'TO', label: 'Tocantins' },
+]
+
+const INSURANCE_OPTIONS = ['Unimed', 'Bradesco Saúde', 'Amil']
+
+export function PatientsPage({ navigate, role }) {
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [view, setView] = useState('list')
+  const [editingId, setEditingId] = useState(null)
+  const [search, setSearch] = useState('')
+  const [insurance, setInsurance] = useState('')
+  const [vip, setVip] = useState('')
+  const [birthday, setBirthday] = useState('')
+  const [city, setCity] = useState('')
+  const [state, setState] = useState('')
+  const [ageMin, setAgeMin] = useState('')
+  const [ageMax, setAgeMax] = useState('')
+  const [lastVisitSince, setLastVisitSince] = useState('')
+  const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [openMenuId, setOpenMenuId] = useState(null)
+  const [page, setPage] = useState(1)
+
+  useEffect(() => {
+    buildPatientRows()
+      .then((data) => setRows(data))
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const editingPatient = rows.find((patient) => patient.id === editingId)
+  const hasAdvancedFilters = city || state || ageMin || ageMax || lastVisitSince
+  const canEditPatients = hasCapability(role, 'canEditPatients')
+
+  const filteredPatients = useMemo(() => {
+    return rows.filter((patient) => {
+      const haystack = [
+        patient.name,
+        patient.cpf,
+        patient.document,
+        patient.insurance,
+        patient.phone,
+        patient.email,
+        patient.city,
+        patient.state,
+        patient.motherName,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+
+      if (search && !haystack.includes(search.toLowerCase())) {
+        return false
+      }
+
+      if (insurance && normalizeFilterValue(patient.insurance) !== normalizeFilterValue(insurance)) {
+        return false
+      }
+
+      if (vip === 'Sim' && !patient.vip) {
+        return false
+      }
+
+      if (vip === 'Não' && patient.vip) {
+        return false
+      }
+
+      const patientBirthday = getPatientBirthday(patient)
+      if (birthday === 'Hoje' && patientBirthday !== getTodayBirthday()) {
+        return false
+      }
+
+      if (birthday === 'Neste mês' && !patientBirthday.endsWith(`/${getCurrentMonth()}`)) {
+        return false
+      }
+
+      if (city && !String(patient.city || '').toLowerCase().includes(city.toLowerCase())) {
+        return false
+      }
+
+      if (state && patient.state !== state) {
+        return false
+      }
+
+      const patientAge = Number(patient.age) || 0
+      if (ageMin && patientAge < Number(ageMin)) {
+        return false
+      }
+
+      if (ageMax && patientAge > Number(ageMax)) {
+        return false
+      }
+
+      if (lastVisitSince && (!patient.lastVisitIso || patient.lastVisitIso < lastVisitSince)) {
+        return false
+      }
+
+      return true
+    })
+  }, [ageMax, ageMin, birthday, city, insurance, lastVisitSince, rows, search, state, vip])
+
+  const totalPages = Math.max(1, Math.ceil(filteredPatients.length / ITEMS_PER_PAGE))
+  const currentPage = Math.min(page, totalPages)
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+  const paginatedPatients = filteredPatients.slice(startIndex, startIndex + ITEMS_PER_PAGE)
+
+  function resetAdvancedFilters() {
+    setCity('')
+    setState('')
+    setAgeMin('')
+    setAgeMax('')
+    setLastVisitSince('')
+    setAdvancedOpen(false)
+    setPage(1)
+  }
+
+  function openForm(patientId = null) {
+    if (!canEditPatients) return
+    setEditingId(patientId)
+    setOpenMenuId(null)
+    setView('form')
+  }
+
+  async function savePatient(patient) {
+  if (!canEditPatients) {
+    window.alert('Você não tem permissão para salvar pacientes.')
+    return
+  }
+
+  const isNew = !rows.some((item) => item.id === patient.id)
+  setSaving(true)
+
+  try {
+    if (isNew) {
+      const created = normalizeCreatedPatient(await patientRepository.create(patient))
+      const patientId = created?.id || patient.id
+      const avatarResult = patient.avatarFile
+        ? await patientRepository.uploadAvatar(patientId, patient.avatarFile)
+        : null
+      const newRow = {
+        ...patient,
+        avatarFile: undefined,
+        avatarUrl: avatarResult?.avatarUrl || patient.avatarUrl,
+        id: patientId,
+        detailId: patientId || patient.detailId || patient.id,
+        name: created?.full_name || created?.name || patient.name,
+        phone: patient.phone || created?.phone_mobile || created?.phone,
+      }
+      setRows((currentRows) => [newRow, ...currentRows])
+    } else {
+      await patientRepository.update(patient.id, patient)
+      const avatarResult = patient.avatarFile
+        ? await patientRepository.uploadAvatar(patient.id, patient.avatarFile)
+        : null
+      const nextPatient = {
+        ...patient,
+        avatarFile: undefined,
+        avatarUrl: avatarResult?.avatarUrl || patient.avatarUrl,
+      }
+      setRows((currentRows) =>
+        currentRows.map((item) => (item.id === patient.id ? nextPatient : item))
+      )
+    }
+  } catch (err) {
+    window.alert(`Erro ao salvar paciente: ${err.message}`)
+    return
+  } finally {
+    setSaving(false)
+  }
+
+  setEditingId(null)
+  setPage(1)
+  setView('list')
+}
+
+  function openDetail(patient) {
+    setOpenMenuId(null)
+    if (patient.detailId) {
+      navigate(`/pacientes/${patient.detailId}`)
+      return
+    }
+
+    openForm(patient.id)
+  }
+
+  if (loading) {
+    return <p className="p-8 text-center text-[#a3a3a3]">Carregando pacientes...</p>
+  }
+
+  if (error) {
+    return <p className="p-8 text-center text-red-400">Erro ao carregar pacientes: {error}</p>
+  }
+
+  if (view === 'form') {
+    return (
+      <PatientEditor
+        existingIds={rows.map((patient) => patient.id)}
+        onCancel={() => {
+          setEditingId(null)
+          setView('list')
+        }}
+        onSave={savePatient}
+        patient={editingPatient}
+        saving={saving}
+      />
+    )
+  }
+
+  return (
+    <div className="mx-auto max-w-7xl space-y-6 text-[#e5e5e5]">
+      <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-[#e5e5e5]">Pacientes</h1>
+          <p className="mt-1 text-sm text-[#a3a3a3]">Gerencie as informações de seus pacientes</p>
+        </div>
+        {canEditPatients ? (
+          <button
+            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#3b82f6] px-4 text-sm font-medium text-white shadow-sm transition hover:bg-[#2563eb] md:w-auto"
+            onClick={() => openForm()}
+            type="button"
+          >
+            <PatientIcon name="user-plus" />
+            Adicionar
+          </button>
+        ) : null}
+      </div>
+
+      <section className="rounded-2xl border border-[#404040] bg-[#262626] px-6 py-8 shadow-sm xl:py-14">
+        <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-5">
+          <div className="relative md:col-span-2">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3">
+              <PatientIcon className="size-4 text-[#a3a3a3]" name="search" />
+            </span>
+            <input
+              className="h-11 w-full rounded-lg border border-[#404040] bg-[#303030] py-2.5 pl-10 pr-4 text-sm text-[#e5e5e5] outline-none transition placeholder:text-[#a3a3a3] focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20"
+              onChange={(event) => {
+                setSearch(event.target.value)
+                setPage(1)
+              }}
+              placeholder="Buscar por nome ou documento..."
+              value={search}
+            />
+          </div>
+
+          <PatientSelect
+            icon="file"
+            label="Selecione o Convenio"
+            onChange={(value) => {
+              setInsurance(value)
+              setPage(1)
+            }}
+            options={INSURANCE_OPTIONS}
+            value={insurance}
+          />
+
+          <PatientSelect
+            icon="star"
+            label="Selecione (VIP)"
+            onChange={(value) => {
+              setVip(value)
+              setPage(1)
+            }}
+            options={['Sim', 'Não']}
+            value={vip}
+          />
+
+          <div className="flex gap-2">
+            <PatientSelect
+              className="flex-1"
+              icon="calendar"
+              label="Aniversariantes"
+              onChange={(value) => {
+                setBirthday(value)
+                setPage(1)
+              }}
+              options={['Hoje', 'Neste mês']}
+              value={birthday}
+            />
+            <button
+              className={`grid size-11 shrink-0 place-items-center rounded-lg border transition ${
+                hasAdvancedFilters
+                  ? 'border-[#3b82f6] bg-[#3b82f6]/10 text-[#3b82f6]'
+                  : 'border-[#404040] bg-[#303030] text-[#e5e5e5] hover:bg-[#333333]'
+              }`}
+              onClick={() => setAdvancedOpen(true)}
+              title="Filtro avancado"
+              type="button"
+            >
+              <PatientIcon className="size-4" name="filter" />
+            </button>
+          </div>
+        </div>
+
+        {hasAdvancedFilters ? (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <span className="text-xs text-[#a3a3a3]">Filtros ativos:</span>
+            {city ? <FilterChip label={`Cidade: ${city}`} onClear={() => setCity('')} /> : null}
+            {state ? <FilterChip label={`Estado: ${state}`} onClear={() => setState('')} /> : null}
+            {ageMin ? <FilterChip label={`Idade min: ${ageMin}`} onClear={() => setAgeMin('')} /> : null}
+            {ageMax ? <FilterChip label={`Idade max: ${ageMax}`} onClear={() => setAgeMax('')} /> : null}
+            {lastVisitSince ? (
+              <FilterChip label={`Desde: ${lastVisitSince}`} onClear={() => setLastVisitSince('')} />
+            ) : null}
+            <button className="text-xs text-[#ef4444] hover:underline" onClick={resetAdvancedFilters} type="button">
+              Limpar todos
+            </button>
+          </div>
+        ) : null}
+
+        <div className="overflow-x-auto rounded-lg border border-[#404040]">
+          <table className="w-full min-w-full table-fixed text-left text-sm">
+            <thead className="bg-[#171717] text-xs font-semibold uppercase text-[#a3a3a3]">
+              <tr>
+                <th className="w-[24%] px-6 py-4">Nome</th>
+                <th className="w-[14%] px-6 py-4">Telefone</th>
+                <th className="w-[12%] px-6 py-4">Cidade</th>
+                <th className="w-[8%] px-6 py-4">Estado</th>
+                <th className="w-[16%] px-6 py-4">Ultimo atendimento</th>
+                <th className="w-[18%] px-6 py-4">Proximo atendimento</th>
+                <th className="sticky right-0 w-[8.5rem] bg-[#171717] px-6 py-4 text-right">Ações</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#404040] bg-[#262626]">
+              {paginatedPatients.length ? (
+                paginatedPatients.map((patient) => (
+                  <tr className="transition hover:bg-[#303030]" key={patient.id}>
+                    <td className="px-6 py-4 align-top">
+                      <button className="flex items-center gap-3 text-left" onClick={() => openDetail(patient)} type="button">
+                        {patient.avatarUrl ? (
+                          <img alt="" className="size-8 shrink-0 rounded-full border border-[#3b82f6]/30 object-cover" src={patient.avatarUrl} />
+                        ) : (
+                          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[#333333] text-xs font-bold text-[#3b82f6]">
+                            {patient.name.charAt(0)}
+                          </span>
+                        )}
+                        <span className="min-w-0">
+                          <span className="block whitespace-normal break-words font-medium text-[#e5e5e5] transition hover:text-[#3b82f6]">
+                            {patient.name}
+                          </span>
+                          <span className="mt-0.5 block whitespace-normal break-words text-xs text-[#a3a3a3]">
+                            {patient.insurance || missingValue('Convênio')} {patient.vip ? ' | VIP' : ''}
+                          </span>
+                        </span>
+                      </button>
+                    </td>
+                    <td className="px-6 py-4 align-top whitespace-normal break-words text-[#a3a3a3]">{patient.phone || missingValue('Telefone')}</td>
+                    <td className="px-6 py-4 align-top whitespace-normal break-words text-[#a3a3a3]">{patient.city || missingValue('Cidade')}</td>
+                    <td className="px-6 py-4 align-top text-[#a3a3a3]">{patient.state || missingValue('Estado')}</td>
+                    <td className="px-6 py-4 align-top whitespace-normal break-words text-[#a3a3a3]">{patient.lastVisit || 'Ainda não houve atendimento'}</td>
+                    <td className="px-6 py-4 align-top whitespace-normal break-words text-[#a3a3a3]">{patient.nextVisit || 'Nenhum atendimento agendado'}</td>
+                    <td className="sticky right-0 bg-[#262626] px-4 py-4 text-right shadow-[-10px_0_12px_-12px_rgba(0,0,0,0.75)]">
+                      <button
+                        aria-label={`Ações de ${patient.name}`}
+                        className="rounded p-1 text-[#a3a3a3] transition hover:bg-[#333333] hover:text-[#e5e5e5]"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          setOpenMenuId(openMenuId === patient.id ? null : patient.id)
+                        }}
+                        type="button"
+                      >
+                        <PatientIcon className="size-5" name="more" />
+                      </button>
+                      {openMenuId === patient.id ? (
+                        <>
+                          <button
+                            aria-label="Fechar menu"
+                            className="fixed inset-0 z-40 cursor-default"
+                            onClick={() => setOpenMenuId(null)}
+                            type="button"
+                          />
+                          <div className="fixed right-8 z-50 w-48 rounded-md border border-[#404040] bg-[#262626] p-1 text-left shadow-lg">
+                            <ActionItem icon="file" label="Ver detalhes" onClick={() => openDetail(patient)} />
+                            {canEditPatients ? <ActionItem icon="edit" label="Editar" onClick={() => openForm(patient.id)} /> : null}
+                            <ActionItem
+                              icon="calendar"
+                              label="Marcar consulta"
+                              onClick={() => {
+                                setOpenMenuId(null)
+                                navigate('/agenda')
+                              }}
+                            />
+                          </div>
+                        </>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td className="px-6 py-10 text-center text-[#a3a3a3]" colSpan={7}>
+                    Nenhum paciente encontrado.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="mt-4 flex flex-col gap-4 border-t border-[#404040] pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-[#a3a3a3]">
+            Mostrando {filteredPatients.length ? startIndex + 1 : 0}-
+            {Math.min(startIndex + ITEMS_PER_PAGE, filteredPatients.length)} de {filteredPatients.length} pacientes
+          </p>
+          <div className="flex items-center gap-2">
+            <PageButton disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>
+              <PatientIcon className="size-4" name="chevron-left" />
+            </PageButton>
+            {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
+              <button
+                className={`grid size-8 place-items-center rounded-lg text-xs font-medium transition ${
+                  pageNumber === currentPage
+                    ? 'bg-[#3b82f6] text-white'
+                    : 'border border-[#404040] bg-[#1a1a1a] text-[#a3a3a3] hover:bg-[#333333]'
+                }`}
+                key={pageNumber}
+                onClick={() => setPage(pageNumber)}
+                type="button"
+              >
+                {pageNumber}
+              </button>
+            ))}
+            <PageButton disabled={currentPage === totalPages} onClick={() => setPage(currentPage + 1)}>
+              <PatientIcon className="size-4" name="chevron-right" />
+            </PageButton>
+          </div>
+        </div>
+      </section>
+
+      {advancedOpen ? (
+        <AdvancedFilterModal
+          ageMax={ageMax}
+          ageMin={ageMin}
+          city={city}
+          lastVisitSince={lastVisitSince}
+          onApply={() => {
+            setPage(1)
+            setAdvancedOpen(false)
+          }}
+          onClear={resetAdvancedFilters}
+          onClose={() => setAdvancedOpen(false)}
+          setAgeMax={setAgeMax}
+          setAgeMin={setAgeMin}
+          setCity={setCity}
+          setLastVisitSince={setLastVisitSince}
+          setState={setState}
+          state={state}
+          stateOptions={BRAZILIAN_STATES}
+        />
+      ) : null}
+    </div>
+  )
+}
+
+function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
+  const [formData, setFormData] = useState(() => ({
+    id: patient?.id || '',
+    detailId: patient?.detailId || null,
+    name: patient?.name || '',
+    cpf: patient?.cpf || '',
+    birthDate: patient?.birthDate || patient?.birth_date || '',
+    motherName: patient?.motherName || patient?.mother_name || '',
+    fatherName: patient?.fatherName || patient?.father_name || '',
+    ethnicity: patient?.ethnicity || '',
+    maritalStatus: patient?.maritalStatus || patient?.marital_status || '',
+    phone: patient?.phone || '',
+    phoneSecondary: patient?.phoneSecondary || patient?.phone_secondary || '',
+    email: patient?.email || '',
+    zipCode: patient?.zipCode || patient?.zip_code || '',
+    addressStreet: patient?.addressStreet || patient?.address_street || patient?.address || '',
+    addressNumber: patient?.addressNumber || patient?.address_number || '',
+    addressComplement: patient?.addressComplement || patient?.address_complement || '',
+    city: patient?.city || '',
+    state: patient?.state || '',
+    insurance: patient?.insurance || '',
+    plan: patient?.plan || '',
+    age: patient?.age || '',
+    condition: patient?.condition || '',
+    birthday: patient?.birthday || '',
+    notesText: patient?.notesText || patient?.notes_text || '',
+    vip: Boolean(patient?.vip),
+    lastVisit: patient?.lastVisit || null,
+    nextVisit: patient?.nextVisit || null,
+    lastVisitIso: patient?.lastVisitIso || null,
+    avatarUrl: patient?.avatarUrl || patient?.avatar_url || '',
+  }))
+  const fileInputRef = useRef(null)
+  const [avatarFile, setAvatarFile] = useState(null)
+  const [avatarPreview, setAvatarPreview] = useState(formData.avatarUrl)
+  const [attachmentsOpen, setAttachmentsOpen] = useState(false)
+  const isNewPatient = !patient
+
+  function handleChange(event) {
+    const { checked, name, type, value } = event.target
+    let nextValue = type === 'checkbox' ? checked : value
+
+    if (name === 'cpf') {
+      nextValue = maskCPF(value)
+    }
+
+    if (name === 'phone') {
+      nextValue = maskPhone(value)
+    }
+
+    if (name === 'phoneSecondary') {
+      nextValue = maskPhone(value)
+    }
+
+    if (name === 'zipCode') {
+      nextValue = maskCEP(value)
+    }
+
+    setFormData((currentData) => ({ ...currentData, [name]: nextValue }))
+  }
+
+  function handleAvatarChange(event) {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setAvatarFile(file)
+    setAvatarPreview(URL.createObjectURL(file))
+    event.target.value = ''
+  }
+
+  function handleSubmit(event) {
+    event.preventDefault()
+
+    if (!isValidPersonName(formData.name)) {
+      window.alert('Informe um nome válido. O campo Nome não pode conter e-mail.')
+      return
+    }
+
+    const requiredFields = [
+      ['cpf', 'CPF'],
+      ['age', 'idade'],
+      ['birthDate', 'data de nascimento'],
+      ['motherName', 'nome da mãe'],
+      ['email', 'email'],
+      ['phone', 'celular'],
+      ['zipCode', 'CEP'],
+      ['addressStreet', 'endereço'],
+      ['addressNumber', 'número'],
+      ['city', 'cidade'],
+      ['state', 'estado'],
+      ['plan', 'plano'],
+    ]
+    if (isNewPatient) {
+      const missingFields = requiredFields
+        .filter(([field]) => !String(formData[field] || '').trim())
+        .map(([, label]) => label)
+
+      if (missingFields.length) {
+        window.alert(`Preencha os campos obrigatórios: ${missingFields.join(', ')}.`)
+        return
+      }
+    }
+
+    onSave({
+      ...formData,
+      id: formData.id || uniqueSlug(formData.name, existingIds),
+      age: Number(formData.age) || 0,
+      birthday: formData.birthday || formatBirthday(formData.birthDate),
+      city: formData.city,
+      document: formData.cpf ? `CPF ${formData.cpf}` : 'CPF não informado',
+      insurance: formData.insurance,
+      lastVisit: formData.lastVisit || 'Ainda não houve atendimento',
+      nextVisit: formData.nextVisit || null,
+      phone: formData.phone,
+      plan: formData.plan,
+      state: formData.state,
+      address: formatAddress(formData),
+      notes: formData.notesText ? [formData.notesText] : [],
+      avatarFile,
+      avatarUrl: avatarFile ? formData.avatarUrl : avatarPreview || formData.avatarUrl,
+    })
+  }
+
+  return (
+    <div className="relative pb-20 text-[#e5e5e5]">
+      <div className="mb-6 flex flex-col items-start justify-between gap-4 border-b border-[#404040] pb-6 md:flex-row">
+        <div className="flex items-start gap-4">
+          <button
+            className="mt-1 grid size-10 place-items-center rounded-lg border border-[#404040] bg-[#262626] text-[#e5e5e5] transition hover:bg-[#333333]"
+            onClick={onCancel}
+            type="button"
+          >
+            <PatientIcon className="size-5" name="arrow-left" />
+          </button>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-[#e5e5e5]">Paciente</h1>
+            <p className="mt-1 text-sm text-[#a3a3a3]">Gerencie as informações de seus pacientes</p>
+          </div>
+        </div>
+      </div>
+
+      <form className="space-y-6" onSubmit={handleSubmit}>
+          <section className={darkCard}>
+            <h2 className="mb-6 text-lg font-semibold text-[#e5e5e5]">Dados do Paciente</h2>
+            <div className="mb-8 flex flex-col items-start gap-4 md:flex-row">
+              {avatarPreview ? (
+                <img alt="" className="size-20 shrink-0 rounded-full border border-[#3b82f6]/30 object-cover" src={avatarPreview} />
+              ) : (
+                <div className="grid size-20 shrink-0 place-items-center rounded-full border border-[#3b82f6]/30 bg-[#3b82f6]/20 text-[#3b82f6]">
+                  <PatientIcon className="size-10" name="user" />
+                </div>
+              )}
+              <button
+                className="mt-2 rounded-lg border border-[#404040] bg-[#1a1a1a] px-4 py-1.5 text-sm font-medium text-[#e5e5e5] transition hover:bg-[#333333]"
+                onClick={() => fileInputRef.current?.click()}
+                type="button"
+              >
+                Carregar
+              </button>
+              <input
+                accept="image/*"
+                className="hidden"
+                onChange={handleAvatarChange}
+                ref={fileInputRef}
+                type="file"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-x-6 gap-y-6 md:grid-cols-12">
+              <DarkField className="md:col-span-6" label="Nome *">
+                <input className={darkInput} name="name" onChange={handleChange} required={isNewPatient} value={formData.name} />
+              </DarkField>
+              <DarkField className="md:col-span-3" label={requiredLabel('CPF')}>
+                <input className={darkInput} maxLength={14} name="cpf" onChange={handleChange} required={isNewPatient} value={formData.cpf} />
+              </DarkField>
+              <DarkField className="md:col-span-3" label={requiredLabel('Idade')}>
+                <input className={darkInput} min="0" name="age" onChange={handleChange} required={isNewPatient} type="number" value={formData.age} />
+              </DarkField>
+              <DarkField className="md:col-span-3" label={requiredLabel('Data de Nascimento')}>
+                <input className={`${darkInput} [color-scheme:dark]`} name="birthDate" onChange={handleChange} required={isNewPatient} type="date" value={formData.birthDate} />
+              </DarkField>
+              <DarkField className="md:col-span-3" label="Aniversário">
+                <input className={darkInput} maxLength={5} name="birthday" onChange={handleChange} placeholder="07/04" value={formData.birthday} />
+              </DarkField>
+              <DarkField className="md:col-span-3" label="Etnia">
+                <select className={darkInput} name="ethnicity" onChange={handleChange} value={formData.ethnicity}>
+                  <option value="">Selecione</option>
+                  <option>Indígena</option>
+                  <option>Não Indígena</option>
+                </select>
+              </DarkField>
+              <DarkField className="md:col-span-3" label="Estado civil">
+                <select className={darkInput} name="maritalStatus" onChange={handleChange} value={formData.maritalStatus}>
+                  <option value="">Selecione</option>
+                  <option>Solteiro(a)</option>
+                  <option>Casado(a)</option>
+                  <option>Divorciado(a)</option>
+                </select>
+              </DarkField>
+              <DarkField className="md:col-span-6" label={requiredLabel('Nome da mãe')}>
+                <input className={darkInput} name="motherName" onChange={handleChange} required={isNewPatient} value={formData.motherName} />
+              </DarkField>
+              <DarkField className="md:col-span-6" label="Nome do pai">
+                <input className={darkInput} name="fatherName" onChange={handleChange} value={formData.fatherName} />
+              </DarkField>
+              <DarkField className="md:col-span-12" label="Observacoes">
+                <textarea className={`${darkInput} min-h-24 py-2`} name="notesText" onChange={handleChange} value={formData.notesText} />
+              </DarkField>
+              <div className="md:col-span-12">
+                <button
+                  className="flex w-full items-center justify-between rounded-lg border border-[#404040] bg-[#1a1a1a] p-4 text-left text-sm font-medium text-[#e5e5e5] transition hover:bg-[#333333]"
+                  onClick={() => setAttachmentsOpen((open) => !open)}
+                  type="button"
+                >
+                  <span className="flex items-center gap-2">
+                    <PatientIcon className="size-4 text-[#a3a3a3]" name="paperclip" />
+                    Anexos do paciente
+                  </span>
+                  <PatientIcon className="size-4 text-[#a3a3a3]" name={attachmentsOpen ? 'chevron-up' : 'chevron-down'} />
+                </button>
+                {attachmentsOpen ? <UploadDropzone /> : null}
+              </div>
+            </div>
+          </section>
+
+          <section className={darkCard}>
+            <h2 className="mb-6 text-lg font-semibold text-[#e5e5e5]">Contato</h2>
+            <div className="grid grid-cols-1 gap-x-6 gap-y-6 md:grid-cols-12">
+              <DarkField className="md:col-span-4" label={requiredLabel('E-mail')}>
+                <input className={darkInput} name="email" onChange={handleChange} required={isNewPatient} type="email" value={formData.email} />
+              </DarkField>
+              <DarkField className="md:col-span-4" label={requiredLabel('Celular')}>
+                <input className={darkInput} maxLength={15} name="phone" onChange={handleChange} required={isNewPatient} value={formData.phone} />
+              </DarkField>
+              <DarkField className="md:col-span-4" label="Telefone 2">
+                <input className={darkInput} maxLength={15} name="phoneSecondary" onChange={handleChange} value={formData.phoneSecondary} />
+              </DarkField>
+            </div>
+          </section>
+
+          <section className={darkCard}>
+            <h2 className="mb-6 text-lg font-semibold text-[#e5e5e5]">Endereço</h2>
+            <div className="grid grid-cols-1 gap-x-6 gap-y-6 md:grid-cols-12">
+              <DarkField className="md:col-span-3" label={requiredLabel('CEP')}>
+                <input className={darkInput} maxLength={9} name="zipCode" onChange={handleChange} placeholder="_____-___" required={isNewPatient} value={formData.zipCode} />
+              </DarkField>
+              <DarkField className="md:col-span-5" label={requiredLabel('Endereço')}>
+                <input className={darkInput} name="addressStreet" onChange={handleChange} required={isNewPatient} value={formData.addressStreet} />
+              </DarkField>
+              <DarkField className="md:col-span-2" label={requiredLabel('Número')}>
+                <input className={darkInput} name="addressNumber" onChange={handleChange} required={isNewPatient} value={formData.addressNumber} />
+              </DarkField>
+              <DarkField className="md:col-span-6" label="Complemento">
+                <input className={darkInput} name="addressComplement" onChange={handleChange} value={formData.addressComplement} />
+              </DarkField>
+              <DarkField className="md:col-span-4" label={requiredLabel('Cidade')}>
+                <input className={darkInput} name="city" onChange={handleChange} required={isNewPatient} value={formData.city} />
+              </DarkField>
+              <DarkField className="md:col-span-4" label={requiredLabel('Estado')}>
+                <select className={darkInput} name="state" onChange={handleChange} required={isNewPatient} value={formData.state}>
+                  <option value="">Selecione</option>
+                  {BRAZILIAN_STATES.map((stateOption) => (
+                    <option key={stateOption.value} value={stateOption.value}>
+                      {stateOption.label}
+                    </option>
+                  ))}
+                </select>
+              </DarkField>
+            </div>
+          </section>
+
+          <section className={darkCard}>
+            <h2 className="mb-6 text-lg font-semibold text-[#e5e5e5]">Informações de convenio</h2>
+            <div className="grid grid-cols-1 gap-x-6 gap-y-6 md:grid-cols-12">
+              <DarkField className="md:col-span-6" label="Convênio">
+                <select className={darkInput} name="insurance" onChange={handleChange} value={formData.insurance}>
+                  <option value="">Selecione</option>
+                  {INSURANCE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </DarkField>
+              <DarkField className="md:col-span-6" label={requiredLabel('Plano')}>
+                <input className={darkInput} name="plan" onChange={handleChange} required={isNewPatient} value={formData.plan} />
+              </DarkField>
+              <label className="flex w-fit cursor-pointer items-center gap-2 text-sm text-[#e5e5e5] md:col-span-12">
+                <input className="size-4 accent-[#3b82f6]" checked={formData.vip} name="vip" onChange={handleChange} type="checkbox" />
+                Paciente VIP
+              </label>
+            </div>
+          </section>
+
+          <div className="flex justify-end gap-3 pt-4">
+            <button
+              className="rounded-lg border border-[#404040] bg-[#262626] px-5 py-2.5 text-sm font-medium text-[#e5e5e5] transition hover:bg-[#333333]"
+              disabled={saving}
+              onClick={onCancel}
+              type="button"
+            >
+              Cancelar
+            </button>
+            <button
+              className="rounded-lg bg-[#3b82f6] px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-[#2563eb] disabled:opacity-60"
+              disabled={saving}
+              type="submit"
+            >
+              {saving ? 'Salvando...' : 'Salvar alteracoes'}
+            </button>
+          </div>
+      </form>
+    </div>
+  )
+}
+
+export function PatientDetailPage({ navigate, patient, role }) {
+  const [activeTab, setActiveTab] = useState('resumo')
+  const [localPatient, setLocalPatient] = useState(patient)
+  const [editing, setEditing] = useState(false)
+  const [messageShortcutOpen, setMessageShortcutOpen] = useState(false)
+  const [appointmentShortcutOpen, setAppointmentShortcutOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const canEditPatients = hasCapability(role, 'canEditPatients')
+  const canHardDeletePatients = hasCapability(role, 'hardDeletePatients')
+
+  async function savePatient(updatedPatient) {
+    if (!canEditPatients) return
+
+    setSaving(true)
+    try {
+      await patientRepository.update(updatedPatient.id, updatedPatient)
+      const avatarResult = updatedPatient.avatarFile
+        ? await patientRepository.uploadAvatar(updatedPatient.id, updatedPatient.avatarFile)
+        : null
+      setLocalPatient((current) => ({
+        ...current,
+        ...updatedPatient,
+        avatarFile: undefined,
+        avatarUrl: avatarResult?.avatarUrl || updatedPatient.avatarUrl,
+      }))
+      setEditing(false)
+    } catch (err) {
+      window.alert(`Erro ao salvar paciente: ${err.message}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function deletePatient() {
+    if (!canHardDeletePatients) return
+
+    if (!window.confirm('Tem certeza que deseja excluir este paciente definitivamente? Esta ação não poderá ser desfeita.')) {
+      return
+    }
+
+    try {
+      await patientRepository.remove(localPatient.id)
+      navigate('/pacientes')
+    } catch (err) {
+      window.alert(`Erro ao excluir paciente: ${err.message}`)
+    }
+  }
+
+  if (editing) {
+    return (
+      <PatientEditor
+        existingIds={[localPatient.id]}
+        onCancel={() => setEditing(false)}
+        onSave={savePatient}
+        patient={localPatient}
+        saving={saving}
+      />
+    )
+  }
+
+  return (
+    <div className="mx-auto max-w-7xl space-y-6">
+      <header className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
+        <div className="flex items-start gap-4">
+          <button
+            className="mt-1 grid size-10 place-items-center rounded-sm border border-[#404040] bg-[#262626] text-[#e5e5e5] transition hover:bg-[#303030]"
+            onClick={() => navigate('/pacientes')}
+            type="button"
+          >
+            <PatientIcon className="size-5" name="chevron-left" />
+          </button>
+          {localPatient.avatarUrl ? (
+            <img alt="" className="mt-1 size-12 rounded-full border border-[#3b82f6]/30 object-cover" src={localPatient.avatarUrl} />
+          ) : null}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#3b82f6]">Dados do Paciente</p>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight text-[#f5f5f5]">{localPatient.name}</h1>
+            <p className="mt-1 text-sm text-[#b8b8b8]">
+              {localPatient.condition} • {localPatient.status} • {localPatient.document}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          {canEditPatients ? (
+            <button
+              className="h-10 rounded-sm border border-[#404040] bg-[#262626] px-4 text-sm font-semibold text-[#e5e5e5] transition hover:bg-[#303030]"
+              onClick={() => setEditing(true)}
+              type="button"
+            >
+              Editar dados
+            </button>
+          ) : null}
+          <button
+            className="h-10 rounded-sm border border-[#404040] bg-[#262626] px-4 text-sm font-semibold text-[#e5e5e5] transition hover:bg-[#303030]"
+            onClick={() => setMessageShortcutOpen(true)}
+            type="button"
+          >
+            Enviar mensagem
+          </button>
+          <button
+            className="h-10 rounded-sm bg-[#3b82f6] px-4 text-sm font-semibold text-white transition hover:bg-[#2563eb]"
+            onClick={() => setAppointmentShortcutOpen(true)}
+            type="button"
+          >
+            Novo retorno
+          </button>
+        </div>
+      </header>
+
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <SummaryTile label="Idade" value={localPatient.age ? `${localPatient.age} anos` : missingValue('Idade')} />
+        <SummaryTile label="Risco" value={localPatient.risk || missingValue('Risco')} tone={localPatient.risk ? riskColor(localPatient.risk) : null} />
+        <SummaryTile label="Última consulta" value={localPatient.lastVisit || 'Ainda não houve atendimento'} />
+        <SummaryTile label="Próxima consulta" value={localPatient.nextVisit || 'Nenhum atendimento agendado'} />
+      </section>
+
+      <section className={darkCard}>
+        <div className="flex gap-4 border-b border-[#404040]">
+          {patientTabs.map((tab) => (
+            <button
+              className={`border-b-2 px-2 pb-3 text-sm font-semibold transition ${
+                activeTab === tab.value
+                  ? 'border-[#3b82f6] text-[#3b82f6]'
+                  : 'border-transparent text-[#b8b8b8] hover:text-[#e5e5e5]'
+              }`}
+              key={tab.value}
+              onClick={() => setActiveTab(tab.value)}
+              type="button"
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-6">
+          {activeTab === 'resumo' ? <PatientSummary patient={localPatient} /> : null}
+          {activeTab === 'consultas' ? <PatientVisits navigate={navigate} patient={localPatient} /> : null}
+          {activeTab === 'documentos' ? <PatientDocuments patient={localPatient} /> : null}
+        </div>
+      </section>
+
+      {canHardDeletePatients ? (
+        <div className="flex justify-end">
+          <button
+            className="h-10 rounded-sm border border-red-700 bg-red-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500/40"
+            onClick={deletePatient}
+            type="button"
+          >
+            Excluir paciente
+          </button>
+        </div>
+      ) : null}
+
+      {messageShortcutOpen ? (
+        <PatientMessageShortcutModal
+          onClose={() => setMessageShortcutOpen(false)}
+          patient={localPatient}
+        />
+      ) : null}
+
+      {appointmentShortcutOpen ? (
+        <PatientAppointmentShortcutModal
+          onClose={() => setAppointmentShortcutOpen(false)}
+          patient={localPatient}
+        />
+      ) : null}
+    </div>
+  )
+}
+
+function PatientSummary({ patient }) {
+  const notes = Array.isArray(patient.notes) ? patient.notes : []
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+      <div className="space-y-6">
+        <h2 className="text-xl font-bold text-[#f5f5f5]">Resumo clínico</h2>
+        <div className="grid gap-3">
+          {notes.length ? notes.map((note) => (
+            <p className="rounded-xl border border-[#404040] bg-[#171717] p-4 text-sm leading-6 text-[#b8b8b8]" key={note}>
+              {note}
+            </p>
+          )) : (
+            <p className="rounded-xl border border-[#404040] bg-[#171717] p-4 text-sm leading-6 text-[#b8b8b8]">
+              Nenhuma observação clínica registrada.
+            </p>
+          )}
+        </div>
+        <PatientInfoSection
+          items={[
+            ['CPF', patient.cpf || patient.document],
+            ['Data de nascimento', formatDisplayDate(patient.birthDate || patient.birth_date)],
+            ['Nome da mãe', patient.motherName],
+            ['Nome do pai', patient.fatherName],
+            ['Etnia', patient.ethnicity],
+            ['Estado civil', patient.maritalStatus],
+          ]}
+          title="Dados pessoais"
+        />
+        <PatientInfoSection
+          items={[
+            ['CEP', patient.zipCode],
+            ['Endereço', patient.addressStreet],
+            ['Número', patient.addressNumber],
+            ['Complemento', patient.addressComplement],
+            ['Cidade', patient.city],
+            ['Estado', patient.state],
+          ]}
+          title="Endereço"
+        />
+        <PatientInfoSection
+          items={[
+            ['Convênio', patient.insurance],
+            ['Plano', patient.plan],
+            ['VIP', patient.vip ? 'Sim' : 'Não'],
+          ]}
+          title="Informações de convênio"
+        />
+      </div>
+      <div className="rounded-xl border border-[#404040] bg-[#171717] p-4">
+        <h3 className="font-bold text-[#f5f5f5]">Contato e equipe</h3>
+        <dl className="mt-4 grid gap-3 text-sm">
+          <InfoRow label="Telefone" value={patient.phone} />
+          <InfoRow label="Telefone 2" value={patient.phoneSecondary} />
+          <InfoRow label="E-mail" value={patient.email} />
+          <InfoRow label="Endereço" value={patient.address} />
+          <InfoRow label="Equipe" value={(patient.team || []).join(', ')} />
+        </dl>
+      </div>
+    </div>
+  )
+}
+
+function PatientMessageShortcutModal({ onClose, patient }) {
+  const [message, setMessage] = useState('')
+  const [channel, setChannel] = useState('whatsapp')
+
+  function handleSubmit(event) {
+    event.preventDefault()
+    onClose()
+  }
+
+  return (
+    <ShortcutModal onClose={onClose} title="Nova mensagem">
+      <form className="space-y-4" onSubmit={handleSubmit}>
+        <DarkField label="Paciente">
+          <input className={darkInput} readOnly value={patient.name || ''} />
+        </DarkField>
+        <DarkField label="Canal">
+          <select className={darkInput} onChange={(event) => setChannel(event.target.value)} value={channel}>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="sms">SMS</option>
+            <option value="email">E-mail</option>
+          </select>
+        </DarkField>
+        <DarkField label="Mensagem">
+          <textarea
+            className={`${darkInput} min-h-28 py-2`}
+            onChange={(event) => setMessage(event.target.value)}
+            value={message}
+          />
+        </DarkField>
+        <ShortcutActions disabled={!message.trim()} onClose={onClose} submitLabel="Enviar" />
+      </form>
+    </ShortcutModal>
+  )
+}
+
+function PatientAppointmentShortcutModal({ onClose, patient }) {
+  const [date, setDate] = useState('')
+  const [time, setTime] = useState('')
+  const [type, setType] = useState('Retorno')
+
+  function handleSubmit(event) {
+    event.preventDefault()
+    onClose()
+  }
+
+  return (
+    <ShortcutModal onClose={onClose} title="Novo agendamento">
+      <form className="space-y-4" onSubmit={handleSubmit}>
+        <DarkField label="Paciente">
+          <input className={darkInput} readOnly value={patient.name || ''} />
+        </DarkField>
+        <div className="grid gap-4 md:grid-cols-2">
+          <DarkField label="Data">
+            <input className={`${darkInput} [color-scheme:dark]`} onChange={(event) => setDate(event.target.value)} type="date" value={date} />
+          </DarkField>
+          <DarkField label="Horário">
+            <input className={`${darkInput} [color-scheme:dark]`} onChange={(event) => setTime(event.target.value)} type="time" value={time} />
+          </DarkField>
+        </div>
+        <DarkField label="Tipo">
+          <input className={darkInput} onChange={(event) => setType(event.target.value)} value={type} />
+        </DarkField>
+        <ShortcutActions disabled={!date || !time} onClose={onClose} submitLabel="Salvar" />
+      </form>
+    </ShortcutModal>
+  )
+}
+
+function ShortcutModal({ children, onClose, title }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="w-full max-w-xl rounded-2xl border border-[#404040] bg-[#262626] shadow-2xl">
+        <div className="flex items-center justify-between border-b border-[#404040] px-5 py-4">
+          <h2 className="text-lg font-bold text-[#f5f5f5]">{title}</h2>
+          <button className="grid size-9 place-items-center rounded-sm text-[#a3a3a3] hover:bg-[#303030]" onClick={onClose} type="button">
+            <PatientIcon className="size-5" name="x" />
+          </button>
+        </div>
+        <div className="p-5">{children}</div>
+      </div>
+    </div>
+  )
+}
+
+function ShortcutActions({ disabled, onClose, submitLabel }) {
+  return (
+    <div className="flex justify-end gap-3 border-t border-[#404040] pt-4">
+      <button className="h-10 rounded-sm border border-[#404040] px-4 text-sm font-semibold text-[#e5e5e5]" onClick={onClose} type="button">
+        Cancelar
+      </button>
+      <button
+        className="h-10 rounded-sm bg-[#3b82f6] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+        disabled={disabled}
+        type="submit"
+      >
+        {submitLabel}
+      </button>
+    </div>
+  )
+}
+
+function PatientInfoSection({ items, title }) {
+  return (
+    <section className="rounded-xl border border-[#404040] bg-[#171717] p-4">
+      <h3 className="font-bold text-[#f5f5f5]">{title}</h3>
+      <dl className="mt-4 grid gap-3 text-sm md:grid-cols-2">
+        {items.map(([label, value]) => (
+          <InfoRow key={label} label={label} value={value || 'Não informado'} />
+        ))}
+      </dl>
+    </section>
+  )
+}
+
+function PatientVisits({ navigate, patient }) {
+  return (
+    <div className="grid gap-3">
+      {[
+        patient.nextVisit
+          ? { date: patient.nextVisit, status: 'Agendada', description: `Retorno para ${patient.condition}` }
+          : null,
+        patient.lastVisit
+          ? { date: patient.lastVisit, status: 'Finalizada', description: 'Consulta registrada no histórico do paciente.' }
+          : null,
+      ].filter(Boolean).map((visit) => (
+        <div className="rounded-xl border border-[#404040] bg-[#171717] p-4" key={`${visit.date}-${visit.status}`}>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="font-semibold text-[#f5f5f5]">{visit.date}</p>
+              <p className="mt-1 text-sm text-[#a3a3a3]">{visit.description}</p>
+            </div>
+            <span
+              className={`rounded px-2 py-1 text-xs font-bold ${
+                visit.status === 'Agendada' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-[#303030] text-[#a3a3a3]'
+              }`}
+            >
+              {visit.status}
+            </span>
+          </div>
+        </div>
+      ))}
+      {!patient.nextVisit && !patient.lastVisit ? (
+        <div className="rounded-xl border border-[#404040] bg-[#171717] p-4 text-sm text-[#a3a3a3]">
+          Nenhum agendamento encontrado para este paciente.
+        </div>
+      ) : null}
+      <button
+        className="h-10 justify-self-start rounded-sm border border-[#404040] bg-[#303030] px-4 text-sm font-semibold text-[#e5e5e5] transition hover:border-[#3b82f6]"
+        onClick={() => navigate('/consultas')}
+        type="button"
+      >
+        Abrir fila de consultas
+      </button>
+    </div>
+  )
+}
+
+function PatientDocuments({ patient }) {
+  const exams = Array.isArray(patient.exams) ? patient.exams : []
+
+  return (
+    <div className="grid gap-3 md:grid-cols-3">
+      {exams.length ? exams.map((exam) => (
+        <div className="rounded-xl border border-[#404040] bg-[#171717] p-4" key={exam}>
+          <p className="font-semibold text-[#f5f5f5]">{exam}</p>
+          <p className="mt-2 text-sm text-[#a3a3a3]">Pendente de revisão.</p>
+          <span className="mt-4 inline-flex rounded bg-amber-500/20 px-2.5 py-1 text-xs font-bold text-amber-400">
+            A revisar
+          </span>
+        </div>
+      )) : (
+        <div className="rounded-xl border border-[#404040] bg-[#171717] p-4 text-sm text-[#a3a3a3]">
+          Nenhum documento encontrado.
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SummaryTile({ label, tone = null, value }) {
+  return (
+    <article className="rounded-2xl border border-[#404040] bg-[#262626] p-4 shadow-sm">
+      <p className="text-sm font-medium text-[#a3a3a3]">{label}</p>
+      <div className="mt-3">
+        {tone ? (
+          <span className={`rounded px-2.5 py-1 text-xs font-bold ${tone}`}>{value}</span>
+        ) : (
+          <p className="text-xl font-bold text-[#f5f5f5]">{value}</p>
+        )}
+      </div>
+    </article>
+  )
+}
+
+function InfoRow({ label, value }) {
+  return (
+    <div>
+      <dt className="font-semibold text-[#737373]">{label}</dt>
+      <dd className="mt-1 text-[#e5e5e5]">{value || missingValue(label)}</dd>
+    </div>
+  )
+}
+
+function missingValue(label) {
+  return `${label} não informado`
+}
+
+function formatDisplayDate(value) {
+  if (!value) return ''
+  const [year, month, day] = String(value).split('-')
+  return year && month && day ? `${day}/${month}/${year}` : value
+}
+
+function riskColor(risk) {
+  if (risk === 'Alto') {
+    return 'bg-red-500/20 text-red-400'
+  }
+
+  if (risk === 'Moderado') {
+    return 'bg-amber-500/20 text-amber-400'
+  }
+
+  return 'bg-emerald-500/20 text-emerald-400'
+}
+
+function normalizeFilterValue(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+}
+
+function getPatientBirthday(patient) {
+  if (patient.birthday) return patient.birthday
+  const birthDate = patient.birthDate || patient.birth_date
+  if (!birthDate) return ''
+
+  const [, month, day] = String(birthDate).split('-')
+  return month && day ? `${day}/${month}` : ''
+}
+
+function getTodayBirthday() {
+  const today = new Date()
+  return `${String(today.getDate()).padStart(2, '0')}/${getCurrentMonth()}`
+}
+
+function getCurrentMonth() {
+  return String(new Date().getMonth() + 1).padStart(2, '0')
+}
+
+function PatientSelect({ className = '', icon, label, onChange, options, value }) {
+  return (
+    <div className={`relative ${className}`}>
+      <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+        <PatientIcon className="size-4 text-[#a3a3a3]" name={icon} />
+      </div>
+      <select
+        className="h-11 w-full cursor-pointer appearance-none rounded-lg border border-[#404040] bg-[#303030] py-2.5 pl-10 pr-8 text-sm text-[#a3a3a3] outline-none transition focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20"
+        onChange={(event) => onChange(event.target.value)}
+        value={value}
+      >
+        <option value="">{label}</option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+      <PatientIcon className="pointer-events-none absolute right-3 top-3.5 size-4 text-[#a3a3a3]" name="chevron-down" />
+    </div>
+  )
+}
+
+function FilterChip({ label, onClear }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-lg bg-[#3b82f6]/10 px-2 py-1 text-xs text-[#3b82f6]">
+      {label}
+      <button aria-label={`Remover ${label}`} onClick={onClear} type="button">
+        <PatientIcon className="size-3" name="x" />
+      </button>
+    </span>
+  )
+}
+
+function PageButton({ children, disabled, onClick }) {
+  return (
+    <button
+      className="grid size-8 place-items-center rounded-lg border border-[#404040] bg-[#1a1a1a] text-[#e5e5e5] transition hover:bg-[#333333] disabled:cursor-not-allowed disabled:opacity-30"
+      disabled={disabled}
+      onClick={onClick}
+      type="button"
+    >
+      {children}
+    </button>
+  )
+}
+
+function ActionItem({ danger = false, icon, label, onClick }) {
+  return (
+    <button
+      className={`flex w-full items-center gap-2 rounded-sm px-3 py-2 text-left text-sm font-medium transition ${
+        danger ? 'text-[#f87171] hover:bg-[#303030]' : 'text-[#e5e5e5] hover:bg-[#303030]'
+      }`}
+      onClick={onClick}
+      type="button"
+    >
+      <PatientIcon className="size-4" name={icon} />
+      {label}
+    </button>
+  )
+}
+
+function requiredLabel(label) {
+  return (
+    <>
+      {label} <span className="text-red-400">*</span>
+    </>
+  )
+}
+
+function DarkField({ children, className = '', label }) {
+  return (
+    <label className={`block ${className}`}>
+      <span className={darkLabel}>{label}</span>
+      {children}
+    </label>
+  )
+}
+
+function UploadDropzone() {
+  return (
+    <div className="mt-4 cursor-pointer rounded-lg border-2 border-dashed border-[#404040] bg-[#1a1a1a] p-8 text-center transition hover:bg-[#333333]">
+      <PatientIcon className="mx-auto mb-3 size-6 text-[#a3a3a3]" name="upload" />
+      <p className="text-sm font-medium text-[#e5e5e5]">Clique para selecionar arquivos ou arraste-os aqui</p>
+      <p className="mt-1 text-xs text-[#a3a3a3]">Imagens e documentos ate 10MB</p>
+    </div>
+  )
+}
+
+function AdvancedFilterModal({
+  ageMax,
+  ageMin,
+  city,
+  lastVisitSince,
+  onApply,
+  onClear,
+  onClose,
+  setAgeMax,
+  setAgeMin,
+  setCity,
+  setLastVisitSince,
+  setState,
+  state,
+  stateOptions,
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-lg rounded-2xl border border-[#404040] bg-[#262626] p-6 shadow-xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mb-6 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-[#e5e5e5]">Filtro Avancado</h2>
+          <button className="rounded p-1 transition hover:bg-[#333333]" onClick={onClose} type="button">
+            <PatientIcon className="size-5 text-[#a3a3a3]" name="x" />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <DarkField label="Cidade">
+              <input
+                className={darkInput}
+                onChange={(event) => setCity(event.target.value)}
+                placeholder="Ex: Recife"
+                value={city}
+              />
+            </DarkField>
+            <DarkField label="Estado">
+              <select className={darkInput} onChange={(event) => setState(event.target.value)} value={state}>
+                <option value="">Todos</option>
+                {stateOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </DarkField>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <DarkField label="Idade minima">
+              <input
+                className={darkInput}
+                min="0"
+                onChange={(event) => setAgeMin(event.target.value)}
+                type="number"
+                value={ageMin}
+              />
+            </DarkField>
+            <DarkField label="Idade maxima">
+              <input
+                className={darkInput}
+                min="0"
+                onChange={(event) => setAgeMax(event.target.value)}
+                type="number"
+                value={ageMax}
+              />
+            </DarkField>
+          </div>
+          <DarkField label="Ultimo atendimento desde">
+            <input
+              className={`${darkInput} [color-scheme:dark]`}
+              onChange={(event) => setLastVisitSince(event.target.value)}
+              type="date"
+              value={lastVisitSince}
+            />
+          </DarkField>
+        </div>
+
+        <div className="mt-6 flex justify-end gap-3">
+          <button
+            className="rounded-lg border border-[#404040] bg-[#262626] px-4 py-2 text-sm font-medium text-[#e5e5e5] transition hover:bg-[#333333]"
+            onClick={onClear}
+            type="button"
+          >
+            Limpar
+          </button>
+          <button
+            className="rounded-lg bg-[#3b82f6] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#2563eb]"
+            onClick={onApply}
+            type="button"
+          >
+            Aplicar Filtros
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PatientIcon({ className = 'size-4', name }) {
+  const common = {
+    className,
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+    strokeWidth: 1.8,
+    viewBox: '0 0 24 24',
+  }
+
+  if (name === 'search') {
+    return (
+      <svg {...common}>
+        <path d="m21 21-4.3-4.3" />
+        <circle cx="11" cy="11" r="7" />
+      </svg>
+    )
+  }
+
+  if (name === 'user-plus') {
+    return (
+      <svg {...common}>
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M19 8v6M22 11h-6" />
+      </svg>
+    )
+  }
+
+  if (name === 'filter') {
+    return (
+      <svg {...common}>
+        <path d="M3 5h18M7 12h10M10 19h4" />
+      </svg>
+    )
+  }
+
+  if (name === 'star') {
+    return (
+      <svg {...common}>
+        <path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z" />
+      </svg>
+    )
+  }
+
+  if (name === 'calendar') {
+    return (
+      <svg {...common}>
+        <path d="M8 3v3M16 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z" />
+      </svg>
+    )
+  }
+
+  if (name === 'file') {
+    return (
+      <svg {...common}>
+        <path d="M7 3h7l4 4v14H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />
+        <path d="M14 3v5h5M9 13h6M9 17h6" />
+      </svg>
+    )
+  }
+
+  if (name === 'more') {
+    return (
+      <svg {...common}>
+        <circle cx="5" cy="12" fill="currentColor" r="1.5" stroke="none" />
+        <circle cx="12" cy="12" fill="currentColor" r="1.5" stroke="none" />
+        <circle cx="19" cy="12" fill="currentColor" r="1.5" stroke="none" />
+      </svg>
+    )
+  }
+
+  if (name === 'edit') {
+    return (
+      <svg {...common}>
+        <path d="m16 3 5 5L8 21H3v-5L16 3Z" />
+      </svg>
+    )
+  }
+
+  if (name === 'trash') {
+    return (
+      <svg {...common}>
+        <path d="M3 6h18M8 6V4h8v2M6 6l1 15h10l1-15M10 11v6M14 11v6" />
+      </svg>
+    )
+  }
+
+  if (name === 'chevron-left') {
+    return (
+      <svg {...common}>
+        <path d="m15 18-6-6 6-6" />
+      </svg>
+    )
+  }
+
+  if (name === 'chevron-right') {
+    return (
+      <svg {...common}>
+        <path d="m9 18 6-6-6-6" />
+      </svg>
+    )
+  }
+
+  if (name === 'chevron-up') {
+    return (
+      <svg {...common}>
+        <path d="m18 15-6-6-6 6" />
+      </svg>
+    )
+  }
+
+  if (name === 'arrow-left') {
+    return (
+      <svg {...common}>
+        <path d="M19 12H5M12 19l-7-7 7-7" />
+      </svg>
+    )
+  }
+
+  if (name === 'x') {
+    return (
+      <svg {...common}>
+        <path d="M18 6 6 18M6 6l12 12" />
+      </svg>
+    )
+  }
+
+  if (name === 'upload') {
+    return (
+      <svg {...common}>
+        <path d="M12 16V4M7 9l5-5 5 5M4 20h16" />
+      </svg>
+    )
+  }
+
+  if (name === 'paperclip') {
+    return (
+      <svg {...common}>
+        <path d="m21 12-8.5 8.5a5 5 0 0 1-7.1-7.1L14 4.8a3 3 0 0 1 4.2 4.2l-8.5 8.5a1 1 0 0 1-1.4-1.4L16 8.4" />
+      </svg>
+    )
+  }
+
+  if (name === 'user') {
+    return (
+      <svg {...common}>
+        <path d="M20 21a8 8 0 0 0-16 0M12 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z" />
+      </svg>
+    )
+  }
+
+  if (name === 'trending') {
+    return (
+      <svg {...common}>
+        <path d="m3 17 6-6 4 4 7-8" />
+        <path d="M14 7h6v6" />
+      </svg>
+    )
+  }
+
+  if (name === 'alert') {
+    return (
+      <svg {...common}>
+        <path d="M12 9v4M12 17h.01" />
+        <path d="M10.3 4.3 2.7 18a2 2 0 0 0 1.8 3h15a2 2 0 0 0 1.8-3L13.7 4.3a2 2 0 0 0-3.4 0Z" />
+      </svg>
+    )
+  }
+
+  if (name === 'shield') {
+    return (
+      <svg {...common}>
+        <path d="M12 3 5 6v5c0 4.5 3 8.5 7 10 4-1.5 7-5.5 7-10V6l-7-3Z" />
+      </svg>
+    )
+  }
+
+  return (
+    <svg {...common}>
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  )
+}
+
+async function buildPatientRows() {
+  return patientRepository.getDirectoryRows()
+}
+
+function normalizeCreatedPatient(payload) {
+  if (Array.isArray(payload)) return payload[0] || null
+  return payload?.patient || payload?.data || payload?.created || payload || null
+}
+
+function uniqueSlug(value, existingIds) {
+  const base = slugify(value) || `paciente-${Date.now()}`
+  let nextId = base
+  let counter = 2
+
+  while (existingIds.includes(nextId)) {
+    nextId = `${base}-${counter}`
+    counter += 1
+  }
+
+  return nextId
+}
+
+function slugify(value) {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+function maskCPF(value) {
+  return value
+    .replace(/\D/g, '')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d{1,2})/, '$1-$2')
+    .replace(/(-\d{2})\d+?$/, '$1')
+}
+
+function maskPhone(value) {
+  return value
+    .replace(/\D/g, '')
+    .replace(/(\d{2})(\d)/, '($1) $2')
+    .replace(/(\d{5})(\d)/, '$1-$2')
+    .replace(/(-\d{4})\d+?$/, '$1')
+}
+
+function maskCEP(value) {
+  return value
+    .replace(/\D/g, '')
+    .replace(/(\d{5})(\d)/, '$1-$2')
+    .replace(/(-\d{3})\d+?$/, '$1')
+}
+
+function formatBirthday(birthDate) {
+  if (!birthDate) return ''
+  const [, month, day] = birthDate.split('-')
+  return day && month ? `${day}/${month}` : ''
+}
+
+function formatAddress(patient) {
+  return [
+    patient.addressStreet,
+    patient.addressNumber,
+    patient.addressComplement,
+    patient.city,
+    patient.state,
+    patient.zipCode,
+  ]
+    .filter(Boolean)
+    .join(', ')
+}

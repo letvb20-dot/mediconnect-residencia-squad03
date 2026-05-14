@@ -1,6 +1,6 @@
-import { apiConfig, getAuthenticatedHeaders } from '../config/api.js'
+import { apiConfig, apiEndpoint, getAuthenticatedHeaders } from '../config/api.js'
 import { normalizeRole } from '../config/permissions.js'
-import { getResponseError, normalizeCollection } from './repositoryUtils.js'
+import { fetchJsonWithFallback, getResponseError, normalizeCollection } from './repositoryUtils.js'
 
 const USER_PROFILE_TABLES = ['user_info', 'profiles', 'user_profiles']
 const USER_LIST_KEYS = ['users', 'usuarios', 'data', 'items', 'results']
@@ -37,16 +37,27 @@ export const userRepository = {
   },
 
   async getById(userId) {
-    const response = await fetch(`${apiConfig.functionsUrl}/user-info-by-id/${encodeURIComponent(userId)}`, {
-      method: 'POST',
-      headers: getAuthenticatedHeaders(),
-    })
-
-    if (!response.ok) {
-      throw new Error(await getResponseError(response, 'Erro ao buscar usuário.'))
-    }
-
-    return response.json()
+    return fetchJsonWithFallback(
+      [
+        {
+          url: apiEndpoint('/user-info-by-id'),
+          options: {
+            method: 'POST',
+            headers: getAuthenticatedHeaders(),
+            body: JSON.stringify({ user_id: userId, userId }),
+          },
+        },
+        {
+          url: `${apiConfig.functionsUrl}/user-info-by-id`,
+          options: {
+            method: 'POST',
+            headers: getAuthenticatedHeaders(),
+            body: JSON.stringify({ user_id: userId, userId }),
+          },
+        },
+      ],
+      'Erro ao buscar usuário.',
+    )
   },
 
   async create(data) {
@@ -69,17 +80,27 @@ export const userRepository = {
       password: data.password,
     }
 
-    const response = await fetch(`${apiConfig.functionsUrl}/create-user-with-password`, {
-      method: 'POST',
-      headers: getAuthenticatedHeaders(),
-      body: JSON.stringify(body),
-    })
-
-    if (!response.ok) {
-      throw new Error(await getResponseError(response, 'Erro ao criar usuário com senha.'))
-    }
-
-    return response.json()
+    return fetchJsonWithFallback(
+      [
+        {
+          url: apiEndpoint('/create-user-with-password'),
+          options: {
+            method: 'POST',
+            headers: getAuthenticatedHeaders(),
+            body: JSON.stringify(body),
+          },
+        },
+        {
+          url: `${apiConfig.functionsUrl}/create-user-with-password`,
+          options: {
+            method: 'POST',
+            headers: getAuthenticatedHeaders(),
+            body: JSON.stringify(body),
+          },
+        },
+      ],
+      'Erro ao criar usuário com senha.',
+    )
   },
 
   async update(userId, data) {
@@ -134,22 +155,22 @@ export const userRepository = {
 }
 
 function buildCreateUserBody(data) {
+  const role = normalizeRole(data.role) || data.role
   const body = {
     email: data.email?.trim(),
     full_name: data.full_name?.trim(),
     phone: data.phone?.trim(),
+    phone_mobile: data.phone_mobile?.trim() || data.phone?.trim(),
     cpf: data.cpf?.trim(),
-    role: data.role,
+    role,
+    roles: data.roles || (role ? [role] : undefined),
+    create_patient_record: Boolean(data.create_patient_record),
     crm: data.crm?.trim(),
     crm_uf: data.crm_uf?.trim() || data.crmUf?.trim(),
+    specialty: data.specialty?.trim() || data.specialidade?.trim(),
   }
 
-  if (data.create_patient_record) {
-    body.create_patient_record = true
-    body.phone_mobile = data.phone_mobile?.trim() || data.phone?.trim()
-  }
-
-  return body
+  return cleanPayload(body)
 }
 
 function normalizeListedUser(user) {

@@ -7,10 +7,18 @@ const DAY_START = '07:00'
 const DAY_END = '19:00'
 const SLOT_MINUTES = 30
 
-export function AgendaDailyView({ baseDate, appointments, canCreateAppointment = true, onAppointmentClick, onSlotCreate }) {
+export function AgendaDailyView({
+  baseDate,
+  appointments,
+  canCreateAppointment = true,
+  occupiedAppointments = appointments,
+  onAppointmentClick,
+  onSlotCreate,
+}) {
   const dailyAppointments = sortAppointmentsByTime(appointments)
   const appointmentsByTime = groupAppointmentsByTime(dailyAppointments)
-  const slots = mergeSlotsWithAppointmentTimes(generateSlots(DAY_START, DAY_END, SLOT_MINUTES), dailyAppointments)
+  const occupiedAppointmentsByTime = groupAppointmentsByTime(sortAppointmentsByTime(occupiedAppointments))
+  const slots = mergeSlotsWithAppointmentTimes(generateSlots(DAY_START, DAY_END, SLOT_MINUTES), occupiedAppointments)
 
   return (
     <div className="agenda-calendar-shell rounded-2xl border border-[#404040] bg-[#262626] p-5">
@@ -45,26 +53,32 @@ export function AgendaDailyView({ baseDate, appointments, canCreateAppointment =
       <div className="agenda-day-grid mt-4 grid gap-2">
         {slots.map((time) => {
           const slotAppointments = appointmentsByTime.get(time) || []
+          const occupiedSlotAppointments = occupiedAppointmentsByTime.get(time) || []
           const primaryAppointment = slotAppointments[0]
-          const isBooked = Boolean(primaryAppointment)
+          const hasHiddenAppointment = !primaryAppointment && occupiedSlotAppointments.length > 0
+          const isBooked = Boolean(primaryAppointment) || hasHiddenAppointment
+          const isPast = isPastSlot(baseDate, time)
+          const canCreateSlot = canCreateAppointment && !isBooked && !isPast
 
           return (
             <article
-              className={`agenda-slot ${isBooked ? getDailyToneClass(primaryAppointment.status) : 'agenda-slot-free'} grid gap-3 rounded-xl border px-4 py-3 shadow-[0_8px_18px_rgba(0,0,0,0.16)] md:grid-cols-[84px_1fr_auto] ${
+              className={`agenda-slot ${isBooked ? getDailyToneClass(primaryAppointment?.status) : isPast ? 'agenda-slot-blocked' : 'agenda-slot-free'} grid gap-3 rounded-xl border px-4 py-3 shadow-[0_8px_18px_rgba(0,0,0,0.16)] md:grid-cols-[84px_1fr_auto] ${
                 isBooked
                   ? 'border-red-700/50 bg-red-950/35 text-red-50'
-                  : 'border-emerald-700/50 bg-emerald-950/35 text-emerald-50'
+                  : isPast
+                    ? 'border-[#404040] bg-[#1f1f1f] text-[#737373]'
+                    : 'border-emerald-700/50 bg-emerald-950/35 text-emerald-50'
               }`}
               key={time}
             >
               <div>
                 <p className="text-xl font-bold leading-none">{time}</p>
                 <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] opacity-80">
-                  {isBooked ? 'Agendado' : 'Disponível'}
+                  {isBooked ? 'Agendado' : isPast ? 'Encerrado' : 'Disponível'}
                 </p>
               </div>
 
-              {isBooked ? (
+              {primaryAppointment ? (
                 <div>
                   <button
                     className="text-left text-sm font-bold transition hover:opacity-85"
@@ -82,6 +96,14 @@ export function AgendaDailyView({ baseDate, appointments, canCreateAppointment =
                     {slotAppointments.length > 1 ? <span className="agenda-slot-chip rounded-full bg-black/25 px-2.5 py-1 shadow-sm">+{slotAppointments.length - 1}</span> : null}
                   </div>
                 </div>
+              ) : hasHiddenAppointment ? (
+                <div className="flex items-center text-sm font-medium opacity-90">
+                  Horário ocupado por agendamento fora do filtro atual.
+                </div>
+              ) : isPast ? (
+                <div className="flex items-center text-sm font-medium opacity-90">
+                  Horário anterior ao horário atual do sistema.
+                </div>
               ) : (
                 <div className="flex items-center text-sm font-medium opacity-90">
                   Horário disponível para novo agendamento.
@@ -90,9 +112,9 @@ export function AgendaDailyView({ baseDate, appointments, canCreateAppointment =
 
               <div className="flex flex-wrap items-start justify-start gap-2 md:justify-end">
                 <span className="agenda-slot-status rounded-full border border-current/30 bg-black/25 px-3 py-1 text-xs font-bold shadow-sm">
-                  {isBooked ? primaryAppointment.status : 'Livre'}
+                  {primaryAppointment ? primaryAppointment.status : hasHiddenAppointment ? 'Ocupado' : isPast ? 'Encerrado' : 'Livre'}
                 </span>
-                {canCreateAppointment ? (
+                {canCreateSlot ? (
                   <button
                     aria-label={`Criar agendamento às ${time}`}
                     className="agenda-slot-add grid size-8 place-items-center rounded-full border border-current/30 bg-black/30 text-base font-bold leading-none shadow-sm transition hover:bg-black/45"
@@ -172,4 +194,12 @@ function formatMinutes(totalMinutes) {
   const hours = String(Math.floor(totalMinutes / 60)).padStart(2, '0')
   const minutes = String(totalMinutes % 60).padStart(2, '0')
   return `${hours}:${minutes}`
+}
+
+function isPastSlot(baseDate, time) {
+  const [hours, minutes] = normalizeTime(time).split(':').map(Number)
+  const slotDate = new Date(baseDate)
+  slotDate.setHours(hours, minutes, 0, 0)
+
+  return slotDate.getTime() < Date.now()
 }

@@ -32,7 +32,10 @@ export const authRepository = {
   },
 
   async requestPasswordReset(email) {
-    const payload = { email: email?.trim() }
+    const payload = {
+      email: email?.trim(),
+      redirect_url: getDefaultRedirectUrl('/login'),
+    }
     const apiResponse = await fetch(apiEndpoint('/request-password-reset'), {
       method: 'POST',
       headers: getAnonHeaders(),
@@ -131,4 +134,9 @@ export const authRepository = {
 
 function shouldFallback(response) {
   return [404, 405].includes(response.status)
+}
+
+function getDefaultRedirectUrl(path) {
+  if (typeof window === 'undefined') return undefined
+  return `${window.location.origin}${path}`
 }

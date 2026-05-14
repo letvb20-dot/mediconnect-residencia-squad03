@@ -31,12 +31,22 @@ const ROLE_ALIASES = {
 
 // Rotas permitidas por role ('*' = todas)
 const ROLE_ROUTES = {
-  admin: '*',
+  admin: [
+    '/inicio', '/home', '/dashboard',
+    '/agenda',
+    '/pacientes',
+    '/laudos',
+    '/relatorios',
+    '/comunicacao', '/mensagens',
+    '/configuracoes', '/config',
+    '/consultas',
+    '/usuarios',
+    '/perfil',
+  ],
   gestor: [
     '/inicio', '/home', '/dashboard',
     '/agenda',
     '/pacientes',
-    '/prontuario',
     '/laudos',
     '/relatorios',
     '/comunicacao', '/mensagens',
@@ -48,7 +58,6 @@ const ROLE_ROUTES = {
   medico: [
     '/agenda',
     '/pacientes',
-    '/prontuario',
     '/laudos',
     '/comunicacao', '/mensagens',
     '/configuracoes', '/config',
@@ -77,7 +86,7 @@ export const ROLE_CAPABILITIES = {
     ownAppointmentsOnly: false,
     canEditPatients: true,
     canViewReports: true,
-    canViewMedicalRecords: true,
+    canViewMedicalRecords: false,
   },
   gestor: {
     manageUsers: true,
@@ -86,7 +95,7 @@ export const ROLE_CAPABILITIES = {
     ownAppointmentsOnly: false,
     canEditPatients: true,
     canViewReports: true,
-    canViewMedicalRecords: true,
+    canViewMedicalRecords: false,
   },
   medico: {
     manageUsers: false,
@@ -95,7 +104,7 @@ export const ROLE_CAPABILITIES = {
     ownAppointmentsOnly: true,
     canEditPatients: false,
     canViewReports: true,
-    canViewMedicalRecords: true,
+    canViewMedicalRecords: false,
   },
   secretaria: {
     manageUsers: false,
@@ -123,28 +132,23 @@ export const ROLE_NAV_ITEMS = {
     { path: '/inicio', label: 'Painel' },
     { path: '/agenda', label: 'Agenda' },
     { path: '/pacientes', label: 'Pacientes' },
-    { path: '/prontuario', label: 'Prontuário' },
     { path: '/laudos', label: 'Relatórios' },
     { path: '/relatorios', label: 'Analytics' },
     { path: '/comunicacao', label: 'Comunicação' },
-    { path: '/usuarios', label: 'Usuários' },
     { path: '/configuracoes', label: 'Configurações' },
   ],
   gestor: [
     { path: '/inicio', label: 'Painel' },
     { path: '/agenda', label: 'Agenda' },
     { path: '/pacientes', label: 'Pacientes' },
-    { path: '/prontuario', label: 'Prontuário' },
     { path: '/laudos', label: 'Relatórios' },
     { path: '/relatorios', label: 'Analytics' },
     { path: '/comunicacao', label: 'Comunicação' },
-    { path: '/usuarios', label: 'Usuários' },
     { path: '/configuracoes', label: 'Configurações' },
   ],
   medico: [
     { path: '/agenda', label: 'Agenda' },
     { path: '/pacientes', label: 'Pacientes' },
-    { path: '/prontuario', label: 'Prontuário' },
     { path: '/laudos', label: 'Relatórios' },
     { path: '/comunicacao', label: 'Comunicação' },
     { path: '/configuracoes', label: 'Configurações' },
@@ -163,6 +167,8 @@ export const ROLE_NAV_ITEMS = {
 
 // Verifica se um role pode acessar uma rota
 export function canAccess(role, pathname) {
+  if (String(pathname || '').startsWith('/prontuario')) return false
+
   const normalizedRole = normalizeRole(role)
   if (!normalizedRole) return false
   const allowed = ROLE_ROUTES[normalizedRole]

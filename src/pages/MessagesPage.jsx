@@ -5,7 +5,7 @@ import { StethoscopeIcon } from '../components/Brand.jsx'
 import { communicationRepository } from '../repositories/communicationRepository.js'
 import { notificationRepository } from '../repositories/notificationRepository.js'
 import { patientRepository } from '../repositories/patientRepository.js'
-import { maskBrazilianPhone, sanitizePlainText } from '../utils/inputSanitizers.js'
+import { sanitizePlainText } from '../utils/inputSanitizers.js'
 
 const channels = {
   whatsapp: { label: 'WhatsApp', className: 'bg-emerald-500/20 text-emerald-400', icon: 'message' },
@@ -599,7 +599,7 @@ function MessageComposer({ allowedChannelKeys, draft, onChange, onClose, onSubmi
       ...current,
       patientId: patient?.id || '',
       patient: patient?.name || '',
-      phone: patient?.phone || current.phone,
+      phone: patient?.phone || patient?.phone_mobile || '',
     }))
     setPatientSearch(patient?.name || '')
   }
@@ -629,7 +629,7 @@ function MessageComposer({ allowedChannelKeys, draft, onChange, onClose, onSubmi
               className={inputClass}
               onChange={(event) => {
                 setPatientSearch(event.target.value)
-                onChange((current) => ({ ...current, patientId: '', patient: '' }))
+                onChange((current) => ({ ...current, patientId: '', patient: '', phone: '' }))
               }}
               placeholder="Digite nome, CPF ou telefone"
               type="search"
@@ -678,8 +678,8 @@ function MessageComposer({ allowedChannelKeys, draft, onChange, onClose, onSubmi
           <DarkField label="Telefone">
             <input
               className={inputClass}
-              onChange={(event) => update('phone', maskBrazilianPhone(event.target.value))}
-              placeholder="(81) 99999-9999"
+              placeholder={draft.patientId ? 'Telefone não cadastrado' : 'Selecione um paciente'}
+              readOnly
               value={draft.phone}
             />
           </DarkField>

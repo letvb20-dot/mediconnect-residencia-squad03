@@ -11,7 +11,6 @@ const ALL_NAV_ITEMS = [
   { href: '/inicio', label: 'Painel', icon: 'pulse', activePaths: ['/inicio', '/home', '/dashboard'] },
   { href: '/agenda', label: 'Agenda', icon: 'calendar' },
   { href: '/pacientes', label: 'Pacientes', icon: 'users', exact: true },
-  { href: '/prontuario', label: 'Prontuário', icon: 'file' },
   { href: '/laudos', label: 'Relatórios', icon: 'clipboard' },
   {
     href: '/comunicacao',
@@ -20,7 +19,6 @@ const ALL_NAV_ITEMS = [
     activePaths: ['/comunicacao', '/mensagens'],
   },
   { href: '/relatorios', label: 'Analytics', icon: 'chart' },
-  { href: '/usuarios', label: 'Usuários', icon: 'shield' },
   { href: '/configuracoes', label: 'Configurações', icon: 'settings', activePaths: ['/configuracoes', '/config'] },
 ]
 
@@ -32,14 +30,12 @@ const titles = {
   '/consultas': 'Consultas',
   '/laudos': 'Relatórios',
   '/pacientes': 'Pacientes',
-  '/prontuario': 'Prontuário',
   '/comunicacao': 'Comunicação',
   '/mensagens': 'Comunicação',
   '/relatorios': 'Analytics',
   '/perfil': 'Perfil',
   '/configuracoes': 'Configurações',
   '/config': 'Configurações',
-  '/usuarios': 'Usuários',
 }
 
 export function AppShell({ children, currentPath, navigate, role, routeTitle }) {

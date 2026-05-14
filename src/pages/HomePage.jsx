@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 
 import loginClinicImage from '../assets/figma/login-clinic.png'
+import { hasCapability } from '../config/permissions.js'
 import { homeRepository } from '../repositories/homeRepository.js'
+import { UsersPage } from './UsersPage.jsx'
 
-export function HomePage({ navigate, profile, user }) {
+export function HomePage({ navigate, profile, role, user }) {
   const [overview, setOverview] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -34,9 +36,11 @@ export function HomePage({ navigate, profile, user }) {
 
   const { appointmentsToday = [], metrics = [], predictiveAlert = '', reportCards = [] } = overview || {}
   const displayName = getDisplayName(profile, user)
+  const canManageUsers = hasCapability(role, 'manageUsers')
 
   return (
-    <div className="mx-auto flex max-w-[1180px] flex-col gap-8 text-[#e5e5e5]">
+    <div className={`mx-auto w-full text-[#e5e5e5] ${canManageUsers ? 'grid max-w-none gap-8 2xl:grid-cols-[minmax(0,1fr)_560px]' : 'flex max-w-[1180px] flex-col gap-8'}`}>
+      <div className="min-w-0 space-y-8">
       <section className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-[32px] font-bold leading-8 tracking-[-0.02em] text-[#e5e5e5]">
@@ -161,6 +165,12 @@ export function HomePage({ navigate, profile, user }) {
           ))}
         </div>
       </section>
+      </div>
+      {canManageUsers ? (
+        <aside className="min-w-0 self-start 2xl:sticky 2xl:top-6">
+          <UsersPage embedded role={role} />
+        </aside>
+      ) : null}
     </div>
   )
 }

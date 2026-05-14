@@ -10,9 +10,9 @@ test('normaliza aliases de perfis conhecidos', () => {
   assert.equal(normalizeRole('secretary'), 'secretaria')
 })
 
-test('medico acessa pacientes e prontuario, mas nao painel ou analytics', () => {
+test('medico acessa pacientes, mas nao prontuario, painel ou analytics', () => {
   assert.equal(canAccess('medico', '/pacientes'), true)
-  assert.equal(canAccess('medico', '/prontuario/123'), true)
+  assert.equal(canAccess('medico', '/prontuario/123'), false)
   assert.equal(canAccess('medico', '/inicio'), false)
   assert.equal(canAccess('medico', '/relatorios'), false)
 })

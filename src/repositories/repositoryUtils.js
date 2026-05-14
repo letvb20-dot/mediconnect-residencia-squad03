@@ -108,6 +108,8 @@ export function translateErrorMessage(message, fallbackMessage = 'Erro inesperad
 }
 
 function getErrorMessage(error, text) {
+  const problemDetails = formatProblemDetails(error)
+
   return error.error_description ||
     error.msg ||
     error.message ||
@@ -116,11 +118,36 @@ function getErrorMessage(error, text) {
     error.details ||
     error.hint ||
     formatFieldErrors(error.errors) ||
+    formatFieldErrors(error.invalid_params) ||
+    problemDetails ||
     text
+}
+
+function formatProblemDetails(error) {
+  if (!error || typeof error !== 'object') return ''
+
+  const parts = [
+    typeof error.title === 'string' ? error.title : '',
+    typeof error.instance === 'string' ? error.instance : '',
+  ].filter(Boolean)
+
+  return parts.join(' - ')
 }
 
 function formatFieldErrors(errors) {
   if (!errors || typeof errors !== 'object') return ''
+
+  if (Array.isArray(errors)) {
+    return errors
+      .map((error) => {
+        if (typeof error === 'string') return error
+        return [error.name || error.field || error.param, error.reason || error.message || error.detail]
+          .filter(Boolean)
+          .join(': ')
+      })
+      .filter(Boolean)
+      .join('; ')
+  }
 
   const messages = Object.entries(errors)
     .flatMap(([field, fieldErrors]) => {

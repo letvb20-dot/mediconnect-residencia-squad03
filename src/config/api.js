@@ -93,6 +93,7 @@ export function getAnonHeaders(extraHeaders = {}) {
 
   return cleanHeaders({
     apikey: apiConfig.anonKey,
+    Authorization: apiConfig.anonKey ? `Bearer ${apiConfig.anonKey}` : undefined,
     'Content-Type': 'application/json',
     ...extraHeaders,
   })

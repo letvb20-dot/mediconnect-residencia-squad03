@@ -10,14 +10,12 @@ import { patientRepository } from './repositories/patientRepository.js'
 const AgendaPage = lazyPage(() => import('./pages/AgendaPage.jsx'), 'AgendaPage')
 const AnalyticsPage = lazyPage(() => import('./pages/AnalyticsPage.jsx'), 'AnalyticsPage')
 const HomePage = lazyPage(() => import('./pages/HomePage.jsx'), 'HomePage')
-const MedicalRecordsPage = lazyPage(() => import('./pages/MedicalRecordsPage.jsx'), 'MedicalRecordsPage')
 const MessagesPage = lazyPage(() => import('./pages/MessagesPage.jsx'), 'MessagesPage')
 const PatientDetailPage = lazyPage(() => import('./pages/PatientsPage.jsx'), 'PatientDetailPage')
 const PatientsPage = lazyPage(() => import('./pages/PatientsPage.jsx'), 'PatientsPage')
 const ProfilePage = lazyPage(() => import('./pages/ProfilePage.jsx'), 'ProfilePage')
 const ReportsPage = lazyPage(() => import('./pages/ReportsPage.jsx'), 'ReportsPage')
 const SettingsPage = lazyPage(() => import('./pages/SettingsPage.jsx'), 'SettingsPage')
-const UsersPage = lazyPage(() => import('./pages/UsersPage.jsx'), 'UsersPage')
 const VisitsPage = lazyPage(() => import('./pages/VisitsPage.jsx'), 'VisitsPage')
 
 const PANEL_PATHS = ['/inicio', '/home', '/dashboard']
@@ -201,7 +199,7 @@ function resolveRoute(pathname, navigate, role, profile, user) {
 
   if (pathname === '/inicio' || pathname === '/home' || pathname === '/dashboard') {
     return {
-      element: <HomePage navigate={navigate} profile={profile} user={user} />,
+      element: <HomePage navigate={navigate} profile={profile} role={role} user={user} />,
       title: 'Painel',
       withShell: true,
     }
@@ -219,31 +217,6 @@ function resolveRoute(pathname, navigate, role, profile, user) {
     return {
       element: <PatientsPage navigate={navigate} role={role} />,
       title: 'Pacientes',
-      withShell: true,
-    }
-  }
-
-  if (pathname === '/prontuario') {
-    return {
-      element: <MedicalRecordsPage navigate={navigate} />,
-      title: 'Prontuário',
-      withShell: true,
-    }
-  }
-
-  if (pathname === '/prontuario/novo') {
-    return {
-      element: <MedicalRecordsPage mode="new" navigate={navigate} />,
-      title: 'Novo prontuário',
-      withShell: true,
-    }
-  }
-
-  if (pathname.startsWith('/prontuario/')) {
-    const [, , recordId, action] = pathname.split('/')
-    return {
-      element: <MedicalRecordsPage mode={action === 'editar' ? 'edit' : 'detail'} navigate={navigate} recordId={recordId} />,
-      title: action === 'editar' ? 'Editar prontuário' : 'Prontuário',
       withShell: true,
     }
   }
@@ -299,9 +272,10 @@ function resolveRoute(pathname, navigate, role, profile, user) {
   }
 
   if (pathname === '/usuarios') {
+    navigate('/inicio', { replace: true })
     return {
-      element: <UsersPage role={role} />,
-      title: 'Usuários',
+      element: <HomePage navigate={navigate} profile={profile} role={role} user={user} />,
+      title: 'Painel',
       withShell: true,
     }
   }

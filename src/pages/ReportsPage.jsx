@@ -46,6 +46,8 @@ const emptyEditor = {
   conclusion: '',
   contentHtml: '',
   contentJson: undefined,
+  hideDate: false,
+  hideSignature: false,
   dueAt: '',
 }
 
@@ -251,6 +253,8 @@ export function ReportsPage({ role }) {
       conclusion: report.conclusion,
       contentHtml: report.contentHtml,
       contentJson: report.contentJson,
+      hideDate: Boolean(report.hideDate),
+      hideSignature: Boolean(report.hideSignature),
       dueAt: toDateTimeLocal(report.dueAt),
     })
     setEditorOpen(true)
@@ -282,6 +286,8 @@ export function ReportsPage({ role }) {
       conclusion: editor.conclusion || plainContent.slice(0, 240) || 'Relatório médico salvo no sistema.',
       contentHtml: editor.contentHtml,
       contentJson: editor.contentJson,
+      hideDate: Boolean(editor.hideDate),
+      hideSignature: Boolean(editor.hideSignature),
       dueAt: editor.dueAt ? new Date(editor.dueAt).toISOString() : new Date().toISOString(),
       createdBy: editor.id ? undefined : viewerProfile?.id || currentProfessional?.userId || currentProfessional?.id || undefined,
       updatedBy: viewerProfile?.id || currentProfessional?.userId || currentProfessional?.id || undefined,
@@ -761,6 +767,29 @@ function ReportEditorModalV3({
               <DarkField label="Conclusão *">
                 <input className={inputClass} onChange={(event) => updateField('conclusion', sanitizePlainText(event.target.value))} value={editor.conclusion} />
               </DarkField>
+              <DarkField label="Prazo">
+                <input className={`${inputClass} [color-scheme:dark]`} onChange={(event) => updateField('dueAt', event.target.value)} type="datetime-local" value={editor.dueAt} />
+              </DarkField>
+
+              <label className="flex min-h-11 items-center gap-3 rounded-sm border border-[#404040] bg-[#171717] px-3 text-sm font-semibold text-[#e5e5e5]">
+                <input
+                  checked={Boolean(editor.hideDate)}
+                  className="size-4 accent-[#3b82f6]"
+                  onChange={(event) => updateField('hideDate', event.target.checked)}
+                  type="checkbox"
+                />
+                Ocultar data
+              </label>
+
+              <label className="flex min-h-11 items-center gap-3 rounded-sm border border-[#404040] bg-[#171717] px-3 text-sm font-semibold text-[#e5e5e5]">
+                <input
+                  checked={Boolean(editor.hideSignature)}
+                  className="size-4 accent-[#3b82f6]"
+                  onChange={(event) => updateField('hideSignature', event.target.checked)}
+                  type="checkbox"
+                />
+                Ocultar assinatura
+              </label>
             </div>
 
             <DarkField label="Editor de texto">
@@ -1010,6 +1039,10 @@ function normalizeSearch(value) {
 }
 
 function printReportAsPdf(report, status) {
+  const dateDetails = report.hideDate
+    ? ''
+    : `${printDetail('Criado em', formatDate(report.createdAt))}${printDetail('Prazo', formatDateTime(report.dueAt))}`
+  const signatureDetails = report.hideSignature ? '' : printDetail('Criado por', report.createdByName)
   const iframe = document.createElement('iframe')
   iframe.setAttribute('title', 'ImpressÃ£o do relatÃ³rio')
   iframe.style.position = 'fixed'
@@ -1054,10 +1087,9 @@ function printReportAsPdf(report, status) {
         <div class="grid">
           ${printDetail('Paciente', report.patientName)}
           ${printDetail('Solicitante', report.requestedBy || '-')}
-          ${printDetail('Criado em', formatDate(report.createdAt))}
-          ${printDetail('Criado por', report.createdByName)}
+          ${dateDetails}
+          ${signatureDetails}
           ${printDetail('Status', status.label)}
-          ${printDetail('Prazo', formatDateTime(report.dueAt))}
         </div>
         <div class="grid">
           ${printDetail('Exame', report.exam || '-')}

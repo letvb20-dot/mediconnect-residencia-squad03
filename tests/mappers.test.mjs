@@ -21,7 +21,7 @@ test('appointmentMapper envia valores aceitos pela API Supabase', () => {
   assert.equal(payload.patient_id, 'patient-1')
   assert.equal(payload.doctor_id, 'doctor-1')
   assert.equal(payload.appointment_type, 'telemedicina')
-  assert.equal(payload.status, 'checked_in')
+  assert.equal(payload.status, 'requested')
   assert.equal(payload.duration_minutes, 30)
   assert.equal('notes' in payload, true)
 })
@@ -53,7 +53,7 @@ test('reportMapper remove campos vazios e normaliza status', () => {
   })
 
   assert.equal(payload.patient_id, 'patient-1')
-  assert.equal(payload.status, 'finalized')
+  assert.equal(payload.status, 'completed')
   assert.equal(payload.requested_by, 'Dra. Leticia')
   assert.equal(payload.content_html, '<p>Conclusao clinica</p>')
   assert.equal('exam' in payload, false)

@@ -37,6 +37,8 @@ export const reportMapper = {
       conclusion: emptyToUndefined(uiData.conclusion),
       content_html: emptyToUndefined(uiData.contentHtml),
       content_json: uiData.contentJson === undefined ? undefined : uiData.contentJson,
+      hide_date: uiData.hideDate === undefined ? undefined : Boolean(uiData.hideDate),
+      hide_signature: uiData.hideSignature === undefined ? undefined : Boolean(uiData.hideSignature),
       due_at: emptyToUndefined(uiData.dueAt),
       created_by: emptyToUndefined(uiData.createdBy),
       updated_by: emptyToUndefined(uiData.updatedBy),
@@ -46,7 +48,7 @@ export const reportMapper = {
 
 function normalizeStatus(status) {
   const normalized = String(status || '').toLowerCase()
-  if (['finalized', 'finalizado', 'finished', 'completed', 'done'].includes(normalized)) {
+  if (['finalized', 'finalizado', 'finished', 'completed', 'complete', 'done'].includes(normalized)) {
     return 'finalized'
   }
 
@@ -54,7 +56,7 @@ function normalizeStatus(status) {
 }
 
 function normalizeApiStatus(status) {
-  return status === 'finalized' ? 'finalized' : 'draft'
+  return status === 'finalized' || status === 'completed' ? 'completed' : 'draft'
 }
 
 function emptyToUndefined(value) {

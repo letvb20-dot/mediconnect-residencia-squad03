@@ -1,41 +1,70 @@
-import { apiConfig, getAuthenticatedHeaders } from '../config/api.js'
-import { getResponseError, normalizeItem } from './repositoryUtils.js'
+import { apiConfig, apiEndpoint, getAuthenticatedHeaders } from '../config/api.js'
+import { fetchJsonWithFallback, getResponseError, normalizeItem } from './repositoryUtils.js'
 
 export const professionalRepository = {
-  async getAll() {
-    const response = await fetch(`${apiConfig.restUrl}/doctors`, {
-      headers: getAuthenticatedHeaders()
+  async getAll(filters = {}) {
+    const query = new URLSearchParams()
+    query.set('select', filters.select || '*')
+    if (filters.active !== undefined) query.set('active', `eq.${filters.active}`)
+    if (filters.specialty) query.set('specialty', `eq.${filters.specialty}`)
+
+    const response = await fetch(`${apiConfig.restUrl}/doctors?${query.toString()}`, {
+      headers: getAuthenticatedHeaders(),
     })
-    
+
     if (!response.ok) {
       throw new Error(await getResponseError(response, 'Erro ao buscar médicos.'))
     }
-    
+
     const data = await response.json()
     return (Array.isArray(data) ? data : []).map(mapProfessional)
   },
 
   async create(data) {
-    const response = await fetch(`${apiConfig.functionsUrl}/create-doctor`, {
-      method: 'POST',
-      headers: getAuthenticatedHeaders(),
-      body: JSON.stringify(cleanPayload({
-        full_name: data.fullName || data.full_name || data.name,
-        email: data.email,
-        cpf: data.cpf,
-        crm: data.crm,
-        crm_uf: data.crmUf || data.crm_uf,
-        phone_mobile: data.phoneMobile || data.phone_mobile || data.phone,
-        specialty: data.specialty || data.specialidade,
-        birth_date: data.birthDate || data.birth_date,
-      })),
+    const body = cleanPayload({
+      full_name: data.fullName || data.full_name || data.name,
+      email: data.email,
+      cpf: data.cpf,
+      crm: data.crm,
+      crm_uf: data.crmUf || data.crm_uf,
+      phone_mobile: data.phoneMobile || data.phone_mobile || data.phone,
+      phone2: data.phone2 || data.phoneSecondary || data.phone_secondary,
+      rg: data.rg,
+      active: data.active,
+      temp_password: data.tempPassword || data.temp_password,
+      specialty: data.specialty || data.specialidade,
+      birth_date: data.birthDate || data.birth_date,
+      cep: data.cep || data.zipCode || data.zip_code,
+      street: data.street || data.addressStreet || data.address_street,
+      number: data.number || data.addressNumber || data.address_number,
+      complement: data.complement || data.addressComplement || data.address_complement,
+      neighborhood: data.neighborhood || data.bairro,
+      city: data.city || data.cidade,
+      state: data.state || data.estado,
     })
+    const result = await fetchJsonWithFallback(
+      [
+        {
+          url: `${apiConfig.functionsUrl}/create-doctor`,
+          options: {
+            method: 'POST',
+            headers: getAuthenticatedHeaders(),
+            body: JSON.stringify(body),
+          },
+        },
+        {
+          url: apiEndpoint('/create-doctor'),
+          options: {
+            method: 'POST',
+            headers: getAuthenticatedHeaders(),
+            body: JSON.stringify(body),
+          },
+        },
+      ],
+      'Erro ao criar médico.',
+    )
 
-    if (!response.ok) {
-      throw new Error(await getResponseError(response, 'Erro ao criar médico.'))
-    }
-
-    return mapProfessional(normalizeItem(await response.json(), ['doctor']))
+    return mapProfessional(normalizeItem(result, ['doctor']))
   },
 
   getCoverageMap() {
@@ -71,7 +100,7 @@ function mapProfessional(doctor) {
     schedule: doctor.schedule || doctor.agenda || doctor.disponibilidade || 'Seg a Sex, 08h as 18h',
     nextSlot: doctor.nextSlot || doctor.proximo_horario || doctor.next_slot || 'Consulta pendente',
     patients: doctor.patients || doctor.pacientes_ativos || doctor.active_patients || 0,
-    status: doctor.status || doctor.situacao || 'Disponivel',
+    status: doctor.status || doctor.situacao || 'Disponível',
   }
 }
 

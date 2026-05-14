@@ -32,6 +32,24 @@ test('getResponseError preserva erros estruturados em portugues da API', async (
   assert.match(message, /cpf: Campo obrigatorio/)
 })
 
+test('getResponseError entende Problem Details RFC 7807 com invalid_params', async () => {
+  const response = new Response(
+    JSON.stringify({
+      type: 'https://api.mediconnect/errors/validation',
+      title: 'Erro de validação',
+      status: 400,
+      detail: 'CPF inválido.',
+      invalid_params: [{ name: 'cpf', reason: 'CPF inválido' }],
+    }),
+    { status: 400, headers: { 'Content-Type': 'application/problem+json' } },
+  )
+
+  const message = await getResponseError(response, 'Erro ao cadastrar paciente.')
+
+  assert.match(message, /Erro ao cadastrar paciente\. \(400\):/)
+  assert.match(message, /CPF inválido/)
+})
+
 test('getResponseError usa fallback em ingles desconhecido', async () => {
   const response = new Response('Something went wrong in backend', { status: 500 })
   const message = await getResponseError(response, 'Falha ao salvar registro.')

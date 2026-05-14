@@ -3,14 +3,16 @@ import {
   endOfWeek,
   eachDayOfInterval,
   format,
+  isBefore,
   isSameDay,
   isToday,
+  startOfDay,
 } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
 import { parseLocalDate, sortAppointmentsByTime } from '../../utils/agendaDate.js'
 
-export function AgendaWeeklyView({ baseDate, appointments, onAppointmentClick }) {
+export function AgendaWeeklyView({ baseDate, appointments, canCreateAppointment = true, onAppointmentClick, onSlotCreate }) {
   const start = startOfWeek(baseDate, { weekStartsOn: 0 })
   const end = endOfWeek(baseDate, { weekStartsOn: 0 })
   const days = eachDayOfInterval({ start, end })
@@ -49,6 +51,7 @@ export function AgendaWeeklyView({ baseDate, appointments, onAppointmentClick })
 
       <div className="mt-4 grid min-h-[400px] grid-cols-7 gap-4">
         {days.map((day) => {
+          const dayIsPast = isBefore(startOfDay(day), startOfDay(new Date()))
           const dayAppointments = weeklyAppointments.filter((appointment) => {
             if (!appointment.date) return false
 
@@ -62,35 +65,51 @@ export function AgendaWeeklyView({ baseDate, appointments, onAppointmentClick })
               className="agenda-week-day flex h-full min-w-0 flex-col gap-2 rounded-lg border border-[#404040]/50 bg-[#1f1f1f] p-2"
             >
               {dayAppointments.length === 0 ? (
-                <div className="flex h-full items-center justify-center p-4">
-                  <span className="text-center text-xs text-[#737373]">Livre</span>
-                </div>
+                <button
+                  className="flex h-full min-h-24 items-center justify-center rounded-md border border-dashed border-[#404040] p-4 text-center text-xs font-semibold text-[#737373] transition hover:border-[#3b82f6]/50 hover:text-[#93c5fd] disabled:cursor-not-allowed disabled:hover:border-[#404040] disabled:hover:text-[#737373]"
+                  disabled={!canCreateAppointment || dayIsPast}
+                  onClick={() => onSlotCreate?.(day)}
+                  type="button"
+                >
+                  {dayIsPast ? 'Encerrado' : 'Livre'}
+                </button>
               ) : (
-                dayAppointments.map((appointment) => (
-                  <button
-                    key={appointment.id}
-                    onClick={() => onAppointmentClick && onAppointmentClick(appointment)}
-                    className={`agenda-event ${getStatusToneClass(appointment.status)} flex w-full min-w-0 flex-col items-start overflow-hidden rounded-md border p-2 text-left shadow-sm transition hover:brightness-110 ${getStatusColors(appointment.status)}`}
-                  >
-                    <div className="mb-1 flex w-full min-w-0 items-center gap-1.5 overflow-hidden">
-                      <span className="shrink-0 rounded bg-black/20 px-1.5 py-0.5 text-[10px] font-bold leading-none">
-                        {appointment.time}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-[9px] font-semibold uppercase tracking-normal opacity-80">
-                        {appointment.mode}
-                      </span>
-                    </div>
-                    <span className="block w-full min-w-0 truncate text-xs font-bold leading-tight" title={appointment.patient}>
-                      {appointment.patient}
-                    </span>
-                    <span
-                      className="mt-0.5 block w-full min-w-0 truncate text-[10px] font-medium opacity-80"
-                      title={appointment.professional}
+                <>
+                  {dayAppointments.map((appointment) => (
+                    <button
+                      key={appointment.id}
+                      onClick={() => onAppointmentClick && onAppointmentClick(appointment)}
+                      className={`agenda-event ${getStatusToneClass(appointment.status)} flex w-full min-w-0 flex-col items-start overflow-hidden rounded-md border p-2 text-left shadow-sm transition hover:brightness-110 ${getStatusColors(appointment.status)}`}
+                      type="button"
                     >
-                      Dr(a). {appointment.professional?.split(' ')[0]}
-                    </span>
+                      <div className="mb-1 flex w-full min-w-0 items-center gap-1.5 overflow-hidden">
+                        <span className="shrink-0 rounded bg-black/20 px-1.5 py-0.5 text-[10px] font-bold leading-none">
+                          {appointment.time}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-[9px] font-semibold uppercase tracking-normal opacity-80">
+                          {appointment.mode}
+                        </span>
+                      </div>
+                      <span className="block w-full min-w-0 truncate text-xs font-bold leading-tight" title={appointment.patient}>
+                        {appointment.patient}
+                      </span>
+                      <span
+                        className="mt-0.5 block w-full min-w-0 truncate text-[10px] font-medium opacity-80"
+                        title={appointment.professional}
+                      >
+                        Dr(a). {appointment.professional?.split(' ')[0]}
+                      </span>
+                    </button>
+                  ))}
+                  <button
+                    className="mt-auto rounded-md border border-dashed border-[#404040] px-2 py-2 text-xs font-semibold text-[#737373] transition hover:border-[#3b82f6]/50 hover:text-[#93c5fd] disabled:cursor-not-allowed disabled:hover:border-[#404040] disabled:hover:text-[#737373]"
+                    disabled={!canCreateAppointment || dayIsPast}
+                    onClick={() => onSlotCreate?.(day)}
+                    type="button"
+                  >
+                    {dayIsPast ? 'Dia encerrado' : '+ Novo agendamento'}
                   </button>
-                ))
+                </>
               )}
             </div>
           )

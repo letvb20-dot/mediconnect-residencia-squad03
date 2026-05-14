@@ -1,11 +1,19 @@
-﻿import { apiConfig, getAnonHeaders, getAuthenticatedHeaders } from '../config/api.js'
+import { apiConfig, apiEndpoint, getAnonHeaders, getAuthenticatedHeaders, getAuthSession } from '../config/api.js'
 import { cleanPersonName, formatBrazilianPhone, formatCpf, isValidPersonName, onlyDigits } from '../utils/brFormatters.js'
-import { getResponseError } from './repositoryUtils.js'
+import { fetchJsonWithFallback, getResponseError } from './repositoryUtils.js'
 
 export const patientRepository = {
   // 1. Listar pacientes
-  async getAll() {
-    const response = await fetch(`${apiConfig.restUrl}/patients?select=*`, { headers: getAuthenticatedHeaders() })
+  async getAll(filters = {}) {
+    const query = new URLSearchParams()
+    query.set('select', filters.select || '*')
+    if (filters.limit) query.set('limit', String(filters.limit))
+    if (filters.offset) query.set('offset', String(filters.offset))
+    if (filters.order) query.set('order', filters.order)
+    if (filters.fullName) query.set('full_name', `ilike.*${filters.fullName}*`)
+    if (filters.cpf) query.set('cpf', `eq.${onlyDigits(filters.cpf)}`)
+
+    const response = await fetch(`${apiConfig.restUrl}/patients?${query.toString()}`, { headers: getAuthenticatedHeaders() })
     if (!response.ok) throw new Error(await getResponseError(response, 'Erro ao buscar pacientes.'))
     return response.json()
   },
@@ -34,26 +42,37 @@ export const patientRepository = {
   // 2. Criar paciente (direto)
   async create(data) {
     validatePatientPayload(data)
-    let lastResponse = null
+    const restPayload = buildPatientPayloads(data, { includeCreatedBy: true })[1]
 
-    for (const body of buildPatientPayloads(data, { includeCreatedBy: true })) {
-      const response = await fetch(`${apiConfig.restUrl}/patients`, {
-        method: 'POST',
-        headers: getAuthenticatedHeaders({ Prefer: 'return=representation' }),
-        body: JSON.stringify(body),
-      })
-
-      if ([401, 403].includes(response.status)) {
-        return this.createWithValidation(data)
-      }
-
-      if (response.ok) return response.json()
-
-      lastResponse = response
-      if (response.status !== 400) break
-    }
-
-    throw new Error(await getResponseError(lastResponse, 'Erro ao criar paciente.'))
+    return fetchJsonWithFallback(
+      [
+        {
+          url: apiEndpoint('/register-patient'),
+          options: {
+            method: 'POST',
+            headers: getAnonHeaders(),
+            body: JSON.stringify(buildRegisterPatientPayload(data)),
+          },
+        },
+        {
+          url: `${apiConfig.functionsUrl}/register-patient`,
+          options: {
+            method: 'POST',
+            headers: getAnonHeaders(),
+            body: JSON.stringify(buildRegisterPatientPayload(data)),
+          },
+        },
+        {
+          url: `${apiConfig.restUrl}/patients`,
+          options: {
+            method: 'POST',
+            headers: getAuthenticatedHeaders({ Prefer: 'return=representation' }),
+            body: JSON.stringify(restPayload),
+          },
+        },
+      ],
+      'Erro ao criar paciente.',
+    )
   },
 
   // 3. Criar paciente com validação de CPF (Edge Function)
@@ -76,26 +95,63 @@ export const patientRepository = {
 
   async registerPublic(data) {
     validatePatientPayload(data)
-    const body = cleanPayload({
-      full_name: cleanPersonName(data.name, data.full_name),
-      cpf: onlyDigits(data.cpf),
-      email: data.email,
-      phone_mobile: onlyDigits(data.phone || data.phone_mobile),
-      birth_date: data.birthDate || data.birth_date || null,
-      redirect_url: data.redirectUrl || data.redirect_url,
-    })
+    const body = buildRegisterPatientPayload(data)
 
-    const response = await fetch(`${apiConfig.functionsUrl}/register-patient`, {
-      method: 'POST',
-      headers: getAnonHeaders(),
-      body: JSON.stringify(body),
-    })
+    return fetchJsonWithFallback(
+      [
+        {
+          url: apiEndpoint('/register-patient'),
+          options: {
+            method: 'POST',
+            headers: getAnonHeaders(),
+            body: JSON.stringify(body),
+          },
+        },
+        {
+          url: `${apiConfig.functionsUrl}/register-patient`,
+          options: {
+            method: 'POST',
+            headers: getAnonHeaders(),
+            body: JSON.stringify(body),
+          },
+        },
+      ],
+      'Erro ao realizar auto-cadastro de paciente.',
+    )
+  },
 
-    if (!response.ok) {
-      throw new Error(await getResponseError(response, 'Erro ao realizar auto-cadastro de paciente.'))
+  async registerWithPassword(data) {
+    validatePatientPayload(data)
+    if (!data.password || String(data.password).length < 6) {
+      throw new Error('A senha deve ter pelo menos 6 caracteres.')
     }
 
-    return response.json()
+    const body = cleanPayload({
+      ...buildRegisterPatientPayload(data),
+      password: data.password,
+    })
+
+    return fetchJsonWithFallback(
+      [
+        {
+          url: apiEndpoint('/register-patient-with-password'),
+          options: {
+            method: 'POST',
+            headers: getAnonHeaders(),
+            body: JSON.stringify(body),
+          },
+        },
+        {
+          url: `${apiConfig.functionsUrl}/register-patient-with-password`,
+          options: {
+            method: 'POST',
+            headers: getAnonHeaders(),
+            body: JSON.stringify(body),
+          },
+        },
+      ],
+      'Erro ao realizar cadastro de paciente com senha.',
+    )
   },
 
   // 4. Atualizar paciente
@@ -103,7 +159,7 @@ export const patientRepository = {
     validatePatientPayload(data)
     let lastResponse = null
 
-    for (const body of buildPatientPayloads(data)) {
+    for (const body of buildPatientPayloads(data, { mode: 'update' })) {
       const response = await fetch(`${apiConfig.restUrl}/patients?id=eq.${patientId}`, {
         method: 'PATCH',
         headers: getAuthenticatedHeaders({ Prefer: 'return=representation' }),
@@ -146,6 +202,33 @@ export const patientRepository = {
     return {
       avatarUrl,
       path: objectPath,
+    }
+  },
+
+  async uploadAttachment(patientId, file) {
+    if (!patientId) {
+      throw new Error('Não foi possível identificar o paciente para enviar o anexo.')
+    }
+
+    const safeName = sanitizeFileName(file.name || `anexo-${Date.now()}`)
+    const objectPath = `patients/${patientId}/attachments/${Date.now()}-${safeName}`
+    const response = await fetch(`${apiConfig.storageUrl}/object/avatars/${objectPath}`, {
+      method: 'POST',
+      headers: getAuthenticatedHeaders({
+        'Content-Type': file.type || 'application/octet-stream',
+        'x-upsert': 'true',
+      }),
+      body: file,
+    })
+
+    if (!response.ok) {
+      throw new Error(await getResponseError(response, 'Falha ao enviar anexo do paciente.'))
+    }
+
+    return {
+      name: file.name || safeName,
+      path: objectPath,
+      url: getPublicAvatarUrl(objectPath),
     }
   },
 
@@ -202,10 +285,20 @@ function mapPatientToDirectory(patient, appointments = []) {
     maritalStatus: patient.maritalStatus || patient.marital_status || patient.estado_civil || '',
     phoneSecondary: formatBrazilianPhone(patient.phoneSecondary || patient.phone_secondary || patient.phone_home || ''),
     zipCode: patient.zipCode || patient.zip_code || patient.cep || '',
-    addressStreet: patient.addressStreet || patient.address_street || patient.street || patient.logradouro || patient.address || '',
+    addressStreet: patient.addressStreet || patient.address_street || patient.street || patient.logradouro || patient.address?.street || patient.address?.logradouro || '',
     addressNumber: patient.addressNumber || patient.address_number || patient.numero || '',
     addressComplement: patient.addressComplement || patient.address_complement || patient.complemento || '',
     plan: patient.plan || patient.plano || patient.insurance_plan || '',
+    bloodType: patient.bloodType || patient.blood_type || patient.tipo_sanguineo || '',
+    weight: patient.weight || patient.peso || '',
+    height: patient.height || patient.altura || '',
+    bmi: patient.bmi || patient.imc || '',
+    allergies: patient.allergies || patient.alergias || '',
+    insuranceNumber: patient.insuranceNumber || patient.insurance_number || patient.numero_matricula || '',
+    insuranceCardValidUntil: patient.insuranceCardValidUntil || patient.insurance_card_valid_until || patient.validade_carteira || '',
+    insuranceIndefiniteValidity: Boolean(patient.insuranceIndefiniteValidity || patient.insurance_indefinite_validity || patient.validade_indeterminada),
+    cns: patient.cns || patient.sus_card || patient.cartao_sus || '',
+    attachments: normalizeAttachments(patient.attachments || patient.anexos || patient.documents || patient.documentos),
     notesText: patient.notesText || patient.notes_text || patient.observations || patient.observacoes || '',
     lastVisitIso: patient.lastVisitIso || patient.last_visit_iso || appointmentSummary.lastVisitIso || null,
     lastVisit: patient.lastVisit || patient.last_visit || appointmentSummary.lastVisit || '',
@@ -226,7 +319,7 @@ function mapPatientToDetail(patient, appointments = []) {
     risk: patient.risk || patient.risco || 'Baixo',
     email: patient.email || '',
     avatarUrl: directory.avatarUrl,
-    address: formatAddress(directory) || patient.address || patient.endereco || 'Endereço não informado',
+    address: formatAddress(directory) || formatObjectAddress(patient.address) || patient.endereco || 'Endereço não informado',
     team: patient.team || patient.equipe || [],
     notes: normalizeNotes(patient.notes || patient.observacoes || directory.notesText),
     exams: patient.exams || patient.exames || [],
@@ -363,6 +456,45 @@ function formatAddress(patient) {
     .join(', ')
 }
 
+function formatObjectAddress(address) {
+  if (!address || typeof address !== 'object') return ''
+
+  return [
+    address.street || address.logradouro,
+    address.number || address.numero,
+    address.complement || address.complemento,
+    address.city || address.cidade,
+    address.state || address.estado || address.uf,
+    address.zipCode || address.zip_code || address.cep,
+  ]
+    .filter(Boolean)
+    .join(', ')
+}
+
+function normalizeAttachments(value) {
+  if (!value) return []
+
+  const attachments = Array.isArray(value) ? value : [value]
+  return attachments
+    .map((attachment) => {
+      if (typeof attachment === 'string') {
+        return {
+          name: attachment.split('/').pop() || 'Anexo do paciente',
+          path: attachment,
+          url: normalizeAvatarUrl(attachment),
+        }
+      }
+
+      const path = attachment.path || attachment.object_path || attachment.url || ''
+      return {
+        name: attachment.name || attachment.file_name || path.split('/').pop() || 'Anexo do paciente',
+        path,
+        url: attachment.url || normalizeAvatarUrl(path),
+      }
+    })
+    .filter((attachment) => attachment.path || attachment.url || attachment.name)
+}
+
 function normalizeNotes(notes) {
   if (Array.isArray(notes)) return notes
   if (!notes) return []
@@ -384,6 +516,21 @@ function normalizeCondition(value) {
   }
 
   return input
+}
+
+function normalizeDecimal(value) {
+  if (value === undefined || value === null || value === '') return undefined
+  const number = Number(String(value).replace(',', '.'))
+  return Number.isFinite(number) ? number : undefined
+}
+
+function sanitizeFileName(name) {
+  return String(name || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    || `arquivo-${Date.now()}`
 }
 
 function normalizeInsurance(value) {
@@ -419,6 +566,16 @@ function buildPatientBody(data, { includeCreatedBy = false } = {}) {
     phone_secondary: onlyDigits(data.phoneSecondary || data.phone_secondary),
     insurance: data.insurance,
     insurance_plan: data.plan || data.insurance_plan,
+    blood_type: data.bloodType || data.blood_type,
+    weight: normalizeDecimal(data.weight || data.peso),
+    height: normalizeDecimal(data.height || data.altura),
+    bmi: normalizeDecimal(data.bmi || data.imc),
+    allergies: data.allergies || data.alergias,
+    insurance_number: data.insuranceNumber || data.insurance_number,
+    insurance_card_valid_until: data.insuranceIndefiniteValidity ? null : data.insuranceCardValidUntil || data.insurance_card_valid_until,
+    insurance_indefinite_validity: data.insuranceIndefiniteValidity === undefined ? undefined : Boolean(data.insuranceIndefiniteValidity),
+    cns: onlyDigits(data.cns || data.sus_card || data.cartao_sus),
+    attachments: data.attachments,
     observations: data.notesText || data.notes_text || data.notes,
     mother_name: data.motherName || data.mother_name,
     father_name: data.fatherName || data.father_name,
@@ -428,7 +585,7 @@ function buildPatientBody(data, { includeCreatedBy = false } = {}) {
   }
 
   if (includeCreatedBy) {
-    body.created_by = data.createdBy || '00000000-0000-0000-0000-000000000000'
+    body.created_by = data.createdBy || getCurrentUserId()
   }
 
   return cleanPayload(body)
@@ -445,7 +602,27 @@ function buildPatientPayloads(data, options = {}) {
     'created_by',
   ])
 
+  if (options.mode === 'update') {
+    const documentedUpdatePayload = pickFields(fullPayload, [
+      'full_name',
+      'phone_mobile',
+      'email',
+    ])
+    return uniquePayloads([fullPayload, documentedUpdatePayload])
+  }
+
   return uniquePayloads([fullPayload, corePayload])
+}
+
+function buildRegisterPatientPayload(data) {
+  return cleanPayload({
+    full_name: cleanPersonName(data.name, data.full_name),
+    cpf: onlyDigits(data.cpf),
+    email: data.email?.trim(),
+    phone_mobile: onlyDigits(data.phone || data.phone_mobile),
+    birth_date: data.birthDate || data.birth_date || null,
+    redirect_url: data.redirectUrl || data.redirect_url || getDefaultRedirectUrl('/auth'),
+  })
 }
 
 function validatePatientPayload(data) {
@@ -483,6 +660,16 @@ function calculateAge(birthDate) {
   }
 
   return age
+}
+
+function getCurrentUserId() {
+  const session = getAuthSession()
+  return session?.user?.id || session?.user_id || session?.sub || undefined
+}
+
+function getDefaultRedirectUrl(path) {
+  if (typeof window === 'undefined') return undefined
+  return `${window.location.origin}${path}`
 }
 
 function cleanPayload(payload) {

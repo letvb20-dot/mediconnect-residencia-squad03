@@ -72,7 +72,7 @@ function normalizePriority(priority) {
   if (!normalized) return ''
   if (normalized.includes('alta') || normalized.includes('urgente')) return 'Alta'
   if (normalized.includes('baixa')) return 'Baixa'
-  if (normalized.includes('media') || normalized.includes('normal')) return 'MÃ©dia'
+  if (normalized.includes('media') || normalized.includes('normal')) return 'Média'
   return ''
 }
 

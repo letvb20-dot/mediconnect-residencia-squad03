@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { StethoscopeIcon } from '../components/Brand.jsx'
 import { ADMIN_CREATABLE_ROLES, GESTOR_CREATABLE_ROLES, hasCapability, normalizeRole, ROLE_LABELS } from '../config/permissions.js'
+import { authRepository } from '../repositories/authRepository.js'
 import { userRepository } from '../repositories/userRepository.js'
 import { sanitizeFieldValue } from '../utils/inputSanitizers.js'
 
@@ -37,9 +38,10 @@ const initialUserForm = {
   create_patient_record: false,
   crm: '',
   crm_uf: '',
+  specialty: '',
 }
 
-export function UsersPage({ role: currentRole }) {
+export function UsersPage({ embedded = false, role: currentRole }) {
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -114,6 +116,7 @@ export function UsersPage({ role: currentRole }) {
       role: normalizeRole(getUserRole(user)) || '',
       crm: user.crm || '',
       crm_uf: user.crm_uf || user.crmUf || '',
+      specialty: user.specialty || user.specialidade || '',
     })
     setModalOpen(true)
   }
@@ -141,8 +144,8 @@ export function UsersPage({ role: currentRole }) {
         return
       }
 
-      if (form.password.length < 8) {
-        window.alert('A senha deve ter pelo menos 8 caracteres.')
+      if (form.password.length < 6) {
+        window.alert('A senha deve ter pelo menos 6 caracteres.')
         return
       }
 
@@ -163,6 +166,7 @@ export function UsersPage({ role: currentRole }) {
         window.alert(`Usuário criado com email e senha para ${form.email}.`)
       } else {
         await userRepository.create(form)
+        await authRepository.sendMagicLink(form.email)
         window.alert(`Usuário criado! Magic Link enviado para ${form.email}.`)
       }
       setModalOpen(false)
@@ -183,7 +187,7 @@ export function UsersPage({ role: currentRole }) {
     }
 
     const confirmed = window.confirm(
-      `⚠️ ATENÇÃO: Esta operação é IRREVERSÍVEL!\n\nO usuário "${user.full_name || user.email}" e TODOS os dados relacionados (perfil, agendamentos, registros) serão deletados permanentemente.\n\nDeseja continuar?`
+      `ATENÇÃO: Esta operação é IRREVERSÍVEL!\n\nO usuário "${user.full_name || user.email}" e TODOS os dados relacionados (perfil, agendamentos, registros) serão deletados permanentemente.\n\nDeseja continuar?`
     )
     if (!confirmed) return
 
@@ -208,10 +212,10 @@ export function UsersPage({ role: currentRole }) {
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 text-[#e5e5e5]">
+    <div className={`${embedded ? 'w-full space-y-4' : 'mx-auto max-w-7xl space-y-6'} text-[#e5e5e5]`}>
       <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#e5e5e5]">Usuários do Sistema</h1>
+          <h1 className={`${embedded ? 'text-lg' : 'text-2xl'} font-bold tracking-tight text-[#e5e5e5]`}>Usuários do Sistema</h1>
           <p className="mt-1 text-sm text-[#a3a3a3]">Gerencie os usuários e seus perfis de acesso</p>
         </div>
         <button
@@ -236,8 +240,8 @@ export function UsersPage({ role: currentRole }) {
                 {filteredUsers.length} de {users.length} usuários exibidos
               </p>
             </div>
-            <div className="flex flex-col gap-3 sm:flex-row">
-            <label className="grid gap-1.5 text-xs font-semibold text-[#a3a3a3] sm:min-w-72">
+            <div className={`flex flex-col gap-3 ${embedded ? '' : 'sm:flex-row'}`}>
+            <label className={`grid gap-1.5 text-xs font-semibold text-[#a3a3a3] ${embedded ? '' : 'sm:min-w-72'}`}>
               <span>Pesquisa</span>
               <input
                 className={darkInput}
@@ -247,7 +251,7 @@ export function UsersPage({ role: currentRole }) {
                 value={search}
               />
             </label>
-            <label className="grid gap-1.5 text-xs font-semibold text-[#a3a3a3] sm:min-w-56">
+            <label className={`grid gap-1.5 text-xs font-semibold text-[#a3a3a3] ${embedded ? '' : 'sm:min-w-56'}`}>
               <span>Perfil</span>
               <select
                 className={darkInput}
@@ -459,10 +463,10 @@ export function UsersPage({ role: currentRole }) {
                     <input
                       autoComplete="new-password"
                       className={darkInput}
-                      minLength={8}
+                      minLength={6}
                       name="password"
                       onChange={handleFormChange}
-                      placeholder="Mínimo 8 caracteres"
+                      placeholder="Mínimo 6 caracteres"
                       required={isPasswordCreation}
                       type="password"
                       value={form.password}
@@ -473,7 +477,7 @@ export function UsersPage({ role: currentRole }) {
                     <input
                       autoComplete="new-password"
                       className={darkInput}
-                      minLength={8}
+                      minLength={6}
                       name="confirm_password"
                       onChange={handleFormChange}
                       placeholder="Repita a senha"
@@ -528,6 +532,16 @@ export function UsersPage({ role: currentRole }) {
                         <option key={uf} value={uf}>{uf}</option>
                       ))}
                     </select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className={darkLabel}>Especialidade</label>
+                    <input
+                      className={darkInput}
+                      name="specialty"
+                      onChange={handleFormChange}
+                      placeholder="Ex: Cardiologia"
+                      value={form.specialty}
+                    />
                   </div>
                 </div>
               ) : null}
@@ -591,7 +605,7 @@ function UserDetailModal({ onClose, onDelete, onEdit, user }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-3xl rounded-xl border border-[#404040] bg-[#242424] shadow-2xl"
+        className="user-modal-shell w-full max-w-3xl rounded-xl border border-[#404040] bg-[#242424] shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-[#404040] px-6 py-4">

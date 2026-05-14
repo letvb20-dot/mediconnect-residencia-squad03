@@ -73,6 +73,7 @@ export const appointmentMapper = {
       time: timeStr,
       type: apiData.type || apiData.tipo || apiData.tipo_consulta || 'Consulta',
       mode: mode,
+      durationMinutes: apiData.duration_minutes || apiData.durationMinutes || 30,
       status: mappedStatus,
       highPriority,
       priority: highPriority ? 'Alta' : normalizePriority(apiData.priority) || 'Média',
@@ -104,7 +105,7 @@ export const appointmentMapper = {
         status: toApiStatus(uiData.status),
         notes: emptyToUndefined(notes),
         observations: emptyToUndefined(notes),
-        duration_minutes: 30, // Padrao
+        duration_minutes: Number(uiData.durationMinutes) || 30,
         created_by: emptyToUndefined(uiData.createdBy),
       }
     }
@@ -119,6 +120,7 @@ export const appointmentMapper = {
       appointment_time: uiData.time,
       type: uiData.type,
       mode: uiData.mode,
+      duration_minutes: Number(uiData.durationMinutes) || 30,
       status: uiData.status || 'Confirmada',
       room: uiData.room,
       high_priority: highPriority,
@@ -162,8 +164,10 @@ function toApiStatus(status) {
   const statusMap = {
     confirmada: 'confirmed',
     confirmado: 'confirmed',
-    em_triagem: 'checked_in',
-    triagem: 'checked_in',
+    em_triagem: 'requested',
+    triagem: 'requested',
+    em_atendimento: 'confirmed',
+    atendimento: 'confirmed',
     aguardando: 'requested',
     solicitada: 'requested',
     solicitacao: 'requested',

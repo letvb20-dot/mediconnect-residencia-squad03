@@ -14,6 +14,7 @@ const initialForm = {
   professionalId: '',
   type: 'Retorno',
   time: '',
+  durationMinutes: 30,
   mode: 'Teleconsulta',
   status: 'Aguardando',
   highPriority: false,
@@ -167,12 +168,8 @@ export function useAgenda() {
     }
   }, [agendaScope, baseDate, currentProfessional?.id, editingAppointment, form.mode, form.professionalId, modalOpen])
 
-  const visibleAppointments = useMemo(() => {
+  const scopedAppointments = useMemo(() => {
     let filtered = localAppointments
-
-    if (status !== 'Todos') {
-      filtered = filtered.filter((appointment) => appointment.status === status)
-    }
 
     if (agendaScope !== 'doctor' && doctorFilter !== 'Todos') {
       filtered = filterAppointmentsByProfessional(filtered, doctorFilter)
@@ -198,6 +195,18 @@ export function useAgenda() {
       }
     }
 
+    return sortAppointmentsByTime(filtered)
+  }, [agendaScope, doctorFilter, doctorSearch, localAppointments, professionals, unitFilter])
+
+  const visibleAppointments = useMemo(() => {
+    let filtered = scopedAppointments
+
+    if (status === 'Prioridade') {
+      filtered = filtered.filter(isHighPriorityAppointment)
+    } else if (status !== 'Todos') {
+      filtered = filtered.filter((appointment) => appointment.status === status)
+    }
+
     if (activeView === 'Dia') {
       filtered = filtered.filter((appointment) => {
         if (!appointment.date) return false
@@ -210,7 +219,22 @@ export function useAgenda() {
     }
 
     return sortAppointmentsByTime(filtered)
-  }, [activeView, agendaScope, baseDate, doctorFilter, doctorSearch, localAppointments, professionals, status, unitFilter])
+  }, [activeView, baseDate, scopedAppointments, status])
+
+  const dailyOccupancyAppointments = useMemo(
+    () =>
+      sortAppointmentsByTime(
+        scopedAppointments.filter((appointment) => {
+          if (!appointment.date) return false
+
+          const appointmentDate = parseLocalDate(appointment.date)
+          if (!appointmentDate) return false
+
+          return isSameDay(appointmentDate, baseDate)
+        }),
+      ),
+    [baseDate, scopedAppointments],
+  )
 
   function updateForm(field, value) {
     setForm((current) => ({ ...current, [field]: value }))
@@ -249,6 +273,7 @@ export function useAgenda() {
       professionalId: appointment.professionalId || '',
       type: appointment.type || initialForm.type,
       time: appointment.time || initialForm.time,
+      durationMinutes: appointment.durationMinutes || initialForm.durationMinutes,
       mode: appointment.mode || initialForm.mode,
       status: appointment.status || initialForm.status,
       highPriority: Boolean(appointment.highPriority || appointment.priority === 'Alta'),
@@ -277,6 +302,16 @@ export function useAgenda() {
     const payload = buildPayload()
     if (!payload) return
 
+    if (isAppointmentInPast(payload.date, payload.time)) {
+      alert('Não é possível agendar consultas em horários anteriores ao horário atual.')
+      return
+    }
+
+    if (await patientHasAppointmentOnDate(payload)) {
+      alert('Este paciente já possui um agendamento neste dia.')
+      return
+    }
+
     try {
       const created = await appointmentRepository.create(payload)
       setLocalAppointments((current) => sortAppointmentsByTime([...current, enrichAppointment(created, payload, patients, professionals)]))
@@ -292,6 +327,16 @@ export function useAgenda() {
 
     const payload = buildPayload()
     if (!payload) return
+
+    if (isAppointmentInPast(payload.date, payload.time)) {
+      alert('Não é possível agendar consultas em horários anteriores ao horário atual.')
+      return
+    }
+
+    if (await patientHasAppointmentOnDate(payload, editingAppointment.id)) {
+      alert('Este paciente já possui outro agendamento neste dia.')
+      return
+    }
 
     try {
       const updated = await appointmentRepository.update(editingAppointment.id, payload)
@@ -360,6 +405,7 @@ export function useAgenda() {
       time: form.time,
       type: form.type,
       mode: form.mode,
+      durationMinutes: Number(form.durationMinutes) || 30,
       status: form.status,
       highPriority,
       priority: highPriority ? 'Alta' : 'Média',
@@ -370,6 +416,18 @@ export function useAgenda() {
       createdByName: editingAppointment?.createdByName || viewerProfile?.name || viewerProfile?.email || '',
       ...overrides,
     }
+  }
+
+  async function patientHasAppointmentOnDate(payload, ignoredAppointmentId = null) {
+    if (hasPatientAppointmentOnDate(localAppointments, payload.patientId, payload.date, ignoredAppointmentId)) {
+      return true
+    }
+
+    const patientAppointments = await appointmentRepository
+      .getAll({ patientId: payload.patientId })
+      .catch(() => [])
+
+    return hasPatientAppointmentOnDate(patientAppointments, payload.patientId, payload.date, ignoredAppointmentId)
   }
 
   return {
@@ -403,6 +461,7 @@ export function useAgenda() {
     handleSubmitAppointment,
     handleCancelAppointment,
     visibleAppointments,
+    dailyOccupancyAppointments,
     availableSlots,
     slotsLoading,
     slotsError,
@@ -427,6 +486,32 @@ function filterAppointmentsByProfessional(appointments, professionalId) {
   )
 }
 
+function hasPatientAppointmentOnDate(appointments, patientId, date, ignoredAppointmentId = null) {
+  return appointments.some((appointment) => {
+    if (ignoredAppointmentId && String(appointment.id) === String(ignoredAppointmentId)) return false
+    if (String(appointment.patientId || '') !== String(patientId || '')) return false
+    if (String(appointment.status || '').toLowerCase() === 'cancelada') return false
+
+    return appointment.date === date
+  })
+}
+
+function isHighPriorityAppointment(appointment) {
+  return Boolean(appointment.highPriority) ||
+    String(appointment.priority || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() === 'alta' ||
+    /^\[Prioridade alta\]/i.test(String(appointment.notes || ''))
+}
+
+function isAppointmentInPast(date, time) {
+  if (!date || !time) return false
+
+  const [year, month, day] = String(date).split('-').map(Number)
+  const [hours, minutes] = String(time).split(':').map(Number)
+  if (!year || !month || !day || Number.isNaN(hours) || Number.isNaN(minutes)) return false
+
+  return new Date(year, month - 1, day, hours, minutes).getTime() < Date.now()
+}
+
 function enrichAppointment(appointment, payload, patients, professionals) {
   const patient = patients.find((item) => String(item.id) === String(payload.patientId))
   const professional = professionals.find((item) => String(item.id) === String(payload.professionalId))
@@ -441,6 +526,7 @@ function enrichAppointment(appointment, payload, patients, professionals) {
     time: payload.time,
     type: payload.type,
     mode: payload.mode,
+    durationMinutes: payload.durationMinutes,
     status: payload.status,
     highPriority: payload.highPriority,
     priority: payload.priority,

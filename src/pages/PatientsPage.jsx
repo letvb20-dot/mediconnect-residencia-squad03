@@ -48,6 +48,7 @@ const BRAZILIAN_STATES = [
 ]
 
 const INSURANCE_OPTIONS = ['Unimed', 'Bradesco Saúde', 'Amil']
+const BLOOD_TYPE_OPTIONS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
 
 export function PatientsPage({ navigate, role }) {
   const [rows, setRows] = useState([])
@@ -59,7 +60,6 @@ export function PatientsPage({ navigate, role }) {
   const [search, setSearch] = useState('')
   const [insurance, setInsurance] = useState('')
   const [vip, setVip] = useState('')
-  const [birthday, setBirthday] = useState('')
   const [city, setCity] = useState('')
   const [state, setState] = useState('')
   const [ageMin, setAgeMin] = useState('')
@@ -114,15 +114,6 @@ export function PatientsPage({ navigate, role }) {
         return false
       }
 
-      const patientBirthday = getPatientBirthday(patient)
-      if (birthday === 'Hoje' && patientBirthday !== getTodayBirthday()) {
-        return false
-      }
-
-      if (birthday === 'Neste mês' && !patientBirthday.endsWith(`/${getCurrentMonth()}`)) {
-        return false
-      }
-
       if (city && !String(patient.city || '').toLowerCase().includes(city.toLowerCase())) {
         return false
       }
@@ -146,7 +137,7 @@ export function PatientsPage({ navigate, role }) {
 
       return true
     })
-  }, [ageMax, ageMin, birthday, city, insurance, lastVisitSince, rows, search, state, vip])
+  }, [ageMax, ageMin, city, insurance, lastVisitSince, rows, search, state, vip])
 
   const totalPages = Math.max(1, Math.ceil(filteredPatients.length / ITEMS_PER_PAGE))
   const currentPage = Math.min(page, totalPages)
@@ -183,11 +174,17 @@ export function PatientsPage({ navigate, role }) {
     if (isNew) {
       const created = normalizeCreatedPatient(await patientRepository.create(patient))
       const patientId = created?.id || patient.id
+      if (patientId) {
+        await patientRepository.update(patientId, patient).catch(() => null)
+      }
       const avatarResult = patient.avatarFile
         ? await patientRepository.uploadAvatar(patientId, patient.avatarFile)
         : null
+      const uploadedAttachments = await uploadPatientAttachments(patientId, patient.attachmentFiles)
       const newRow = {
         ...patient,
+        attachmentFiles: undefined,
+        attachments: [...(patient.attachments || []), ...uploadedAttachments],
         avatarFile: undefined,
         avatarUrl: avatarResult?.avatarUrl || patient.avatarUrl,
         id: patientId,
@@ -201,8 +198,11 @@ export function PatientsPage({ navigate, role }) {
       const avatarResult = patient.avatarFile
         ? await patientRepository.uploadAvatar(patient.id, patient.avatarFile)
         : null
+      const uploadedAttachments = await uploadPatientAttachments(patient.id, patient.attachmentFiles)
       const nextPatient = {
         ...patient,
+        attachmentFiles: undefined,
+        attachments: [...(patient.attachments || []), ...uploadedAttachments],
         avatarFile: undefined,
         avatarUrl: avatarResult?.avatarUrl || patient.avatarUrl,
       }
@@ -222,10 +222,24 @@ export function PatientsPage({ navigate, role }) {
   setView('list')
 }
 
+async function uploadPatientAttachments(patientId, files = []) {
+  if (!files?.length) return []
+
+  const uploads = await Promise.all(
+    files.map((file) => patientRepository.uploadAttachment(patientId, file)),
+  )
+
+  return uploads.map((upload) => ({
+    name: upload.name,
+    path: upload.path,
+    url: upload.url,
+  }))
+}
+
   async function deletePatient(patient) {
     if (!canHardDeletePatients) return
 
-    if (!window.confirm(`Tem certeza que deseja excluir ${patient.name}? Esta aÃ§Ã£o nÃ£o poderÃ¡ ser desfeita.`)) {
+    if (!window.confirm(`Tem certeza que deseja excluir ${patient.name}? Esta ação não poderá ser desfeita.`)) {
       return
     }
 
@@ -291,7 +305,7 @@ export function PatientsPage({ navigate, role }) {
       </div>
 
       <section className="rounded-2xl border border-[#404040] bg-[#262626] px-6 py-8 shadow-sm xl:py-14">
-        <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-5">
+        <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
           <div className="relative md:col-span-2">
             <span className="absolute inset-y-0 left-0 flex items-center pl-3">
               <PatientIcon className="size-4 text-[#a3a3a3]" name="search" />
@@ -330,17 +344,6 @@ export function PatientsPage({ navigate, role }) {
           />
 
           <div className="flex gap-2">
-            <PatientSelect
-              className="flex-1"
-              icon="calendar"
-              label="Aniversariantes"
-              onChange={(value) => {
-                setBirthday(value)
-                setPage(1)
-              }}
-              options={['Hoje', 'Neste mês']}
-              value={birthday}
-            />
             <button
               className={`grid size-11 shrink-0 place-items-center rounded-lg border transition ${
                 hasAdvancedFilters
@@ -542,9 +545,18 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
     insurance: patient?.insurance || '',
     plan: patient?.plan || '',
     age: patient?.age || '',
+    bloodType: patient?.bloodType || patient?.blood_type || '',
+    weight: patient?.weight || patient?.peso || '',
+    height: patient?.height || patient?.altura || '',
+    bmi: patient?.bmi || patient?.imc || '',
+    allergies: patient?.allergies || patient?.alergias || '',
     condition: patient?.condition || '',
-    birthday: patient?.birthday || '',
     notesText: patient?.notesText || patient?.notes_text || '',
+    insuranceNumber: patient?.insuranceNumber || patient?.insurance_number || patient?.numero_matricula || '',
+    insuranceCardValidUntil: patient?.insuranceCardValidUntil || patient?.insurance_card_valid_until || patient?.validade_carteira || '',
+    insuranceIndefiniteValidity: Boolean(patient?.insuranceIndefiniteValidity || patient?.insurance_indefinite_validity),
+    cns: patient?.cns || patient?.sus_card || patient?.cartao_sus || '',
+    attachments: patient?.attachments || patient?.anexos || [],
     vip: Boolean(patient?.vip),
     lastVisit: patient?.lastVisit || null,
     nextVisit: patient?.nextVisit || null,
@@ -552,16 +564,34 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
     avatarUrl: patient?.avatarUrl || patient?.avatar_url || '',
   }))
   const fileInputRef = useRef(null)
+  const attachmentInputRef = useRef(null)
   const [avatarFile, setAvatarFile] = useState(null)
   const [avatarPreview, setAvatarPreview] = useState(formData.avatarUrl)
+  const [attachmentFiles, setAttachmentFiles] = useState([])
   const [attachmentsOpen, setAttachmentsOpen] = useState(false)
   const isNewPatient = !patient
+  const calculatedBmi = calculateBmi(formData.weight, formData.height)
 
   function handleChange(event) {
     const { checked, name, type, value } = event.target
-    const nextValue = type === 'checkbox' ? checked : sanitizeFieldValue(name, value)
+    const nextValue = type === 'checkbox'
+      ? checked
+      : type === 'date'
+        ? value
+        : ['weight', 'height'].includes(name)
+          ? value.replace(/[^\d,.]/g, '').slice(0, 6)
+          : sanitizeFieldValue(name, value)
 
-    setFormData((currentData) => ({ ...currentData, [name]: nextValue }))
+    setFormData((currentData) => {
+      const nextData = { ...currentData, [name]: nextValue }
+      if (name === 'weight' || name === 'height') {
+        nextData.bmi = calculateBmi(nextData.weight, nextData.height)
+      }
+      if (name === 'insuranceIndefiniteValidity' && checked) {
+        nextData.insuranceCardValidUntil = ''
+      }
+      return nextData
+    })
   }
 
   function handleAvatarChange(event) {
@@ -570,6 +600,14 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
 
     setAvatarFile(file)
     setAvatarPreview(URL.createObjectURL(file))
+    event.target.value = ''
+  }
+
+  function handleAttachmentChange(event) {
+    const files = Array.from(event.target.files || [])
+    if (!files.length) return
+
+    setAttachmentFiles((current) => [...current, ...files])
     event.target.value = ''
   }
 
@@ -610,7 +648,7 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
       ...formData,
       id: formData.id || uniqueSlug(formData.name, existingIds),
       age: Number(formData.age) || 0,
-      birthday: formData.birthday || formatBirthday(formData.birthDate),
+      bmi: calculatedBmi,
       city: formData.city,
       document: formData.cpf ? `CPF ${formData.cpf}` : 'CPF não informado',
       insurance: formData.insurance,
@@ -623,6 +661,8 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
       notes: formData.notesText ? [formData.notesText] : [],
       avatarFile,
       avatarUrl: avatarFile ? formData.avatarUrl : avatarPreview || formData.avatarUrl,
+      attachmentFiles,
+      attachments: formData.attachments,
     })
   }
 
@@ -684,9 +724,6 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
               <DarkField className="md:col-span-3" label={requiredLabel('Data de Nascimento')}>
                 <input className={`${darkInput} [color-scheme:dark]`} name="birthDate" onChange={handleChange} required={isNewPatient} type="date" value={formData.birthDate} />
               </DarkField>
-              <DarkField className="md:col-span-3" label="Aniversário">
-                <input className={darkInput} maxLength={5} name="birthday" onChange={handleChange} placeholder="0704" value={formData.birthday} />
-              </DarkField>
               <DarkField className="md:col-span-3" label="Etnia">
                 <select className={darkInput} name="ethnicity" onChange={handleChange} value={formData.ethnicity}>
                   <option value="">Selecione</option>
@@ -720,7 +757,14 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
                   </span>
                   <PatientIcon className="size-4 text-[#a3a3a3]" name={attachmentsOpen ? 'chevron-up' : 'chevron-down'} />
                 </button>
-                {attachmentsOpen ? <UploadDropzone /> : null}
+                {attachmentsOpen ? (
+                  <UploadDropzone
+                    attachmentInputRef={attachmentInputRef}
+                    existingAttachments={formData.attachments}
+                    files={attachmentFiles}
+                    onFileChange={handleAttachmentChange}
+                  />
+                ) : null}
               </div>
             </div>
           </section>
@@ -731,11 +775,28 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
               <DarkField className="md:col-span-6" label="Condição principal">
                 <input className={darkInput} name="condition" onChange={handleChange} value={formData.condition} />
               </DarkField>
+              <DarkField className="md:col-span-3" label="Tipo sanguíneo">
+                <select className={darkInput} name="bloodType" onChange={handleChange} value={formData.bloodType}>
+                  <option value="">Selecione</option>
+                  {BLOOD_TYPE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+              </DarkField>
               <DarkField className="md:col-span-3" label="Última consulta">
                 <input className={`${darkInput} [color-scheme:dark]`} name="lastVisitIso" onChange={handleChange} type="date" value={formData.lastVisitIso || ''} />
               </DarkField>
-              <DarkField className="md:col-span-3" label="Aniversário">
-                <input className={darkInput} maxLength={5} name="birthday" onChange={handleChange} placeholder="0704" value={formData.birthday} />
+              <DarkField className="md:col-span-3" label="Peso (kg)">
+                <input className={darkInput} inputMode="decimal" name="weight" onChange={handleChange} value={formData.weight} />
+              </DarkField>
+              <DarkField className="md:col-span-3" label="Altura (m)">
+                <input className={darkInput} inputMode="decimal" name="height" onChange={handleChange} placeholder="1,70" value={formData.height} />
+              </DarkField>
+              <DarkField className="md:col-span-3" label="IMC">
+                <input className={darkInput} readOnly value={calculatedBmi} />
+              </DarkField>
+              <DarkField className="md:col-span-12" label="Alergias">
+                <textarea className={`${darkInput} min-h-24 py-2`} name="allergies" onChange={handleChange} value={formData.allergies} />
               </DarkField>
             </div>
           </section>
@@ -802,10 +863,36 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
               <DarkField className="md:col-span-6" label={requiredLabel('Plano')}>
                 <input className={darkInput} name="plan" onChange={handleChange} required={isNewPatient} value={formData.plan} />
               </DarkField>
+              <DarkField className="md:col-span-4" label="Número da matrícula">
+                <input className={darkInput} name="insuranceNumber" onChange={handleChange} value={formData.insuranceNumber} />
+              </DarkField>
+              <DarkField className="md:col-span-4" label="Validade da carteira">
+                <input
+                  className={`${darkInput} [color-scheme:dark]`}
+                  disabled={formData.insuranceIndefiniteValidity}
+                  name="insuranceCardValidUntil"
+                  onChange={handleChange}
+                  type="date"
+                  value={formData.insuranceCardValidUntil}
+                />
+              </DarkField>
+              <label className="flex h-10 items-center gap-2 self-end text-sm text-[#e5e5e5] md:col-span-4">
+                <input className="size-4 accent-[#3b82f6]" checked={formData.insuranceIndefiniteValidity} name="insuranceIndefiniteValidity" onChange={handleChange} type="checkbox" />
+                Validade indeterminada
+              </label>
               <label className="flex w-fit cursor-pointer items-center gap-2 text-sm text-[#e5e5e5] md:col-span-12">
                 <input className="size-4 accent-[#3b82f6]" checked={formData.vip} name="vip" onChange={handleChange} type="checkbox" />
                 Paciente VIP
               </label>
+            </div>
+          </section>
+
+          <section className={darkCard}>
+            <h2 className="mb-6 text-lg font-semibold text-[#e5e5e5]">Informações do SUS</h2>
+            <div className="grid grid-cols-1 gap-x-6 gap-y-6 md:grid-cols-12">
+              <DarkField className="md:col-span-6" label="CNS">
+                <input className={darkInput} maxLength={15} name="cns" onChange={handleChange} value={formData.cns} />
+              </DarkField>
             </div>
           </section>
 
@@ -909,7 +996,6 @@ export function PatientDetailPage({ navigate, patient, role }) {
           >
             <PatientIcon className="size-5" name="chevron-left" />
           </button>
-          <PatientAvatar patient={localPatient} />
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#3b82f6]">Dados do Paciente</p>
             <h1 className="mt-1 text-2xl font-bold tracking-tight text-[#f5f5f5]">{localPatient.name}</h1>
@@ -1049,11 +1135,30 @@ function PatientSummary({ patient }) {
         />
         <PatientInfoSection
           items={[
+            ['Tipo sanguíneo', patient.bloodType],
+            ['Peso', patient.weight ? `${patient.weight} kg` : ''],
+            ['Altura', patient.height ? `${patient.height} m` : ''],
+            ['IMC', patient.bmi],
+            ['Alergias', patient.allergies],
+            ['Condição principal', patient.condition],
+          ]}
+          title="Informações médicas"
+        />
+        <PatientInfoSection
+          items={[
             ['Convênio', patient.insurance],
             ['Plano', patient.plan],
+            ['Número da matrícula', patient.insuranceNumber],
+            ['Validade da carteira', patient.insuranceIndefiniteValidity ? 'Indeterminada' : formatDisplayDate(patient.insuranceCardValidUntil)],
             ['VIP', patient.vip ? 'Sim' : 'Não'],
           ]}
           title="Informações de convênio"
+        />
+        <PatientInfoSection
+          items={[
+            ['CNS', patient.cns],
+          ]}
+          title="Informações do SUS"
         />
       </div>
       <div className="rounded-xl border border-[#404040] bg-[#171717] p-4">
@@ -1271,9 +1376,25 @@ function PatientVisits({ navigate, patient }) {
 
 function PatientDocuments({ patient }) {
   const exams = Array.isArray(patient.exams) ? patient.exams : []
+  const attachments = Array.isArray(patient.attachments) ? patient.attachments : []
 
   return (
     <div className="grid gap-3 md:grid-cols-3">
+      {attachments.map((attachment) => (
+        <a
+          className="rounded-xl border border-[#404040] bg-[#171717] p-4 transition hover:border-[#3b82f6]"
+          href={attachment.url}
+          key={attachment.path || attachment.url || attachment.name}
+          rel="noreferrer"
+          target="_blank"
+        >
+          <p className="font-semibold text-[#f5f5f5]">{attachment.name || 'Anexo do paciente'}</p>
+          <p className="mt-2 text-sm text-[#a3a3a3]">Arquivo enviado para o cadastro.</p>
+          <span className="mt-4 inline-flex rounded bg-emerald-500/20 px-2.5 py-1 text-xs font-bold text-emerald-400">
+            Disponível
+          </span>
+        </a>
+      ))}
       {exams.length ? exams.map((exam) => (
         <div className="rounded-xl border border-[#404040] bg-[#171717] p-4" key={exam}>
           <p className="font-semibold text-[#f5f5f5]">{exam}</p>
@@ -1282,11 +1403,12 @@ function PatientDocuments({ patient }) {
             A revisar
           </span>
         </div>
-      )) : (
+      )) : null}
+      {!attachments.length && !exams.length ? (
         <div className="rounded-xl border border-[#404040] bg-[#171717] p-4 text-sm text-[#a3a3a3]">
           Nenhum documento encontrado.
         </div>
-      )}
+      ) : null}
     </div>
   )
 }
@@ -1307,12 +1429,22 @@ function SummaryTile({ label, tone = null, value }) {
 }
 
 function InfoRow({ label, value }) {
+  const displayValue = formatInfoValue(value)
+
   return (
     <div>
       <dt className="font-semibold text-[#737373]">{label}</dt>
-      <dd className="mt-1 text-[#e5e5e5]">{value || missingValue(label)}</dd>
+      <dd className="mt-1 break-words text-[#e5e5e5]">{displayValue || missingValue(label)}</dd>
     </div>
   )
+}
+
+function formatInfoValue(value) {
+  if (Array.isArray(value)) return value.filter(Boolean).join(', ')
+  if (value && typeof value === 'object') {
+    return Object.values(value).filter(Boolean).join(', ')
+  }
+  return value
 }
 
 function missingValue(label) {
@@ -1343,24 +1475,6 @@ function normalizeFilterValue(value) {
     .replace(/[\u0300-\u036f]/g, '')
     .trim()
     .toLowerCase()
-}
-
-function getPatientBirthday(patient) {
-  if (patient.birthday) return patient.birthday
-  const birthDate = patient.birthDate || patient.birth_date
-  if (!birthDate) return ''
-
-  const [, month, day] = String(birthDate).split('-')
-  return month && day ? `${day}/${month}` : ''
-}
-
-function getTodayBirthday() {
-  const today = new Date()
-  return `${String(today.getDate()).padStart(2, '0')}/${getCurrentMonth()}`
-}
-
-function getCurrentMonth() {
-  return String(new Date().getMonth() + 1).padStart(2, '0')
 }
 
 function PatientSelect({ className = '', icon, label, onChange, options, value }) {
@@ -1442,12 +1556,38 @@ function DarkField({ children, className = '', label }) {
   )
 }
 
-function UploadDropzone() {
+function UploadDropzone({ attachmentInputRef, existingAttachments = [], files = [], onFileChange }) {
   return (
-    <div className="mt-4 cursor-pointer rounded-lg border-2 border-dashed border-[#404040] bg-[#1a1a1a] p-8 text-center transition hover:bg-[#333333]">
+    <div
+      className="mt-4 cursor-pointer rounded-lg border-2 border-dashed border-[#404040] bg-[#1a1a1a] p-8 text-center transition hover:bg-[#333333]"
+      onClick={() => attachmentInputRef.current?.click()}
+      role="button"
+      tabIndex={0}
+    >
       <PatientIcon className="mx-auto mb-3 size-6 text-[#a3a3a3]" name="upload" />
       <p className="text-sm font-medium text-[#e5e5e5]">Clique para selecionar arquivos ou arraste-os aqui</p>
       <p className="mt-1 text-xs text-[#a3a3a3]">Imagens e documentos ate 10MB</p>
+      <input className="hidden" multiple onChange={onFileChange} ref={attachmentInputRef} type="file" />
+      {files.length || existingAttachments.length ? (
+        <ul className="mt-4 grid gap-2 text-left text-xs text-[#a3a3a3]">
+          {existingAttachments.map((attachment) => (
+            <li className="rounded border border-[#404040] bg-[#262626] px-3 py-2" key={attachment.path || attachment.url || attachment.name}>
+              {attachment.url ? (
+                <a className="font-semibold text-[#3b82f6]" href={attachment.url} rel="noreferrer" target="_blank">
+                  {attachment.name || 'Anexo cadastrado'}
+                </a>
+              ) : (
+                attachment.name || 'Anexo cadastrado'
+              )}
+            </li>
+          ))}
+          {files.map((file) => (
+            <li className="rounded border border-[#404040] bg-[#262626] px-3 py-2" key={`${file.name}-${file.size}`}>
+              {file.name}
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   )
 }
@@ -1770,10 +1910,17 @@ function slugify(value) {
     .replace(/^-+|-+$/g, '')
 }
 
-function formatBirthday(birthDate) {
-  if (!birthDate) return ''
-  const [, month, day] = birthDate.split('-')
-  return day && month ? `${day}/${month}` : ''
+function calculateBmi(weight, height) {
+  const normalizedWeight = Number(String(weight || '').replace(',', '.'))
+  let normalizedHeight = Number(String(height || '').replace(',', '.'))
+
+  if (!normalizedWeight || !normalizedHeight) return ''
+  if (normalizedHeight > 3) normalizedHeight /= 100
+
+  const bmi = normalizedWeight / (normalizedHeight * normalizedHeight)
+  if (!Number.isFinite(bmi)) return ''
+
+  return bmi.toFixed(1)
 }
 
 function formatAddress(patient) {

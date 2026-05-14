@@ -10,13 +10,14 @@ import {
   subWeeks,
 } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { AgendaDailyView } from '../components/calendar/AgendaDailyView.jsx'
 import { AgendaMonthlyView } from '../components/calendar/AgendaMonthlyView.jsx'
 import { AgendaWeeklyView } from '../components/calendar/AgendaWeeklyView.jsx'
 import { StethoscopeIcon } from '../components/Brand.jsx'
 import { useAgenda } from '../hooks/useAgenda.js'
+import { availabilityRepository } from '../repositories/availabilityRepository.js'
 import { formatLocalDateInput, parseLocalDate } from '../utils/agendaDate.js'
 
 const statusFilters = [
@@ -25,6 +26,7 @@ const statusFilters = [
   { label: 'Em triagem', value: 'Em triagem' },
   { label: 'Aguardando', value: 'Aguardando' },
   { label: 'Canceladas', value: 'Cancelada' },
+  { label: 'Prioridade', value: 'Prioridade' },
 ]
 
 const viewFilters = [
@@ -35,6 +37,15 @@ const viewFilters = [
 
 const appointmentTypeOptions = ['Retorno', 'Primeira consulta', 'Exame', 'Avaliação pre-op']
 const appointmentStatusOptions = ['Confirmada', 'Em triagem', 'Aguardando']
+const weekdayOptions = [
+  { label: 'Domingo', value: 0 },
+  { label: 'Segunda', value: 1 },
+  { label: 'Terça', value: 2 },
+  { label: 'Quarta', value: 3 },
+  { label: 'Quinta', value: 4 },
+  { label: 'Sexta', value: 5 },
+  { label: 'Sábado', value: 6 },
+]
 
 export function AgendaPage({ navigate }) {
   const shortcutHandledRef = useRef(false)
@@ -55,8 +66,8 @@ export function AgendaPage({ navigate }) {
     setBaseDate,
     status,
     setStatus,
+    doctorFilter,
     setDoctorFilter,
-    doctorSearch,
     setDoctorSearch,
     unitFilter,
     setUnitFilter,
@@ -70,6 +81,7 @@ export function AgendaPage({ navigate }) {
     handleSubmitAppointment,
     handleCancelAppointment,
     visibleAppointments,
+    dailyOccupancyAppointments,
     availableSlots,
     slotsLoading,
     slotsError,
@@ -136,7 +148,7 @@ export function AgendaPage({ navigate }) {
   }
 
   return (
-    <div className="mx-auto flex max-w-[1180px] flex-col gap-8 text-[#e5e5e5]">
+    <div className="mx-auto flex w-full max-w-none flex-col gap-8 text-[#e5e5e5]">
       <section className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-[32px] font-bold leading-8 tracking-[-0.02em] text-[#e5e5e5]">
@@ -214,8 +226,8 @@ export function AgendaPage({ navigate }) {
           </div>
         </section>
       ) : (
-        <section className="grid gap-6 xl:grid-cols-1">
-          <div className="rounded-2xl border border-[#404040] bg-[#262626] p-5 shadow-[0_1px_3px_rgba(0,0,0,0.2)]">
+        <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_460px] 2xl:grid-cols-[minmax(0,1fr)_520px]">
+          <div className="self-start rounded-2xl border border-[#404040] bg-[#262626] p-5 shadow-[0_1px_3px_rgba(0,0,0,0.2)]">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -228,56 +240,62 @@ export function AgendaPage({ navigate }) {
                 </p>
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                {viewFilters.map((view) => (
-                  <button
-                    className={`h-8 rounded-sm border px-3 text-sm font-semibold transition ${
-                      activeView === view.value
-                        ? 'border-[#3b82f6] bg-[#3b82f6] text-white'
-                        : 'border-[#404040] bg-[#303030] text-[#a3a3a3] hover:text-[#e5e5e5]'
-                    }`}
-                    key={view.value}
-                    onClick={() => setActiveView(view.value)}
-                    type="button"
-                  >
-                    {view.label}
-                  </button>
-                ))}
+              <div className="flex max-w-full flex-wrap items-center justify-start gap-2 lg:justify-end">
+                <div className="flex shrink-0 gap-2">
+                  {viewFilters.map((view) => (
+                    <button
+                      className={`h-8 rounded-sm border px-3 text-sm font-semibold transition ${
+                        activeView === view.value
+                          ? 'border-[#3b82f6] bg-[#3b82f6] text-white'
+                          : 'border-[#404040] bg-[#303030] text-[#a3a3a3] hover:text-[#e5e5e5]'
+                      }`}
+                      key={view.value}
+                      onClick={() => setActiveView(view.value)}
+                      type="button"
+                    >
+                      {view.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex min-w-0 flex-nowrap gap-2 overflow-x-auto pb-1">
+                  {statusFilters.map((filter) => (
+                    <button
+                      className={`h-8 shrink-0 rounded-sm border px-3 text-sm font-semibold transition ${
+                        status === filter.value
+                          ? 'border-[#3b82f6] bg-[#3b82f6]/10 text-[#3b82f6]'
+                          : 'border-[#404040] bg-[#303030] text-[#a3a3a3] hover:text-[#e5e5e5]'
+                      }`}
+                      key={filter.value}
+                      onClick={() => setStatus(filter.value)}
+                      type="button"
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
-            <div className="mt-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-              <div className="flex flex-wrap gap-2">
-                {statusFilters.map((filter) => (
-                  <button
-                    className={`h-8 rounded-sm border px-3 text-sm font-semibold transition ${
-                      status === filter.value
-                        ? 'border-[#3b82f6] bg-[#3b82f6]/10 text-[#3b82f6]'
-                        : 'border-[#404040] bg-[#303030] text-[#a3a3a3] hover:text-[#e5e5e5]'
-                    }`}
-                    key={filter.value}
-                    onClick={() => setStatus(filter.value)}
-                    type="button"
-                  >
-                    {filter.label}
-                  </button>
-                ))}
-              </div>
-
+            <div className="mt-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-end">
               {!isDoctorScope ? (
-                <div className="grid gap-3 sm:min-w-[32rem] sm:grid-cols-2">
+                <div className="grid w-full gap-3 sm:grid-cols-[minmax(22rem,1.35fr)_minmax(13rem,0.65fr)] lg:max-w-[48rem]">
                   <label className="grid gap-1.5 text-xs font-semibold text-[#a3a3a3]">
                     <span>Médico</span>
-                    <input
-                      className="h-9 rounded-sm border border-[#404040] bg-[#303030] px-3 text-sm font-medium text-[#e5e5e5] outline-none transition placeholder:text-[#737373] focus:border-[#3b82f6]"
+                    <select
+                      className="h-9 rounded-sm border border-[#404040] bg-[#303030] px-3 text-sm font-medium text-[#e5e5e5] outline-none transition focus:border-[#3b82f6]"
                       onChange={(event) => {
-                        setDoctorFilter('Todos')
-                        setDoctorSearch(event.target.value)
+                        setDoctorFilter(event.target.value)
+                        setDoctorSearch('')
                       }}
-                      placeholder="Pesquisar médico pelo nome"
-                      type="search"
-                      value={doctorSearch}
-                    />
+                      value={doctorFilter}
+                    >
+                      <option value="Todos">Todos os médicos</option>
+                      {professionals.map((professional) => (
+                        <option key={professional.id} value={professional.id}>
+                          {professional.name}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                   <label className="grid gap-1.5 text-xs font-semibold text-[#a3a3a3]">
                     <span>Unidade</span>
@@ -309,7 +327,9 @@ export function AgendaPage({ navigate }) {
                 <AgendaWeeklyView
                   baseDate={baseDate}
                   appointments={visibleAppointments}
+                  canCreateAppointment={canCreateAppointment}
                   onAppointmentClick={openManage}
+                  onSlotCreate={(day) => openCreate({ date: formatLocalDateInput(day) })}
                 />
               )}
 
@@ -329,12 +349,19 @@ export function AgendaPage({ navigate }) {
                   appointments={visibleAppointments}
                   baseDate={baseDate}
                   canCreateAppointment={canCreateAppointment}
+                  occupiedAppointments={dailyOccupancyAppointments}
                   onAppointmentClick={openManage}
                   onSlotCreate={(time) => openCreate({ time })}
                 />
               )}
             </div>
           </div>
+          <AvailabilitySidebar
+            currentProfessional={currentProfessional}
+            isDoctorScope={isDoctorScope}
+            professionals={professionals}
+            viewerProfile={viewerProfile}
+          />
         </section>
       )}
 
@@ -402,6 +429,14 @@ export function AgendaPage({ navigate }) {
                     ) : null}
                   </>
                 )}
+              </DarkField>
+              <DarkField label="Observações">
+                <textarea
+                  className="min-h-36 w-full resize-y rounded-md border border-[#404040] bg-[#303030] px-3 py-2 text-sm leading-5 text-[#e5e5e5] outline-none transition placeholder:text-[#737373] focus:border-[#3b82f6]"
+                  onChange={(event) => updateForm('notes', event.target.value)}
+                  placeholder="Observações sobre o agendamento"
+                  value={form.notes}
+                />
               </DarkField>
             </div>
 
@@ -499,12 +534,15 @@ export function AgendaPage({ navigate }) {
                 </select>
               </DarkField>
 
-              <DarkField label="Observações">
-                <textarea
-                  className="min-h-36 w-full resize-y rounded-md border border-[#404040] bg-[#303030] px-3 py-2 text-sm leading-5 text-[#e5e5e5] outline-none transition placeholder:text-[#737373] focus:border-[#3b82f6]"
-                  onChange={(event) => updateForm('notes', event.target.value)}
-                  placeholder="Observações sobre o agendamento"
-                  value={form.notes}
+              <DarkField label="Duração">
+                <input
+                  className="h-11 rounded-md border border-[#404040] bg-[#303030] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#3b82f6]"
+                  max="240"
+                  min="15"
+                  onChange={(event) => updateForm('durationMinutes', event.target.value)}
+                  step="15"
+                  type="number"
+                  value={form.durationMinutes}
                 />
               </DarkField>
             </div>
@@ -524,7 +562,7 @@ export function AgendaPage({ navigate }) {
           <div className="flex flex-wrap justify-end gap-3 pt-2">
             {editingAppointment ? (
               <button
-                className="mr-auto h-10 rounded-sm border border-red-500/40 bg-red-950/20 px-4 text-sm font-semibold text-red-200 transition hover:bg-red-950/35"
+                className="agenda-cancel-button mr-auto h-10 rounded-sm border border-red-500/40 bg-red-950/20 px-4 text-sm font-semibold text-red-200 transition hover:bg-red-950/35"
                 onClick={handleCancelAppointment}
                 type="button"
               >
@@ -550,6 +588,407 @@ export function AgendaPage({ navigate }) {
       </DarkModal>
     </div>
   )
+}
+
+function AvailabilitySidebar({ currentProfessional, isDoctorScope, professionals, viewerProfile }) {
+  const today = formatLocalDateInput(new Date())
+  const defaultDoctorId = isDoctorScope ? currentProfessional?.id || '' : professionals[0]?.id || ''
+  const isSecretary = isSecretaryProfile(viewerProfile)
+  const doctorOptions = useMemo(
+    () => (isDoctorScope && currentProfessional ? [currentProfessional] : professionals),
+    [currentProfessional, isDoctorScope, professionals],
+  )
+  const [availabilityFilters, setAvailabilityFilters] = useState({
+    doctorId: defaultDoctorId,
+    weekday: '',
+    appointmentType: '',
+  })
+  const [availabilityForm, setAvailabilityForm] = useState({
+    doctorId: defaultDoctorId,
+    weekdays: [1],
+    startTime: '08:00',
+    endTime: '18:00',
+    slotMinutes: 30,
+    appointmentType: 'presencial',
+    active: true,
+  })
+  const [exceptionFilters, setExceptionFilters] = useState({
+    doctorId: defaultDoctorId,
+    date: today,
+    kind: '',
+  })
+  const [exceptionForm, setExceptionForm] = useState({
+    doctorId: defaultDoctorId,
+    date: today,
+    kind: 'bloqueio',
+    startTime: '',
+    endTime: '',
+    reason: '',
+  })
+  const [exceptionRows, setExceptionRows] = useState([])
+  const [loadingAvailability, setLoadingAvailability] = useState(false)
+  const [availabilityError, setAvailabilityError] = useState('')
+  const [availabilityCheck, setAvailabilityCheck] = useState(null)
+
+  useEffect(() => {
+    if (!defaultDoctorId) return
+
+    setAvailabilityFilters((current) => ({ ...current, doctorId: current.doctorId || defaultDoctorId }))
+    setAvailabilityForm((current) => ({ ...current, doctorId: current.doctorId || defaultDoctorId }))
+    setExceptionFilters((current) => ({ ...current, doctorId: current.doctorId || defaultDoctorId }))
+    setExceptionForm((current) => ({ ...current, doctorId: current.doctorId || defaultDoctorId }))
+  }, [defaultDoctorId])
+
+  const loadExceptions = useCallback(async () => {
+    if (isSecretary) return
+
+    setAvailabilityError('')
+
+    try {
+      const exceptions = await availabilityRepository.getExceptions({
+        doctorId: exceptionFilters.doctorId,
+        date: exceptionFilters.date || undefined,
+      })
+      setExceptionRows(exceptions)
+    } catch (err) {
+      setAvailabilityError(err.message || 'Falha ao carregar exceções de agenda.')
+    }
+  }, [
+    exceptionFilters.date,
+    exceptionFilters.doctorId,
+    isSecretary,
+  ])
+
+  useEffect(() => {
+    loadExceptions()
+  }, [loadExceptions])
+
+  async function verifyAvailability() {
+    setLoadingAvailability(true)
+    setAvailabilityError('')
+
+    try {
+      const availability = await availabilityRepository.getAll({
+        doctorId: availabilityFilters.doctorId,
+        weekday: availabilityFilters.weekday === '' ? undefined : Number(availabilityFilters.weekday),
+        appointmentType: availabilityFilters.appointmentType || undefined,
+      })
+      setAvailabilityCheck({
+        filters: { ...availabilityFilters },
+        rows: availability,
+      })
+    } catch (err) {
+      setAvailabilityError(err.message || 'Falha ao verificar disponibilidade.')
+    } finally {
+      setLoadingAvailability(false)
+    }
+  }
+
+  async function createAvailability(event) {
+    event.preventDefault()
+    if (!availabilityForm.doctorId) {
+      window.alert('Selecione um médico para criar disponibilidade.')
+      return
+    }
+    if (!availabilityForm.weekdays.length) {
+      window.alert('Selecione ao menos um dia da semana.')
+      return
+    }
+
+    try {
+      await Promise.all(
+        availabilityForm.weekdays.map((weekday) =>
+          availabilityRepository.create({
+            ...availabilityForm,
+            weekday,
+          }),
+        ),
+      )
+      window.alert('Disponibilidade cadastrada.')
+    } catch (err) {
+      window.alert(err.message || 'Erro ao criar disponibilidade.')
+    }
+  }
+
+  async function createException(event) {
+    event.preventDefault()
+    if (!exceptionForm.doctorId || !exceptionForm.date || !exceptionForm.kind) {
+      window.alert('Preencha médico, data e tipo da exceção.')
+      return
+    }
+
+    try {
+      await availabilityRepository.createException({
+        ...exceptionForm,
+        createdBy: viewerProfile?.id || currentProfessional?.userId || currentProfessional?.id,
+      })
+      await loadExceptions()
+      window.alert('Exceção cadastrada.')
+    } catch (err) {
+      window.alert(err.message || 'Erro ao criar exceção de agenda.')
+    }
+  }
+
+  function updateAvailabilityFilter(field, value) {
+    setAvailabilityFilters((current) => ({ ...current, [field]: value }))
+  }
+
+  function updateAvailabilityForm(field, value) {
+    setAvailabilityForm((current) => ({ ...current, [field]: value }))
+  }
+
+  function toggleAvailabilityWeekday(weekday) {
+    setAvailabilityForm((current) => {
+      const weekdays = current.weekdays.includes(weekday)
+        ? current.weekdays.filter((day) => day !== weekday)
+        : [...current.weekdays, weekday].sort((a, b) => a - b)
+
+      return { ...current, weekdays }
+    })
+  }
+
+  function updateExceptionFilter(field, value) {
+    setExceptionFilters((current) => ({ ...current, [field]: value }))
+  }
+
+  function updateExceptionForm(field, value) {
+    setExceptionForm((current) => ({ ...current, [field]: value }))
+  }
+
+  return (
+    <aside className="grid self-start content-start gap-4 rounded-2xl border border-[#404040] bg-[#262626] p-4 shadow-[0_1px_3px_rgba(0,0,0,0.2)]">
+      <div>
+        <h2 className="text-base font-bold text-[#f5f5f5]">Disponibilidade médica</h2>
+        <p className="mt-1 text-xs leading-5 text-[#a3a3a3]">Horários recorrentes e exceções da agenda.</p>
+      </div>
+
+      {availabilityError ? (
+        <p className="availability-error rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-5 text-amber-200">{availabilityError}</p>
+      ) : null}
+
+      <section className="grid gap-3 rounded-xl border border-[#404040] bg-[#1f1f1f] p-3">
+        <h3 className="text-sm font-bold text-[#f5f5f5]">Filtros</h3>
+        <SidebarField label="Médico">
+          <select className={sidebarInputClass} disabled={isDoctorScope} onChange={(event) => updateAvailabilityFilter('doctorId', event.target.value)} value={availabilityFilters.doctorId}>
+            <option value="">Todos</option>
+            {doctorOptions.map((professional) => (
+              <option key={professional.id} value={professional.id}>{professional.name}</option>
+            ))}
+          </select>
+        </SidebarField>
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+          <SidebarField label="Dia">
+            <select className={sidebarInputClass} onChange={(event) => updateAvailabilityFilter('weekday', event.target.value)} value={availabilityFilters.weekday}>
+              <option value="">Todos</option>
+              {weekdayOptions.map((day) => <option key={day.value} value={day.value}>{day.label}</option>)}
+            </select>
+          </SidebarField>
+          <SidebarField label="Tipo">
+            <select className={sidebarInputClass} onChange={(event) => updateAvailabilityFilter('appointmentType', event.target.value)} value={availabilityFilters.appointmentType}>
+              <option value="">Todos</option>
+              <option value="presencial">Presencial</option>
+              <option value="telemedicina">Telemedicina</option>
+            </select>
+          </SidebarField>
+        </div>
+        <button className="h-9 rounded-sm border border-[#3b82f6] bg-[#3b82f6] text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60" disabled={loadingAvailability} onClick={verifyAvailability} type="button">
+          {loadingAvailability ? 'Verificando...' : 'Verificar'}
+        </button>
+      </section>
+
+      {!isSecretary ? <form className="grid gap-3 rounded-xl border border-[#404040] bg-[#1f1f1f] p-3" onSubmit={createAvailability}>
+        <h3 className="text-sm font-bold text-[#f5f5f5]">Cadastrar Disponibilidade</h3>
+        <SidebarField label="Médico">
+          <select className={sidebarInputClass} disabled={isDoctorScope} onChange={(event) => updateAvailabilityForm('doctorId', event.target.value)} value={availabilityForm.doctorId}>
+            <option value="">Selecione</option>
+            {doctorOptions.map((professional) => (
+              <option key={professional.id} value={professional.id}>{professional.name}</option>
+            ))}
+          </select>
+        </SidebarField>
+        <div className="grid gap-2">
+          <span className="text-xs font-semibold text-[#a3a3a3]">Dias</span>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+            {weekdayOptions.map((day) => (
+              <label className="flex h-10 items-center justify-between rounded-sm border border-[#404040] bg-[#303030] px-3 text-xs font-semibold text-[#e5e5e5]" key={day.value}>
+                <span>{day.label}</span>
+                <input
+                  checked={availabilityForm.weekdays.includes(day.value)}
+                  className="size-4 accent-[#3b82f6]"
+                  onChange={() => toggleAvailabilityWeekday(day.value)}
+                  type="checkbox"
+                />
+              </label>
+            ))}
+          </div>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+          <SidebarField label="Tipo">
+            <select className={sidebarInputClass} onChange={(event) => updateAvailabilityForm('appointmentType', event.target.value)} value={availabilityForm.appointmentType}>
+              <option value="presencial">Presencial</option>
+              <option value="telemedicina">Telemedicina</option>
+            </select>
+          </SidebarField>
+          <SidebarField label="Início">
+            <input className={`${sidebarInputClass} [color-scheme:dark]`} onChange={(event) => updateAvailabilityForm('startTime', event.target.value)} type="time" value={availabilityForm.startTime} />
+          </SidebarField>
+          <SidebarField label="Fim">
+            <input className={`${sidebarInputClass} [color-scheme:dark]`} onChange={(event) => updateAvailabilityForm('endTime', event.target.value)} type="time" value={availabilityForm.endTime} />
+          </SidebarField>
+          <SidebarField label="Slot (min)">
+            <input className={sidebarInputClass} max="120" min="15" onChange={(event) => updateAvailabilityForm('slotMinutes', Number(event.target.value))} step="15" type="number" value={availabilityForm.slotMinutes} />
+          </SidebarField>
+          <label className="flex h-10 items-center gap-2 text-xs font-semibold text-[#e5e5e5]">
+            <input checked={availabilityForm.active} className="size-4 accent-[#3b82f6]" onChange={(event) => updateAvailabilityForm('active', event.target.checked)} type="checkbox" />
+            Ativa
+          </label>
+        </div>
+        <button className="h-9 rounded-sm bg-[#3b82f6] text-sm font-semibold text-white" type="submit">Cadastrar disponibilidade</button>
+      </form> : null}
+
+      {!isSecretary ? <section className="grid gap-3 rounded-xl border border-[#404040] bg-[#1f1f1f] p-3">
+        <h3 className="text-sm font-bold text-[#f5f5f5]">Exceções</h3>
+        <div className="grid gap-2">
+          <SidebarField label="Médico">
+            <select className={sidebarInputClass} disabled={isDoctorScope} onChange={(event) => updateExceptionFilter('doctorId', event.target.value)} value={exceptionFilters.doctorId}>
+              <option value="">Todos</option>
+              {doctorOptions.map((professional) => (
+                <option key={professional.id} value={professional.id}>{professional.name}</option>
+              ))}
+            </select>
+          </SidebarField>
+          <SidebarField label="Data">
+            <input className={`${sidebarInputClass} [color-scheme:dark]`} onChange={(event) => updateExceptionFilter('date', event.target.value)} type="date" value={exceptionFilters.date} />
+          </SidebarField>
+        </div>
+
+        <form className="grid gap-2 border-t border-[#404040] pt-3" onSubmit={createException}>
+          <SidebarField label="Médico">
+            <select className={sidebarInputClass} disabled={isDoctorScope} onChange={(event) => updateExceptionForm('doctorId', event.target.value)} value={exceptionForm.doctorId}>
+              <option value="">Selecione</option>
+              {doctorOptions.map((professional) => (
+                <option key={professional.id} value={professional.id}>{professional.name}</option>
+              ))}
+            </select>
+          </SidebarField>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+            <SidebarField label="Data">
+              <input className={`${sidebarInputClass} [color-scheme:dark]`} onChange={(event) => updateExceptionForm('date', event.target.value)} type="date" value={exceptionForm.date} />
+            </SidebarField>
+            <SidebarField label="Tipo">
+              <select className={sidebarInputClass} onChange={(event) => updateExceptionForm('kind', event.target.value)} value={exceptionForm.kind}>
+                <option value="bloqueio">Bloqueio</option>
+                <option value="disponibilidade_extra">Disponibilidade extra</option>
+              </select>
+            </SidebarField>
+            <SidebarField label="Início">
+              <input className={`${sidebarInputClass} [color-scheme:dark]`} onChange={(event) => updateExceptionForm('startTime', event.target.value)} type="time" value={exceptionForm.startTime} />
+            </SidebarField>
+            <SidebarField label="Fim">
+              <input className={`${sidebarInputClass} [color-scheme:dark]`} onChange={(event) => updateExceptionForm('endTime', event.target.value)} type="time" value={exceptionForm.endTime} />
+            </SidebarField>
+          </div>
+          <SidebarField label="Motivo">
+            <input className={sidebarInputClass} onChange={(event) => updateExceptionForm('reason', event.target.value)} value={exceptionForm.reason} />
+          </SidebarField>
+          <button className="h-9 rounded-sm border border-[#3b82f6] bg-[#3b82f6] text-sm font-semibold text-white" type="submit">Criar exceção</button>
+        </form>
+
+        <div className="grid gap-2">
+          {exceptionRows.slice(0, 4).map((row) => (
+            <div className="rounded-md border border-[#404040] bg-[#262626] p-2 text-xs text-[#a3a3a3]" key={row.id}>
+              <p className="font-semibold text-[#e5e5e5]">{formatDisplayDate(row.date)} | {row.kind === 'disponibilidade_extra' ? 'Extra' : 'Bloqueio'}</p>
+              <p>{row.startTime || 'Dia inteiro'}{row.endTime ? ` - ${row.endTime}` : ''}</p>
+              {row.reason ? <p>{row.reason}</p> : null}
+            </div>
+          ))}
+          {!exceptionRows.length ? <p className="text-xs text-[#737373]">Nenhuma exceção encontrada.</p> : null}
+        </div>
+      </section> : null}
+
+      <AvailabilityCheckModal
+        onClose={() => setAvailabilityCheck(null)}
+        result={availabilityCheck}
+      />
+    </aside>
+  )
+}
+
+const sidebarInputClass = 'h-10 w-full rounded-sm border border-[#404040] bg-[#303030] px-3 text-sm text-[#e5e5e5] outline-none transition focus:border-[#3b82f6]'
+
+function AvailabilityCheckModal({ onClose, result }) {
+  if (!result) return null
+
+  const rows = result.rows || []
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center">
+      <div className="agenda-modal-shell flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-[#404040] bg-[#242424] shadow-2xl">
+        <div className="flex items-center justify-between gap-4 border-b border-[#404040] px-5 py-4">
+          <h2 className="text-lg font-bold text-[#e5e5e5]">Verificação de disponibilidade</h2>
+          <button
+            aria-label="Fechar"
+            className="grid size-8 place-items-center rounded-sm text-xl leading-none text-[#a3a3a3] transition hover:bg-[#303030] hover:text-[#e5e5e5]"
+            onClick={onClose}
+            type="button"
+          >
+            ×
+          </button>
+        </div>
+        <div className="overflow-y-auto p-5">
+          {rows.length ? (
+            <div className="grid gap-3">
+              <p className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm font-semibold text-emerald-200">
+                Disponibilidade encontrada para os filtros selecionados.
+              </p>
+              {rows.map((row) => (
+                <article className="rounded-lg border border-[#404040] bg-[#1f1f1f] p-3 text-sm text-[#a3a3a3]" key={row.id || `${row.doctorId}-${row.weekday}-${row.startTime}`}>
+                  <p className="font-semibold text-[#e5e5e5]">
+                    {getWeekdayLabel(row.weekday)} | {row.startTime} - {row.endTime}
+                  </p>
+                  <p className="mt-1">
+                    {row.appointmentType || 'presencial'} | {row.slotMinutes || 30} min | {row.active ? 'ativa' : 'inativa'}
+                  </p>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="availability-empty-message rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm font-semibold text-amber-200">
+              Nenhuma disponibilidade encontrada para os filtros selecionados.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SidebarField({ children, label }) {
+  return (
+    <label className="grid gap-1.5 text-xs font-semibold text-[#a3a3a3]">
+      <span>{label}</span>
+      {children}
+    </label>
+  )
+}
+
+function getWeekdayLabel(value) {
+  return weekdayOptions.find((day) => Number(day.value) === Number(value))?.label || 'Dia'
+}
+
+function formatDisplayDate(value) {
+  if (!value) return '-'
+  const [year, month, day] = String(value).split('-')
+  return year && month && day ? `${day}/${month}/${year}` : value
+}
+
+function isSecretaryProfile(profile) {
+  const normalized = String(profile?.normalizedRole || profile?.role || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+
+  return Boolean(profile?.isSecretary) || normalized.includes('secretaria')
 }
 
 function DarkField({ children, className = '', label }) {

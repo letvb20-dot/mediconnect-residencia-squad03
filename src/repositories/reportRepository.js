@@ -15,7 +15,7 @@ export const reportRepository = {
     }
 
     if (filters.status) {
-      query.set('status', `eq.${filters.status}`)
+      query.set('status', `eq.${toApiReportStatus(filters.status)}`)
     }
 
     if (filters.createdBy) {
@@ -26,16 +26,23 @@ export const reportRepository = {
       query.set('created_by', `in.(${filters.createdByValues.join(',')})`)
     }
 
-    const response = await fetch(`${apiConfig.restUrl}/reports?${query.toString()}`, {
+    let response = await fetch(`${apiConfig.restUrl}/reports?${query.toString()}`, {
       headers: getAuthenticatedHeaders(),
     })
+
+    if (!response.ok && response.status === 400 && filters.status) {
+      query.delete('status')
+      response = await fetch(`${apiConfig.restUrl}/reports?${query.toString()}`, {
+        headers: getAuthenticatedHeaders(),
+      })
+    }
 
     if (!response.ok) {
       throw new Error(await getResponseError(response, 'Falha ao buscar relatórios médicos.'))
     }
 
     const data = await response.json()
-    const reports = Array.isArray(data) ? data : []
+    const reports = filterReportsByStatus(Array.isArray(data) ? data : [], filters.status)
     const doctorNameById = await getDoctorNameMap().catch(() => new Map())
 
     return reports.map((report) => reportMapper.toUi(resolveRequester(report, doctorNameById)))
@@ -161,5 +168,23 @@ function uniquePayloads(payloads) {
     if (seen.has(signature)) return false
     seen.add(signature)
     return true
+  })
+}
+
+function toApiReportStatus(status) {
+  return status === 'finalized' ? 'completed' : status
+}
+
+function filterReportsByStatus(reports, status) {
+  if (!status) return reports
+
+  const expected = toApiReportStatus(status)
+  return reports.filter((report) => {
+    const normalized = String(report.status || '').toLowerCase()
+    if (expected === 'completed') {
+      return ['completed', 'finalized', 'finalizado', 'finished', 'done'].includes(normalized)
+    }
+
+    return normalized === expected
   })
 }

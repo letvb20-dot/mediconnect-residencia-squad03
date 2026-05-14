@@ -1,6 +1,8 @@
 import { useState } from 'react'
 
 import { authRepository } from '../repositories/authRepository.js'
+import { patientRepository } from '../repositories/patientRepository.js'
+import { maskBrazilianPhone, maskCpf } from '../utils/inputSanitizers.js'
 
 import { BrandLogo } from '../components/Brand.jsx'
 import loginClinicImage from '../assets/figma/login-clinic.png'
@@ -11,7 +13,6 @@ export function LoginPage({ navigate }) {
     password: '',
   })
   const [showPassword, setShowPassword] = useState(false)
-  const [devCredentialsOpen, setDevCredentialsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -150,32 +151,6 @@ export function LoginPage({ navigate }) {
                 {loading ? 'Entrando...' : 'Entrar'}
               </button>
             </form>
-
-            <div className="mt-5 rounded-[6px] border border-white/10 bg-white/[0.03] p-3">
-              <button
-                className="flex w-full items-center justify-between text-left text-xs font-semibold text-white/60 transition hover:text-white"
-                onClick={() => setDevCredentialsOpen((open) => !open)}
-                type="button"
-              >
-                Credenciais dev
-                <span>{devCredentialsOpen ? '-' : '+'}</span>
-              </button>
-              {devCredentialsOpen ? (
-                <div className="mt-3 grid gap-2">
-                  {getDevCredentials().map((credential) => (
-                    <button
-                      className="rounded border border-white/10 px-3 py-2 text-left text-xs text-white/70 transition hover:border-[#3b82f6]/50 hover:text-white"
-                      key={credential.email}
-                      onClick={() => setForm({ email: credential.email, password: credential.password })}
-                      type="button"
-                    >
-                      <span className="block font-semibold text-white">{getCredentialLabel(credential)}</span>
-                      <span className="mt-0.5 block">{credential.email}</span>
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
           </div>
         </section>
       </div>
@@ -184,47 +159,145 @@ export function LoginPage({ navigate }) {
 }
 
 export function RegisterPage({ navigate }) {
-  const [role, setRole] = useState('Clínica')
+  const [form, setForm] = useState({
+    birth_date: '',
+    confirm_password: '',
+    cpf: '',
+    email: '',
+    full_name: '',
+    password: '',
+    phone_mobile: '',
+  })
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  function updateField(field, value) {
+    const nextValue =
+      field === 'cpf'
+        ? maskCpf(value)
+        : field === 'phone_mobile'
+          ? maskBrazilianPhone(value)
+          : value
+
+    setForm((current) => ({ ...current, [field]: nextValue }))
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault()
+    setError('')
+
+    if (form.password.length < 6) {
+      setError('A senha deve ter pelo menos 6 caracteres.')
+      return
+    }
+
+    if (form.password !== form.confirm_password) {
+      setError('A confirmação de senha não confere.')
+      return
+    }
+
+    setLoading(true)
+    try {
+      await patientRepository.registerWithPassword(form)
+      window.alert('Cadastro realizado. Você já pode fazer login.')
+      navigate('/login')
+    } catch (err) {
+      setError(err.message || 'Erro ao realizar cadastro.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
     <AuthLayout
-      description="Solicite seu acesso. A criação de usuários reais é feita por um administrador no módulo Usuários."
-      title="Criar acesso"
+      description="Crie seu acesso de paciente com CPF, celular e senha."
+      title="Cadastro de paciente"
     >
-      <form
-        className="mt-8 grid gap-5"
-        onSubmit={(event) => {
-          event.preventDefault()
-          window.alert('Peça a um administrador para criar seu usuário com perfil correto no módulo Usuários.')
-          navigate('/login')
-        }}
-      >
-        <AuthField label="Nome da organização">
-          <input className={authInputClass} defaultValue="Clínica Boa Vista" />
+      {error ? (
+        <div className="mt-4 rounded bg-red-500/10 p-3 text-sm font-semibold text-red-500 border border-red-500/20">
+          {error}
+        </div>
+      ) : null}
+      <form className="mt-8 grid gap-5" onSubmit={handleSubmit}>
+        <AuthField label="Nome completo">
+          <input
+            autoComplete="name"
+            className={authInputClass}
+            onChange={(event) => updateField('full_name', event.target.value)}
+            required
+            value={form.full_name}
+          />
         </AuthField>
-        <AuthField label="Responsável">
-          <input className={authInputClass} defaultValue="Marina Lopes" />
+        <AuthField label="E-mail">
+          <input
+            autoComplete="email"
+            className={authInputClass}
+            onChange={(event) => updateField('email', event.target.value)}
+            required
+            type="email"
+            value={form.email}
+          />
         </AuthField>
-        <AuthField label="Tipo de conta">
-          <div className="grid grid-cols-2 gap-2">
-            {['Clínica', 'Profissional'].map((option) => (
-              <button
-                className={`h-11 rounded-[6px] border px-3 text-sm font-semibold transition ${
-                  role === option
-                    ? 'border-[#3b82f6] bg-[#3b82f6]/15 text-[#3b82f6]'
-                    : 'border-white/10 bg-white/[0.05] text-white/50 hover:text-white'
-                }`}
-                key={option}
-                onClick={() => setRole(option)}
-                type="button"
-              >
-                {option}
-              </button>
-            ))}
-          </div>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <AuthField label="CPF">
+            <input
+              autoComplete="off"
+              className={authInputClass}
+              maxLength={14}
+              onChange={(event) => updateField('cpf', event.target.value)}
+              required
+              value={form.cpf}
+            />
+          </AuthField>
+          <AuthField label="Celular">
+            <input
+              autoComplete="tel"
+              className={authInputClass}
+              maxLength={15}
+              onChange={(event) => updateField('phone_mobile', event.target.value)}
+              required
+              value={form.phone_mobile}
+            />
+          </AuthField>
+        </div>
+        <AuthField label="Data de nascimento">
+          <input
+            className={`${authInputClass} [color-scheme:dark]`}
+            onChange={(event) => updateField('birth_date', event.target.value)}
+            type="date"
+            value={form.birth_date}
+          />
         </AuthField>
-        <button className="inline-flex h-11 w-full items-center justify-center rounded-[6px] bg-[#3b82f6] text-sm font-semibold text-white shadow-[0_10px_15px_rgba(59,130,246,0.2)] transition hover:bg-[#3478ed]" type="submit">
-          Continuar
+        <div className="grid gap-5 sm:grid-cols-2">
+          <AuthField label="Senha">
+            <input
+              autoComplete="new-password"
+              className={authInputClass}
+              minLength={6}
+              onChange={(event) => updateField('password', event.target.value)}
+              required
+              type="password"
+              value={form.password}
+            />
+          </AuthField>
+          <AuthField label="Confirmar senha">
+            <input
+              autoComplete="new-password"
+              className={authInputClass}
+              minLength={6}
+              onChange={(event) => updateField('confirm_password', event.target.value)}
+              required
+              type="password"
+              value={form.confirm_password}
+            />
+          </AuthField>
+        </div>
+        <button
+          className="inline-flex h-11 w-full items-center justify-center rounded-[6px] bg-[#3b82f6] text-sm font-semibold text-white shadow-[0_10px_15px_rgba(59,130,246,0.2)] transition hover:bg-[#3478ed] disabled:opacity-60"
+          disabled={loading}
+          type="submit"
+        >
+          {loading ? 'Cadastrando...' : 'Cadastrar'}
         </button>
       </form>
       <button className="mt-5 text-sm font-semibold text-[#3b82f6]" onClick={() => navigate('/login')} type="button">
@@ -377,39 +450,6 @@ function LoginMetric({ label, value }) {
       <dd className="mt-0.5 text-[11px] leading-4 text-white/50 xl:text-xs">{label}</dd>
     </div>
   )
-}
-
-function getDevCredentials() {
-  return [
-    {
-      label: 'Administrador',
-      email: import.meta.env.VITE_DEV_ADMIN_EMAIL || 'hugo@popcode.com.br',
-      password: import.meta.env.VITE_DEV_ADMIN_PASSWORD || 'hdoria',
-    },
-    {
-      label: 'Gestão',
-      email: import.meta.env.VITE_DEV_DOCTOR_EMAIL || 'medico@mediconnect.com',
-      password: import.meta.env.VITE_DEV_DOCTOR_PASSWORD || 'Senha@123',
-    },
-    {
-      label: 'Médico',
-      email: import.meta.env.VITE_DEV_SECRETARY_EMAIL || 'recepcao@mediconnect.com',
-      password: import.meta.env.VITE_DEV_SECRETARY_PASSWORD || 'demo12345',
-    },
-    {
-      label: 'Gestor',
-      email: import.meta.env.VITE_DEV_MANAGER_EMAIL || 'gestao@mediconnect.com',
-      password: import.meta.env.VITE_DEV_MANAGER_PASSWORD || '12345678',
-    },
-  ]
-}
-
-function getCredentialLabel(credential) {
-  if (credential.email === 'hugo@popcode.com.br') return 'Administrador'
-  if (credential.email === 'medico@mediconnect.com') return 'Médico'
-  if (credential.email === 'recepcao@mediconnect.com') return 'Secretária'
-  if (credential.email === 'gestao@mediconnect.com') return 'Gestor'
-  return credential.label
 }
 
 function EyeIcon() {

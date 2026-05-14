@@ -19,10 +19,10 @@ const SettingsPage = lazyPage(() => import('./pages/SettingsPage.jsx'), 'Setting
 const VisitsPage = lazyPage(() => import('./pages/VisitsPage.jsx'), 'VisitsPage')
 
 const PANEL_PATHS = ['/inicio', '/home', '/dashboard']
-const ROLE_HOME_PATHS = {
-  medico: '/agenda',
-  secretaria: '/agenda',
-}
+const ROLE_HOME_PATHS = {}
+const FREE_TEXT_INPUT_LIMIT = 255
+const FREE_TEXTAREA_LIMIT = 2000
+const RICH_TEXT_LIMIT = 12000
 
 function lazyPage(loader, exportName) {
   return lazy(() => loader().then((module) => ({ default: module[exportName] })))
@@ -58,6 +58,8 @@ function App() {
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
   }, [])
+
+  useEffect(() => attachTextLimitGuards(), [])
 
   const route = useMemo(
     () => resolveRoute(location.pathname, navigate, role, profile, user),
@@ -103,6 +105,63 @@ function App() {
       <RouteSuspense resetKey={location.pathname}>{route.element}</RouteSuspense>
     </AppShell>
   )
+}
+
+function attachTextLimitGuards() {
+  function getFieldLimit(target) {
+    if (!(target instanceof HTMLElement)) return 0
+
+    if (target.matches('textarea')) return FREE_TEXTAREA_LIMIT
+    if (target.matches('input')) {
+      const type = String(target.getAttribute('type') || 'text').toLowerCase()
+      if (['button', 'checkbox', 'color', 'date', 'datetime-local', 'email', 'file', 'hidden', 'month', 'number', 'password', 'radio', 'range', 'reset', 'search', 'submit', 'time', 'week'].includes(type)) {
+        return 0
+      }
+
+      return FREE_TEXT_INPUT_LIMIT
+    }
+
+    return 0
+  }
+
+  function applyMaxLength(target, limit) {
+    if (!limit || target.hasAttribute('readonly')) return
+    const currentMax = Number(target.getAttribute('maxlength') || 0)
+    if (!currentMax || currentMax > limit) target.setAttribute('maxlength', String(limit))
+  }
+
+  function handleFocusIn(event) {
+    const target = event.target
+    const limit = getFieldLimit(target)
+    if (limit) applyMaxLength(target, limit)
+  }
+
+  function handleInput(event) {
+    const target = event.target
+    const limit = getFieldLimit(target)
+    if (!limit || typeof target.value !== 'string' || target.value.length <= limit) return
+    target.value = target.value.slice(0, limit)
+  }
+
+  function handleBeforeInput(event) {
+    const target = event.target instanceof HTMLElement
+      ? event.target.closest('[contenteditable="true"], .ProseMirror')
+      : null
+    if (!target) return
+
+    const nextTextLength = (target.textContent || '').length + String(event.data || '').length
+    if (nextTextLength > RICH_TEXT_LIMIT) event.preventDefault()
+  }
+
+  document.addEventListener('focusin', handleFocusIn, true)
+  document.addEventListener('input', handleInput, true)
+  document.addEventListener('beforeinput', handleBeforeInput, true)
+
+  return () => {
+    document.removeEventListener('focusin', handleFocusIn, true)
+    document.removeEventListener('input', handleInput, true)
+    document.removeEventListener('beforeinput', handleBeforeInput, true)
+  }
 }
 
 class RouteErrorBoundary extends Component {

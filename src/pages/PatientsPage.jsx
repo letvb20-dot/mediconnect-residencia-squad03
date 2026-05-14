@@ -292,16 +292,30 @@ async function uploadPatientAttachments(patientId, files = []) {
           <h1 className="text-2xl font-bold tracking-tight text-[#e5e5e5]">Pacientes</h1>
           <p className="mt-1 text-sm text-[#a3a3a3]">Gerencie as informações de seus pacientes</p>
         </div>
-        {canEditPatients ? (
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
           <button
-            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#3b82f6] px-4 text-sm font-medium text-white shadow-sm transition hover:bg-[#2563eb] md:w-auto"
-            onClick={() => openForm()}
+            className={`inline-flex h-10 items-center justify-center gap-2 rounded-lg border px-4 text-sm font-medium shadow-sm transition ${
+              hasAdvancedFilters
+                ? 'border-[#3b82f6] bg-[#3b82f6]/10 text-[#3b82f6]'
+                : 'border-[#404040] bg-[#303030] text-[#e5e5e5] hover:bg-[#333333]'
+            }`}
+            onClick={() => setAdvancedOpen(true)}
             type="button"
           >
-            <PatientIcon name="user-plus" />
-            Adicionar
+            <PatientIcon className="size-4" name="filter" />
+            Filtro avançado
           </button>
-        ) : null}
+          {canEditPatients ? (
+            <button
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#3b82f6] px-4 text-sm font-medium text-white shadow-sm transition hover:bg-[#2563eb]"
+              onClick={() => openForm()}
+              type="button"
+            >
+              <PatientIcon name="user-plus" />
+              Adicionar
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <section className="rounded-2xl border border-[#404040] bg-[#262626] px-6 py-8 shadow-sm xl:py-14">
@@ -342,21 +356,6 @@ async function uploadPatientAttachments(patientId, files = []) {
             options={['Sim', 'Não']}
             value={vip}
           />
-
-          <div className="flex gap-2">
-            <button
-              className={`grid size-11 shrink-0 place-items-center rounded-lg border transition ${
-                hasAdvancedFilters
-                  ? 'border-[#3b82f6] bg-[#3b82f6]/10 text-[#3b82f6]'
-                  : 'border-[#404040] bg-[#303030] text-[#e5e5e5] hover:bg-[#333333]'
-              }`}
-              onClick={() => setAdvancedOpen(true)}
-              title="Filtro avancado"
-              type="button"
-            >
-              <PatientIcon className="size-4" name="filter" />
-            </button>
-          </div>
         </div>
 
         {hasAdvancedFilters ? (
@@ -527,13 +526,28 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
     id: patient?.id || '',
     detailId: patient?.detailId || null,
     name: patient?.name || '',
+    socialName: patient?.socialName || patient?.social_name || '',
     cpf: patient?.cpf || '',
+    rg: patient?.rg || '',
+    otherDocuments: patient?.otherDocuments || patient?.other_documents || '',
+    documentNumber: patient?.documentNumber || patient?.document_number || '',
+    sex: patient?.sex || patient?.sexo || '',
     birthDate: patient?.birthDate || patient?.birth_date || '',
     motherName: patient?.motherName || patient?.mother_name || '',
+    motherProfession: patient?.motherProfession || patient?.mother_profession || '',
     fatherName: patient?.fatherName || patient?.father_name || '',
+    fatherProfession: patient?.fatherProfession || patient?.father_profession || '',
+    responsibleName: patient?.responsibleName || patient?.responsible_name || '',
+    responsibleCpf: patient?.responsibleCpf || patient?.responsible_cpf || '',
+    spouseName: patient?.spouseName || patient?.spouse_name || '',
     ethnicity: patient?.ethnicity || '',
+    race: patient?.race || patient?.raca || '',
+    naturality: patient?.naturality || patient?.naturalidade || '',
+    nationality: patient?.nationality || patient?.nacionalidade || '',
+    profession: patient?.profession || patient?.profissao || '',
     maritalStatus: patient?.maritalStatus || patient?.marital_status || '',
     phone: patient?.phone || '',
+    phoneLandline: patient?.phoneLandline || patient?.phone_landline || '',
     phoneSecondary: patient?.phoneSecondary || patient?.phone_secondary || '',
     email: patient?.email || '',
     zipCode: patient?.zipCode || patient?.zip_code || '',
@@ -557,6 +571,7 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
     insuranceIndefiniteValidity: Boolean(patient?.insuranceIndefiniteValidity || patient?.insurance_indefinite_validity),
     cns: patient?.cns || patient?.sus_card || patient?.cartao_sus || '',
     attachments: patient?.attachments || patient?.anexos || [],
+    lgpdOptIn: Boolean(patient?.lgpdOptIn ?? patient?.lgpd_opt_in ?? true),
     vip: Boolean(patient?.vip),
     lastVisit: patient?.lastVisit || null,
     nextVisit: patient?.nextVisit || null,
@@ -715,8 +730,29 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
               <DarkField className="md:col-span-6" label="Nome *">
                 <input className={darkInput} name="name" onChange={handleChange} required={isNewPatient} value={formData.name} />
               </DarkField>
+              <DarkField className="md:col-span-6" label="Nome social">
+                <input className={darkInput} name="socialName" onChange={handleChange} value={formData.socialName} />
+              </DarkField>
               <DarkField className="md:col-span-3" label={requiredLabel('CPF')}>
                 <input className={darkInput} maxLength={14} name="cpf" onChange={handleChange} required={isNewPatient} value={formData.cpf} />
+              </DarkField>
+              <DarkField className="md:col-span-3" label="RG">
+                <input className={darkInput} maxLength={11} name="rg" onChange={handleChange} value={formData.rg} />
+              </DarkField>
+              <DarkField className="md:col-span-3" label="Outros documentos">
+                <input className={darkInput} name="otherDocuments" onChange={handleChange} value={formData.otherDocuments} />
+              </DarkField>
+              <DarkField className="md:col-span-3" label="NÃºmero do documento">
+                <input className={darkInput} maxLength={11} name="documentNumber" onChange={handleChange} value={formData.documentNumber} />
+              </DarkField>
+              <DarkField className="md:col-span-3" label="Sexo">
+                <select className={darkInput} name="sex" onChange={handleChange} value={formData.sex}>
+                  <option value="">Selecione</option>
+                  <option>Feminino</option>
+                  <option>Masculino</option>
+                  <option>Intersexo</option>
+                  <option>Prefere nÃ£o informar</option>
+                </select>
               </DarkField>
               <DarkField className="md:col-span-3" label={requiredLabel('Idade')}>
                 <input className={darkInput} min="0" name="age" onChange={handleChange} required={isNewPatient} type="number" value={formData.age} />
@@ -744,6 +780,41 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
               </DarkField>
               <DarkField className="md:col-span-6" label="Nome do pai">
                 <input className={darkInput} name="fatherName" onChange={handleChange} value={formData.fatherName} />
+              </DarkField>
+              <DarkField className="md:col-span-3" label="RaÃ§a">
+                <select className={darkInput} name="race" onChange={handleChange} value={formData.race}>
+                  <option value="">Selecione</option>
+                  <option>Branca</option>
+                  <option>Preta</option>
+                  <option>Parda</option>
+                  <option>Amarela</option>
+                  <option>IndÃ­gena</option>
+                  <option>NÃ£o informada</option>
+                </select>
+              </DarkField>
+              <DarkField className="md:col-span-3" label="Naturalidade">
+                <input className={darkInput} name="naturality" onChange={handleChange} value={formData.naturality} />
+              </DarkField>
+              <DarkField className="md:col-span-3" label="Nacionalidade">
+                <input className={darkInput} name="nationality" onChange={handleChange} value={formData.nationality} />
+              </DarkField>
+              <DarkField className="md:col-span-3" label="ProfissÃ£o">
+                <input className={darkInput} name="profession" onChange={handleChange} value={formData.profession} />
+              </DarkField>
+              <DarkField className="md:col-span-6" label="ProfissÃ£o da mÃ£e">
+                <input className={darkInput} name="motherProfession" onChange={handleChange} value={formData.motherProfession} />
+              </DarkField>
+              <DarkField className="md:col-span-6" label="ProfissÃ£o do pai">
+                <input className={darkInput} name="fatherProfession" onChange={handleChange} value={formData.fatherProfession} />
+              </DarkField>
+              <DarkField className="md:col-span-6" label="Nome do responsÃ¡vel">
+                <input className={darkInput} name="responsibleName" onChange={handleChange} value={formData.responsibleName} />
+              </DarkField>
+              <DarkField className="md:col-span-3" label="CPF do responsÃ¡vel">
+                <input className={darkInput} maxLength={14} name="responsibleCpf" onChange={handleChange} value={formData.responsibleCpf} />
+              </DarkField>
+              <DarkField className="md:col-span-3" label="Nome do esposo(a)">
+                <input className={darkInput} name="spouseName" onChange={handleChange} value={formData.spouseName} />
               </DarkField>
               <div className="md:col-span-12">
                 <button
@@ -804,13 +875,16 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
           <section className={darkCard}>
             <h2 className="mb-6 text-lg font-semibold text-[#e5e5e5]">Contato</h2>
             <div className="grid grid-cols-1 gap-x-6 gap-y-6 md:grid-cols-12">
-              <DarkField className="md:col-span-4" label={requiredLabel('E-mail')}>
+              <DarkField className="md:col-span-3" label={requiredLabel('E-mail')}>
                 <input className={darkInput} name="email" onChange={handleChange} required={isNewPatient} type="email" value={formData.email} />
               </DarkField>
-              <DarkField className="md:col-span-4" label={requiredLabel('Celular')}>
+              <DarkField className="md:col-span-3" label={requiredLabel('Celular')}>
                 <input className={darkInput} maxLength={15} name="phone" onChange={handleChange} required={isNewPatient} value={formData.phone} />
               </DarkField>
-              <DarkField className="md:col-span-4" label="Telefone 2">
+              <DarkField className="md:col-span-3" label="TEL1">
+                <input className={darkInput} maxLength={15} name="phoneLandline" onChange={handleChange} value={formData.phoneLandline} />
+              </DarkField>
+              <DarkField className="md:col-span-3" label="TEL2">
                 <input className={darkInput} maxLength={15} name="phoneSecondary" onChange={handleChange} value={formData.phoneSecondary} />
               </DarkField>
             </div>
@@ -901,6 +975,10 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
             <DarkField label="Observações gerais">
               <textarea className={`${darkInput} min-h-32 py-2`} name="notesText" onChange={handleChange} value={formData.notesText} />
             </DarkField>
+            <label className="mt-4 flex min-h-12 items-center justify-between gap-4 rounded-lg border border-[#404040] bg-[#1a1a1a] px-4 text-sm font-medium text-[#e5e5e5]">
+              <span>Autoriza o recebimento de mensagens conforme LGPD</span>
+              <input className="size-4 accent-[#3b82f6]" checked={Boolean(formData.lgpdOptIn)} name="lgpdOptIn" onChange={handleChange} type="checkbox" />
+            </label>
           </section>
 
           <div className="flex justify-end gap-3 pt-4">
@@ -1094,25 +1172,25 @@ export function PatientDetailPage({ navigate, patient, role }) {
 }
 
 function PatientSummary({ patient }) {
-  const notes = Array.isArray(patient.notes) ? patient.notes : []
-
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
       <div className="space-y-6">
-        <h2 className="text-xl font-bold text-[#f5f5f5]">Resumo clínico</h2>
-        <div className="grid gap-3">
-          {notes.length ? notes.map((note) => (
-            <p className="rounded-xl border border-[#404040] bg-[#171717] p-4 text-sm leading-6 text-[#b8b8b8]" key={note}>
-              {note}
-            </p>
-          )) : (
-            <p className="rounded-xl border border-[#404040] bg-[#171717] p-4 text-sm leading-6 text-[#b8b8b8]">
-              Nenhuma observação clínica registrada.
-            </p>
-          )}
-        </div>
         <PatientInfoSection
           items={[
+            ['Nome social', patient.socialName],
+            ['RG', patient.rg],
+            ['Outros documentos', patient.otherDocuments],
+            ['NÃºmero do documento', patient.documentNumber],
+            ['Sexo', patient.sex],
+            ['ProfissÃ£o da mÃ£e', patient.motherProfession],
+            ['ProfissÃ£o do pai', patient.fatherProfession],
+            ['RaÃ§a', patient.race],
+            ['Naturalidade', patient.naturality],
+            ['Nacionalidade', patient.nationality],
+            ['ProfissÃ£o', patient.profession],
+            ['ResponsÃ¡vel', patient.responsibleName],
+            ['CPF do responsÃ¡vel', patient.responsibleCpf],
+            ['Esposo(a)', patient.spouseName],
             ['CPF', patient.cpf || patient.document],
             ['Data de nascimento', formatDisplayDate(patient.birthDate || patient.birth_date)],
             ['Nome da mãe', patient.motherName],
@@ -1173,9 +1251,11 @@ function PatientSummary({ patient }) {
         </div>
         <h3 className="font-bold text-[#f5f5f5]">Contato e equipe</h3>
         <dl className="mt-4 grid gap-3 text-sm">
-          <InfoRow label="Telefone" value={patient.phone} />
-          <InfoRow label="Telefone 2" value={patient.phoneSecondary} />
+          <InfoRow label="Celular" value={patient.phone} />
+          <InfoRow label="TEL1" value={patient.phoneLandline} />
+          <InfoRow label="TEL2" value={patient.phoneSecondary} />
           <InfoRow label="E-mail" value={patient.email} />
+          <InfoRow label="Mensagens LGPD" value={patient.lgpdOptIn ? 'Opt-in' : 'Opt-out'} />
           <InfoRow label="Endereço" value={patient.address} />
           <InfoRow label="Equipe" value={(patient.team || []).join(', ')} />
         </dl>

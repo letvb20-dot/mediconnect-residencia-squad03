@@ -23,6 +23,9 @@ export function AnalyticsPage() {
     insuranceData = [],
     kpis = [],
     revenueData = [],
+    annualRevenue = 0,
+    attendanceMetrics = {},
+    satisfactionIndicators = {},
     topPatients = [],
   } = dashboard || {}
   const topPatientMaxVisits = useMemo(
@@ -99,6 +102,13 @@ export function AnalyticsPage() {
         {kpis.map((kpi) => (
           <KpiCard key={kpi.label} kpi={kpi} />
         ))}
+      </section> : null}
+
+      {!loading && !error ? <section className="grid gap-4 md:grid-cols-4" aria-label="MÃ©tricas de atendimento e financeiro">
+        <MiniMetric title="MÃ©tricas de atendimento" value={`${attendanceMetrics.completed || 0}/${attendanceMetrics.scheduled || 0}`} detail="realizadas sobre agendadas" />
+        <MiniMetric title="Faturamento anual" value={formatCurrency(annualRevenue)} detail="ano corrente" />
+        <MiniMetric title="Taxa de no-show" value={`${attendanceMetrics.noShowRate || 0}%`} detail={`${attendanceMetrics.noShow || 0} ausÃªncias`} />
+        <MiniMetric title="SatisfaÃ§Ã£o" value={satisfactionIndicators.average ? `${satisfactionIndicators.average}/5` : '-'} detail={satisfactionIndicators.label || 'sem respostas'} />
       </section> : null}
 
       {!loading && !error ? <section className="grid gap-6 lg:grid-cols-2" aria-label="Gráficos principais">
@@ -205,6 +215,16 @@ function KpiCard({ kpi }) {
         <AnalyticsIcon className="size-3.5" name={kpi.up ? 'arrow-up' : 'arrow-down'} />
         {kpi.change}
       </span>
+    </article>
+  )
+}
+
+function MiniMetric({ detail, title, value }) {
+  return (
+    <article className={`${cardClass} p-4`}>
+      <p className="text-xs font-semibold text-[#a3a3a3]">{title}</p>
+      <p className="mt-2 text-xl font-bold text-[#f5f5f5]">{value}</p>
+      <p className="mt-1 text-xs text-[#a3a3a3]">{detail}</p>
     </article>
   )
 }
@@ -384,6 +404,14 @@ function rateClass(rate) {
   }
 
   return 'text-emerald-400'
+}
+
+function formatCurrency(value) {
+  return new Intl.NumberFormat('pt-BR', {
+    currency: 'BRL',
+    maximumFractionDigits: 0,
+    style: 'currency',
+  }).format(Number(value) || 0)
 }
 
 function AnalyticsIcon({ className = 'size-4', name }) {

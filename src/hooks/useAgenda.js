@@ -16,7 +16,7 @@ const initialForm = {
   time: '',
   durationMinutes: 30,
   mode: 'Teleconsulta',
-  status: 'Aguardando',
+  status: 'Agendado',
   highPriority: false,
   notes: '',
 }
@@ -360,7 +360,7 @@ export function useAgenda() {
     if (!editingAppointment) return
     if (!window.confirm('Tem certeza que deseja cancelar este agendamento?')) return
 
-    const payload = buildPayload({ status: 'Cancelada' })
+    const payload = buildPayload({ status: 'Cancelado' })
     if (!payload) return
 
     try {
@@ -490,7 +490,7 @@ function hasPatientAppointmentOnDate(appointments, patientId, date, ignoredAppoi
   return appointments.some((appointment) => {
     if (ignoredAppointmentId && String(appointment.id) === String(ignoredAppointmentId)) return false
     if (String(appointment.patientId || '') !== String(patientId || '')) return false
-    if (String(appointment.status || '').toLowerCase() === 'cancelada') return false
+    if (['cancelada', 'cancelado'].includes(String(appointment.status || '').toLowerCase())) return false
 
     return appointment.date === date
   })

@@ -48,6 +48,10 @@ export const reportMapper = {
 
 function normalizeStatus(status) {
   const normalized = String(status || '').toLowerCase()
+  if (['sent', 'enviado', 'delivered', 'emailed'].includes(normalized)) {
+    return 'sent'
+  }
+
   if (['finalized', 'finalizado', 'finished', 'completed', 'complete', 'done'].includes(normalized)) {
     return 'finalized'
   }
@@ -56,6 +60,7 @@ function normalizeStatus(status) {
 }
 
 function normalizeApiStatus(status) {
+  if (status === 'sent' || status === 'enviado') return 'sent'
   return status === 'finalized' || status === 'completed' ? 'completed' : 'draft'
 }
 

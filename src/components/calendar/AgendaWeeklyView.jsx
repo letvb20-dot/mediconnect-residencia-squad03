@@ -121,17 +121,21 @@ export function AgendaWeeklyView({ baseDate, appointments, canCreateAppointment 
 
 function getStatusToneClass(status) {
   switch (status) {
+    case 'Confirmado':
     case 'Confirmada':
       return 'agenda-event-confirmed'
     case 'Em triagem':
       return 'agenda-event-triage'
+    case 'Realizado':
     case 'Concluida':
     case 'Concluída':
       return 'agenda-event-finished'
+    case 'Cancelado':
     case 'Cancelada':
       return 'agenda-event-cancelled'
     case 'Bloqueado':
       return 'agenda-event-blocked'
+    case 'Agendado':
     case 'Aguardando':
     default:
       return 'agenda-event-waiting'
@@ -140,15 +144,19 @@ function getStatusToneClass(status) {
 
 function getStatusColors(status) {
   switch (status) {
+    case 'Confirmado':
     case 'Confirmada':
       return 'border-[#14532d] bg-[#052e1a] text-[#10b981]'
     case 'Em triagem':
       return 'border-[#78350f] bg-[#2d1e05] text-[#f59e0b]'
+    case 'Realizado':
     case 'Concluida':
     case 'Concluída':
       return 'border-[#1e3a8a] bg-[#172554] text-[#60a5fa]'
+    case 'Agendado':
     case 'Aguardando':
       return 'border-[#404040] bg-[#303030] text-[#e5e5e5]'
+    case 'Cancelado':
     case 'Cancelada':
       return 'border-[#7f1d1d] bg-[#450a0a] text-[#f87171] opacity-75'
     case 'Bloqueado':

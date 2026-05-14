@@ -12,7 +12,7 @@ test('appointmentMapper envia valores aceitos pela API Supabase', () => {
       date: '2026-05-11',
       time: '10:30',
       mode: 'Teleconsulta',
-      status: 'Em triagem',
+      status: 'Agendado',
       notes: '',
     },
     'supabase',
@@ -37,7 +37,7 @@ test('appointmentMapper converte resposta da API para labels da agenda', () => {
   })
 
   assert.equal(appointment.id, 'appt-1')
-  assert.equal(appointment.status, 'Confirmada')
+  assert.equal(appointment.status, 'Confirmado')
   assert.equal(appointment.mode, 'Teleconsulta')
   assert.equal(appointment.patient, 'Ana Souza')
   assert.equal(appointment.professional, 'Dra. Leticia')

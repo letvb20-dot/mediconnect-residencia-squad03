@@ -260,8 +260,9 @@ async function getPatientById(patientId) {
 
 function mapPatientToDirectory(patient, appointments = []) {
   const appointmentSummary = summarizeAppointments(patient.id, appointments)
-  const city = getFirstValue(patient, ['city', 'cidade', 'address_city', 'municipio'], patient.address?.city)
-  const state = getFirstValue(patient, ['state', 'uf', 'address_state', 'estado'], patient.address?.state)
+  const address = getAddressObject(patient)
+  const city = getFirstValue(patient, ['city', 'cidade', 'address_city', 'municipio', 'municipality', 'address_municipality'], getFirstValue(address, ['city', 'cidade', 'municipio', 'municipality']))
+  const state = getFirstValue(patient, ['state', 'uf', 'address_state', 'address_uf', 'estado'], getFirstValue(address, ['state', 'uf', 'estado']))
   const insurance = getFirstValue(patient, ['insurance', 'convenio', 'health_insurance', 'insurance_name'])
   const name = cleanPersonName(patient.name, patient.full_name, patient.nome)
   const cpf = formatCpf(patient.cpf || patient.document || patient.documento)
@@ -271,6 +272,20 @@ function mapPatientToDirectory(patient, appointments = []) {
     name: name || 'Paciente sem nome',
     cpf,
     document: cpf || patient.document || patient.documento || '',
+    socialName: patient.socialName || patient.social_name || patient.nome_social || '',
+    rg: patient.rg || '',
+    otherDocuments: patient.otherDocuments || patient.other_documents || patient.outros_documentos || '',
+    documentNumber: patient.documentNumber || patient.document_number || patient.numero_documento || '',
+    sex: patient.sex || patient.sexo || patient.gender || '',
+    race: patient.race || patient.raca || patient.raça || '',
+    naturality: patient.naturality || patient.naturalidade || '',
+    nationality: patient.nationality || patient.nacionalidade || '',
+    profession: patient.profession || patient.profissao || patient.profissão || '',
+    motherProfession: patient.motherProfession || patient.mother_profession || patient.profissao_mae || '',
+    fatherProfession: patient.fatherProfession || patient.father_profession || patient.profissao_pai || '',
+    responsibleName: patient.responsibleName || patient.responsible_name || patient.nome_responsavel || '',
+    responsibleCpf: formatCpf(patient.responsibleCpf || patient.responsible_cpf || patient.cpf_responsavel || ''),
+    spouseName: patient.spouseName || patient.spouse_name || patient.nome_conjuge || patient.nome_esposo || '',
     phone: formatBrazilianPhone(patient.phone || patient.phone_mobile || patient.telefone || ''),
     avatarUrl: normalizeAvatarUrl(patient.avatarUrl || patient.avatar_url || patient.avatar_path),
     detailId: patient.id,
@@ -283,9 +298,10 @@ function mapPatientToDirectory(patient, appointments = []) {
     fatherName: patient.fatherName || patient.father_name || patient.nome_pai || '',
     ethnicity: patient.ethnicity || patient.etnia || '',
     maritalStatus: patient.maritalStatus || patient.marital_status || patient.estado_civil || '',
-    phoneSecondary: formatBrazilianPhone(patient.phoneSecondary || patient.phone_secondary || patient.phone_home || ''),
+    phoneLandline: formatBrazilianPhone(patient.phoneLandline || patient.phone_landline || patient.phone1 || patient.tel1 || patient.telefone1 || ''),
+    phoneSecondary: formatBrazilianPhone(patient.phoneSecondary || patient.phone_secondary || patient.phone2 || patient.tel2 || patient.telefone2 || patient.phone_home || ''),
     zipCode: patient.zipCode || patient.zip_code || patient.cep || '',
-    addressStreet: patient.addressStreet || patient.address_street || patient.street || patient.logradouro || patient.address?.street || patient.address?.logradouro || '',
+    addressStreet: patient.addressStreet || patient.address_street || patient.street || patient.logradouro || address?.street || address?.logradouro || '',
     addressNumber: patient.addressNumber || patient.address_number || patient.numero || '',
     addressComplement: patient.addressComplement || patient.address_complement || patient.complemento || '',
     plan: patient.plan || patient.plano || patient.insurance_plan || '',
@@ -298,6 +314,7 @@ function mapPatientToDirectory(patient, appointments = []) {
     insuranceCardValidUntil: patient.insuranceCardValidUntil || patient.insurance_card_valid_until || patient.validade_carteira || '',
     insuranceIndefiniteValidity: Boolean(patient.insuranceIndefiniteValidity || patient.insurance_indefinite_validity || patient.validade_indeterminada),
     cns: patient.cns || patient.sus_card || patient.cartao_sus || '',
+    lgpdOptIn: Boolean(patient.lgpdOptIn ?? patient.lgpd_opt_in ?? patient.accepts_messages ?? patient.opt_in_messages ?? patient.receber_mensagens),
     attachments: normalizeAttachments(patient.attachments || patient.anexos || patient.documents || patient.documentos),
     notesText: patient.notesText || patient.notes_text || patient.observations || patient.observacoes || '',
     lastVisitIso: patient.lastVisitIso || patient.last_visit_iso || appointmentSummary.lastVisitIso || null,
@@ -439,6 +456,12 @@ function getFirstValue(source, keys, fallback = '') {
   return fallback || ''
 }
 
+function getAddressObject(patient) {
+  const address = patient?.address || patient?.endereco
+  if (address && typeof address === 'object') return address
+  return {}
+}
+
 function normalizeId(value) {
   return String(value || '').trim()
 }
@@ -554,8 +577,18 @@ function buildPatientBody(data, { includeCreatedBy = false } = {}) {
   const body = {
     full_name: cleanPersonName(data.name, data.full_name),
     cpf: onlyDigits(data.cpf),
+    social_name: cleanPersonName(data.socialName || data.social_name),
+    rg: onlyDigits(data.rg),
+    other_documents: data.otherDocuments || data.other_documents,
+    document_number: data.documentNumber || data.document_number,
+    sex: data.sex || data.sexo,
+    race: data.race || data.raca,
+    naturality: data.naturality || data.naturalidade,
+    nationality: data.nationality || data.nacionalidade,
+    profession: data.profession || data.profissao,
     email: data.email?.trim(),
     phone_mobile: onlyDigits(data.phone || data.phone_mobile),
+    phone_landline: onlyDigits(data.phoneLandline || data.phone_landline),
     birth_date: data.birthDate || data.birth_date || null,
     city: data.city,
     state: data.state,
@@ -578,9 +611,15 @@ function buildPatientBody(data, { includeCreatedBy = false } = {}) {
     attachments: data.attachments,
     observations: data.notesText || data.notes_text || data.notes,
     mother_name: data.motherName || data.mother_name,
+    mother_profession: data.motherProfession || data.mother_profession,
     father_name: data.fatherName || data.father_name,
+    father_profession: data.fatherProfession || data.father_profession,
+    responsible_name: data.responsibleName || data.responsible_name,
+    responsible_cpf: onlyDigits(data.responsibleCpf || data.responsible_cpf),
+    spouse_name: data.spouseName || data.spouse_name,
     ethnicity: data.ethnicity,
     marital_status: data.maritalStatus || data.marital_status,
+    lgpd_opt_in: data.lgpdOptIn === undefined ? undefined : Boolean(data.lgpdOptIn),
     vip: data.vip === undefined ? undefined : Boolean(data.vip),
   }
 

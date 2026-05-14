@@ -26,6 +26,7 @@ const BRAZILIAN_UF = [
   'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE',
   'TO',
 ]
+const USERS_PER_PAGE = 8
 const initialUserForm = {
   email: '',
   full_name: '',
@@ -41,7 +42,7 @@ const initialUserForm = {
   specialty: '',
 }
 
-export function UsersPage({ embedded = false, role: currentRole }) {
+export function UsersPage({ embedded = false, embeddedHeaderOnly = false, hideHeader = false, role: currentRole }) {
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -53,6 +54,7 @@ export function UsersPage({ embedded = false, role: currentRole }) {
   const [form, setForm] = useState(initialUserForm)
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState('Todos')
+  const [userPage, setUserPage] = useState(1)
 
   const normalizedRole = normalizeRole(currentRole)
   const canManageUsers = hasCapability(normalizedRole, 'manageUsers')
@@ -74,10 +76,18 @@ export function UsersPage({ embedded = false, role: currentRole }) {
     const matchesRole = roleFilter === 'Todos' || normalizeRole(getUserRole(user)) === roleFilter
     return matchesSearch && matchesRole
   })
+  const totalUserPages = Math.max(1, Math.ceil(filteredUsers.length / USERS_PER_PAGE))
+  const currentUserPage = Math.min(userPage, totalUserPages)
+  const visibleUsers = filteredUsers.slice((currentUserPage - 1) * USERS_PER_PAGE, currentUserPage * USERS_PER_PAGE)
 
   useEffect(() => {
+    if (embeddedHeaderOnly) return
     loadUsers()
-  }, [])
+  }, [embeddedHeaderOnly])
+
+  useEffect(() => {
+    setUserPage(1)
+  }, [roleFilter, search])
 
   async function loadUsers() {
     setLoading(true)
@@ -211,9 +221,18 @@ export function UsersPage({ embedded = false, role: currentRole }) {
     )
   }
 
+  if (embeddedHeaderOnly) {
+    return (
+      <div>
+        <h1 className="text-lg font-bold tracking-tight text-[#e5e5e5]">Usuários do Sistema</h1>
+        <p className="mt-1 text-sm text-[#a3a3a3]">Gerencie os usuários e seus perfis de acesso</p>
+      </div>
+    )
+  }
+
   return (
     <div className={`${embedded ? 'w-full space-y-4' : 'mx-auto max-w-7xl space-y-6'} text-[#e5e5e5]`}>
-      <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
+      {!hideHeader ? <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div>
           <h1 className={`${embedded ? 'text-lg' : 'text-2xl'} font-bold tracking-tight text-[#e5e5e5]`}>Usuários do Sistema</h1>
           <p className="mt-1 text-sm text-[#a3a3a3]">Gerencie os usuários e seus perfis de acesso</p>
@@ -225,7 +244,7 @@ export function UsersPage({ embedded = false, role: currentRole }) {
         >
           + Novo usuário
         </button>
-      </div>
+      </div> : null}
 
       {loading ? (
         <p className="py-10 text-center text-sm text-[#a3a3a3]">Carregando usuários...</p>
@@ -240,8 +259,8 @@ export function UsersPage({ embedded = false, role: currentRole }) {
                 {filteredUsers.length} de {users.length} usuários exibidos
               </p>
             </div>
-            <div className={`flex flex-col gap-3 ${embedded ? '' : 'sm:flex-row'}`}>
-            <label className={`grid gap-1.5 text-xs font-semibold text-[#a3a3a3] ${embedded ? '' : 'sm:min-w-72'}`}>
+            <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(11rem,0.6fr)]">
+            <label className="grid gap-1.5 text-xs font-semibold text-[#a3a3a3]">
               <span>Pesquisa</span>
               <input
                 className={darkInput}
@@ -251,7 +270,7 @@ export function UsersPage({ embedded = false, role: currentRole }) {
                 value={search}
               />
             </label>
-            <label className={`grid gap-1.5 text-xs font-semibold text-[#a3a3a3] ${embedded ? '' : 'sm:min-w-56'}`}>
+            <label className="grid gap-1.5 text-xs font-semibold text-[#a3a3a3]">
               <span>Perfil</span>
               <select
                 className={darkInput}
@@ -281,7 +300,7 @@ export function UsersPage({ embedded = false, role: currentRole }) {
               </thead>
               <tbody className="divide-y divide-[#404040]">
                 {filteredUsers.length ? (
-                  filteredUsers.map((user) => {
+                  visibleUsers.map((user) => {
                     const userRole = getNormalizedUserRole(user)
                     const userStatus = getUserStatus(user)
                     return (
@@ -329,6 +348,29 @@ export function UsersPage({ embedded = false, role: currentRole }) {
               </tbody>
             </table>
           </div>
+          {filteredUsers.length > USERS_PER_PAGE ? (
+            <div className="flex items-center justify-between gap-3 border-t border-[#404040] px-6 py-4 text-xs text-[#a3a3a3]">
+              <span>Página {currentUserPage} de {totalUserPages}</span>
+              <div className="flex gap-2">
+                <button
+                  className="h-8 rounded border border-[#404040] bg-[#303030] px-3 font-semibold text-[#e5e5e5] disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={currentUserPage <= 1}
+                  onClick={() => setUserPage((page) => Math.max(1, page - 1))}
+                  type="button"
+                >
+                  Anterior
+                </button>
+                <button
+                  className="h-8 rounded border border-[#404040] bg-[#303030] px-3 font-semibold text-[#e5e5e5] disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={currentUserPage >= totalUserPages}
+                  onClick={() => setUserPage((page) => Math.min(totalUserPages, page + 1))}
+                  type="button"
+                >
+                  Próxima
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
 

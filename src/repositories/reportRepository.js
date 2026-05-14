@@ -87,6 +87,19 @@ export const reportRepository = {
     const data = await response.json()
     return reportMapper.toUi(normalizeItem(data))
   },
+
+  async remove(id) {
+    const response = await fetch(`${apiConfig.restUrl}/reports?id=eq.${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: getAuthenticatedHeaders(),
+    })
+
+    if (!response.ok) {
+      throw new Error(await getResponseError(response, 'Falha ao excluir relatÃ³rio mÃ©dico.'))
+    }
+
+    return true
+  },
 }
 
 async function getDoctorNameMap() {
@@ -172,7 +185,9 @@ function uniquePayloads(payloads) {
 }
 
 function toApiReportStatus(status) {
-  return status === 'finalized' ? 'completed' : status
+  if (status === 'finalized') return 'completed'
+  if (status === 'sent') return 'sent'
+  return status
 }
 
 function filterReportsByStatus(reports, status) {
@@ -183,6 +198,10 @@ function filterReportsByStatus(reports, status) {
     const normalized = String(report.status || '').toLowerCase()
     if (expected === 'completed') {
       return ['completed', 'finalized', 'finalizado', 'finished', 'done'].includes(normalized)
+    }
+
+    if (expected === 'sent') {
+      return ['sent', 'enviado', 'delivered', 'emailed'].includes(normalized)
     }
 
     return normalized === expected

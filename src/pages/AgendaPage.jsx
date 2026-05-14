@@ -22,10 +22,10 @@ import { formatLocalDateInput, parseLocalDate } from '../utils/agendaDate.js'
 
 const statusFilters = [
   { label: 'Todos', value: 'Todos' },
-  { label: 'Confirmadas', value: 'Confirmada' },
-  { label: 'Em triagem', value: 'Em triagem' },
-  { label: 'Aguardando', value: 'Aguardando' },
-  { label: 'Canceladas', value: 'Cancelada' },
+  { label: 'Agendados', value: 'Agendado' },
+  { label: 'Confirmados', value: 'Confirmado' },
+  { label: 'Realizados', value: 'Realizado' },
+  { label: 'Cancelados', value: 'Cancelado' },
   { label: 'Prioridade', value: 'Prioridade' },
 ]
 
@@ -36,7 +36,7 @@ const viewFilters = [
 ]
 
 const appointmentTypeOptions = ['Retorno', 'Primeira consulta', 'Exame', 'Avaliação pre-op']
-const appointmentStatusOptions = ['Confirmada', 'Em triagem', 'Aguardando']
+const appointmentStatusOptions = ['Agendado', 'Confirmado', 'Realizado', 'Cancelado']
 const weekdayOptions = [
   { label: 'Domingo', value: 0 },
   { label: 'Segunda', value: 1 },

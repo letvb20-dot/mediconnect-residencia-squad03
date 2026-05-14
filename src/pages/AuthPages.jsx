@@ -9,9 +9,10 @@ import { StethoscopeIcon } from '../components/Brand.jsx'
 // ─── Estilos ────────────────────────────────────────────────────────────────
 
 const dotPanelStyle = {
-  backgroundColor: '#071627',
-  backgroundImage: 'radial-gradient(rgba(255,255,255,0.08) 1px, transparent 1px)',
-  backgroundSize: '26px 26px',
+  backgroundColor: '#02070f',
+  backgroundImage:
+    'radial-gradient(rgba(147,197,253,0.14) 1px, transparent 1px), linear-gradient(105deg, #030406 0%, #071326 42%, #0d2454 100%)',
+  backgroundSize: '32px 32px, auto',
 }
 
 const lightInputClass =
@@ -51,7 +52,7 @@ export function LoginPage({ navigate }) {
   }
 
   return (
-    <main className="min-h-screen">
+    <main className="min-h-screen bg-[#f4f7fb]">
       <div className="grid min-h-screen lg:grid-cols-2">
 
         {/* Painel esquerdo (dark navy + dots) */}
@@ -108,9 +109,9 @@ export function LoginPage({ navigate }) {
           </div>
         </section>
 
-        {/* Painel direito (branco) */}
-        <section className="flex min-h-screen items-center justify-center bg-white px-6 py-12 sm:px-10 lg:px-16">
-          <div className="w-full max-w-[420px]">
+        {/* Painel direito */}
+        <section className="flex min-h-screen items-center justify-center bg-[#f4f7fb] px-6 py-12 sm:px-10 lg:px-16">
+          <div className="w-full max-w-[448px]">
 
             <RightLogo />
 
@@ -498,8 +499,8 @@ function AuthLayout({ children, description, title }) {
           </div>
         </section>
 
-        <section className="flex min-h-screen items-center justify-center bg-white px-6 py-12 sm:px-10 lg:px-16">
-          <div className="w-full max-w-[420px]">
+        <section className="flex min-h-screen items-center justify-center bg-[#f4f7fb] px-6 py-12 sm:px-10 lg:px-16">
+          <div className="w-full max-w-[448px]">
             <div className="mb-8 lg:hidden">
               <RightLogo />
             </div>

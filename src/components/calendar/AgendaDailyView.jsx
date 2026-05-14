@@ -136,14 +136,19 @@ export function AgendaDailyView({
 
 function getDailyToneClass(status) {
   switch (status) {
+    case 'Confirmado':
     case 'Confirmada':
       return 'agenda-slot-confirmed'
+    case 'Realizado':
+      return 'agenda-slot-finished'
     case 'Em triagem':
       return 'agenda-slot-triage'
+    case 'Cancelado':
     case 'Cancelada':
       return 'agenda-slot-cancelled'
     case 'Bloqueado':
       return 'agenda-slot-blocked'
+    case 'Agendado':
     case 'Aguardando':
     default:
       return 'agenda-slot-waiting'

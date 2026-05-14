@@ -10,17 +10,17 @@ test('normaliza aliases de perfis conhecidos', () => {
   assert.equal(normalizeRole('secretary'), 'secretaria')
 })
 
-test('medico acessa pacientes, mas nao prontuario, painel ou analytics', () => {
+test('medico acessa painel e pacientes, mas nao prontuario ou analytics', () => {
   assert.equal(canAccess('medico', '/pacientes'), true)
   assert.equal(canAccess('medico', '/prontuario/123'), false)
-  assert.equal(canAccess('medico', '/inicio'), false)
+  assert.equal(canAccess('medico', '/inicio'), true)
   assert.equal(canAccess('medico', '/relatorios'), false)
 })
 
-test('secretaria acessa agenda e pacientes, mas nao painel', () => {
+test('secretaria acessa painel, agenda e pacientes', () => {
+  assert.equal(canAccess('secretaria', '/inicio'), true)
   assert.equal(canAccess('secretaria', '/agenda'), true)
   assert.equal(canAccess('secretaria', '/pacientes'), true)
-  assert.equal(canAccess('secretaria', '/inicio'), false)
 })
 
 test('roles administrativos mantem capacidades criticas', () => {

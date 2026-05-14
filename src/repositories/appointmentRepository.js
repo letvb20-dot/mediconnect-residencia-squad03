@@ -66,7 +66,7 @@ export const appointmentRepository = {
   },
 
   async cancel(id, uiData) {
-    return this.update(id, { ...uiData, status: 'Cancelada' })
+    return this.update(id, { ...uiData, status: 'Cancelado' })
   },
 }
 

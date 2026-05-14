@@ -25,15 +25,16 @@ export const appointmentMapper = {
 
     // Tradução de status do banco (inglês) para UI (português)
     const statusMap = {
-      requested: 'Aguardando',
-      confirmed: 'Confirmada',
-      checked_in: 'Em triagem',
-      completed: 'Concluída',
-      cancelled: 'Cancelada',
+      requested: 'Agendado',
+      scheduled: 'Agendado',
+      confirmed: 'Confirmado',
+      checked_in: 'Confirmado',
+      completed: 'Realizado',
+      cancelled: 'Cancelado',
     }
 
     const rawStatus = String(apiData.status || '').toLowerCase()
-    const mappedStatus = statusMap[rawStatus] || apiData.situacao || 'Aguardando'
+    const mappedStatus = statusMap[rawStatus] || normalizeUiStatus(apiData.situacao || apiData.status) || 'Agendado'
 
     // Modalidade
     let mode = apiData.mode || apiData.modalidade || apiData.formato || 'Presencial'
@@ -121,7 +122,7 @@ export const appointmentMapper = {
       type: uiData.type,
       mode: uiData.mode,
       duration_minutes: Number(uiData.durationMinutes) || 30,
-      status: uiData.status || 'Confirmada',
+      status: normalizeUiStatus(uiData.status) || 'Agendado',
       room: uiData.room,
       high_priority: highPriority,
       priority: highPriority ? 'Alta' : uiData.priority,
@@ -162,6 +163,8 @@ function toApiStatus(status) {
     .toLowerCase()
 
   const statusMap = {
+    agendado: 'requested',
+    agendada: 'requested',
     confirmada: 'confirmed',
     confirmado: 'confirmed',
     em_triagem: 'requested',
@@ -173,6 +176,8 @@ function toApiStatus(status) {
     solicitacao: 'requested',
     cancelada: 'cancelled',
     cancelado: 'cancelled',
+    realizado: 'completed',
+    realizada: 'completed',
     concluida: 'completed',
     concluido: 'completed',
     finalizada: 'completed',
@@ -180,4 +185,36 @@ function toApiStatus(status) {
   }
 
   return statusMap[normalized.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')] || 'requested'
+}
+
+function normalizeUiStatus(status) {
+  const normalized = String(status || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+
+  const statusMap = {
+    agendado: 'Agendado',
+    agendada: 'Agendado',
+    aguardando: 'Agendado',
+    requested: 'Agendado',
+    confirmada: 'Confirmado',
+    confirmado: 'Confirmado',
+    confirmed: 'Confirmado',
+    checked_in: 'Confirmado',
+    em_triagem: 'Confirmado',
+    realizado: 'Realizado',
+    realizada: 'Realizado',
+    concluida: 'Realizado',
+    concluido: 'Realizado',
+    completed: 'Realizado',
+    cancelada: 'Cancelado',
+    cancelado: 'Cancelado',
+    cancelled: 'Cancelado',
+  }
+
+  return statusMap[normalized] || ''
 }

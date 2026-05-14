@@ -28,6 +28,12 @@ export const analyticsRepository = {
     const completedAppointments = appointmentsInPeriod.filter((appointment) => isCompletedStatus(appointment.status))
     const noShowAppointments = appointmentsInPeriod.filter((appointment) => isNoShowStatus(appointment.status))
     const revenue = appointmentsInPeriod.reduce((total, appointment) => total + getAppointmentRevenue(appointment), 0)
+    const annualRevenue = appointments
+      .filter((appointment) => {
+        const date = parseAppointmentDate(appointment)
+        return date && date.getFullYear() === new Date().getFullYear()
+      })
+      .reduce((total, appointment) => total + getAppointmentRevenue(appointment), 0)
     const noShowRate = appointmentsInPeriod.length
       ? roundPercent(noShowAppointments.length, appointmentsInPeriod.length)
       : 0
@@ -54,6 +60,15 @@ export const analyticsRepository = {
       }),
       doctorPerformance: buildDoctorPerformance(appointmentsInPeriod, professionals),
       insuranceData: buildInsuranceData(patients),
+      attendanceMetrics: {
+        scheduled: appointmentsInPeriod.length,
+        completed: completedAppointments.length,
+        cancelled: appointmentsInPeriod.filter((appointment) => isCancelledStatus(appointment.status)).length,
+        noShow: noShowAppointments.length,
+        noShowRate,
+      },
+      annualRevenue,
+      satisfactionIndicators: buildSatisfactionIndicators(appointmentsInPeriod),
       kpis: [
         { label: 'Consultas Realizadas', value: String(completedAppointments.length), change: `${appointmentsInPeriod.length} agendadas`, up: true, icon: 'calendar' },
         { label: 'Taxa de No-Show', value: `${noShowRate}%`, change: `${noShowAppointments.length} faltas`, up: false, icon: 'activity' },
@@ -182,11 +197,36 @@ function normalizeStatus(status) {
 }
 
 function isCompletedStatus(status) {
-  return ['concluida', 'concluido', 'completed', 'finalizada', 'finalizado'].includes(normalizeStatus(status))
+  return ['realizado', 'realizada', 'concluida', 'concluido', 'completed', 'finalizada', 'finalizado'].includes(normalizeStatus(status))
 }
 
 function isNoShowStatus(status) {
   return ['no_show', 'no-show', 'falta', 'ausente', 'faltou'].includes(normalizeStatus(status).replace(/\s+/g, '_'))
+}
+
+function isCancelledStatus(status) {
+  return ['cancelada', 'cancelado', 'cancelled'].includes(normalizeStatus(status))
+}
+
+function buildSatisfactionIndicators(appointments) {
+  const ratedAppointments = appointments
+    .map((appointment) => Number(appointment.satisfaction || appointment.satisfacao || appointment.rating || 0))
+    .filter((rating) => Number.isFinite(rating) && rating > 0)
+
+  if (!ratedAppointments.length) {
+    return {
+      average: 0,
+      responses: 0,
+      label: 'Sem avaliaÃ§Ãµes registradas',
+    }
+  }
+
+  const average = ratedAppointments.reduce((total, rating) => total + rating, 0) / ratedAppointments.length
+  return {
+    average: Math.round(average * 10) / 10,
+    responses: ratedAppointments.length,
+    label: `${ratedAppointments.length} avaliaÃ§Ãµes`,
+  }
 }
 
 function getAppointmentRevenue(appointment) {

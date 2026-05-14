@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 import { normalizeRole } from '../config/permissions.js'
 import { StethoscopeIcon } from '../components/Brand.jsx'
@@ -25,6 +26,11 @@ const statusConfig = {
     pill: 'bg-emerald-500/20 text-emerald-400',
     stat: 'text-emerald-400',
   },
+  sent: {
+    label: 'Enviado',
+    pill: 'bg-sky-500/20 text-sky-300',
+    stat: 'text-sky-300',
+  },
 }
 
 const orderOptions = [
@@ -46,6 +52,9 @@ const emptyEditor = {
   conclusion: '',
   contentHtml: '',
   contentJson: undefined,
+  digitalSignature: '',
+  importedPdfs: [],
+  imageFiles: [],
   hideDate: false,
   hideSignature: false,
   dueAt: '',
@@ -70,8 +79,13 @@ export function ReportsPage({ role }) {
 
   const [editorOpen, setEditorOpen] = useState(false)
   const [viewerReport, setViewerReport] = useState(null)
+  const [versionsReport, setVersionsReport] = useState(null)
+  const [protocolReport, setProtocolReport] = useState(null)
   const [editor, setEditor] = useState(emptyEditor)
   const [page, setPage] = useState(1)
+  const [openReportMenuId, setOpenReportMenuId] = useState(null)
+  const [reportMenuAnchor, setReportMenuAnchor] = useState(null)
+  const canDeleteReports = ['admin', 'gestor'].includes(normalizeRole(role))
 
   const patientOptions = useMemo(
     () =>
@@ -236,6 +250,7 @@ export function ReportsPage({ role }) {
       ...emptyEditor,
       patientId: patientOptions[0]?.id || '',
       requestedBy: isDoctorRole ? currentProfessional?.name || viewerProfile?.name || '' : '',
+      digitalSignature: currentProfessional?.crm || viewerProfile?.name || '',
     })
     setEditorOpen(true)
   }
@@ -253,6 +268,9 @@ export function ReportsPage({ role }) {
       conclusion: report.conclusion,
       contentHtml: report.contentHtml,
       contentJson: report.contentJson,
+      digitalSignature: report.contentJson?.digitalSignature || '',
+      importedPdfs: report.contentJson?.importedPdfs || [],
+      imageFiles: report.contentJson?.imageFiles || [],
       hideDate: Boolean(report.hideDate),
       hideSignature: Boolean(report.hideSignature),
       dueAt: toDateTimeLocal(report.dueAt),
@@ -285,7 +303,12 @@ export function ReportsPage({ role }) {
       diagnosis: editor.diagnosis || plainContent.slice(0, 240) || 'Relatório médico registrado em prontuário.',
       conclusion: editor.conclusion || plainContent.slice(0, 240) || 'Relatório médico salvo no sistema.',
       contentHtml: editor.contentHtml,
-      contentJson: editor.contentJson,
+      contentJson: {
+        ...(editor.contentJson && typeof editor.contentJson === 'object' ? editor.contentJson : {}),
+        digitalSignature: editor.digitalSignature,
+        importedPdfs: editor.importedPdfs || [],
+        imageFiles: editor.imageFiles || [],
+      },
       hideDate: Boolean(editor.hideDate),
       hideSignature: Boolean(editor.hideSignature),
       dueAt: editor.dueAt ? new Date(editor.dueAt).toISOString() : new Date().toISOString(),
@@ -321,6 +344,71 @@ export function ReportsPage({ role }) {
     } finally {
       setSaving(false)
     }
+  }
+
+  async function releaseReport(report) {
+    if (!window.confirm('Liberar este relatÃ³rio para impressÃ£o e envio ao paciente?')) return
+
+    try {
+      await reportRepository.update(report.id, {
+        ...report,
+        status: 'finalized',
+        updatedBy: viewerProfile?.id || currentProfessional?.userId || currentProfessional?.id || undefined,
+      })
+      await loadReports()
+    } catch (releaseError) {
+      alert(releaseError.message || 'Erro ao liberar relatÃ³rio.')
+    }
+  }
+
+  async function deleteReport(report) {
+    if (!canDeleteReports) {
+      alert('Apenas gestor ou administrador podem excluir relatÃ³rios.')
+      return
+    }
+
+    if (!window.confirm('Este relatÃ³rio contÃ©m dados sensÃ­veis. Deseja continuar?')) return
+    const confirmation = window.prompt('Digite EXCLUIR para confirmar a remoÃ§Ã£o definitiva do relatÃ³rio.')
+    if (confirmation !== 'EXCLUIR') return
+
+    try {
+      await reportRepository.remove(report.id)
+      await loadReports()
+    } catch (deleteError) {
+      alert(deleteError.message || 'Erro ao excluir relatÃ³rio.')
+    }
+  }
+
+  async function saveDeliveryProtocol(report, protocol) {
+    const contentJson = {
+      ...(report.contentJson && typeof report.contentJson === 'object' ? report.contentJson : {}),
+      deliveryProtocol: protocol,
+    }
+
+    try {
+      await reportRepository.update(report.id, { ...report, contentJson })
+      setProtocolReport(null)
+      await loadReports()
+    } catch (protocolError) {
+      alert(protocolError.message || 'Erro ao registrar protocolo de entrega.')
+    }
+  }
+
+  function toggleReportMenu(reportId, anchor) {
+    setOpenReportMenuId((currentId) => {
+      if (currentId === reportId) {
+        setReportMenuAnchor(null)
+        return null
+      }
+
+      setReportMenuAnchor(anchor)
+      return reportId
+    })
+  }
+
+  function closeReportMenu() {
+    setOpenReportMenuId(null)
+    setReportMenuAnchor(null)
   }
 
   return (
@@ -383,6 +471,7 @@ export function ReportsPage({ role }) {
               <option value="">Todos os status</option>
               <option value="draft">Rascunho</option>
               <option value="finalized">Finalizado</option>
+              <option value="sent">Enviado</option>
             </select>
           </FilterField>
 
@@ -452,7 +541,17 @@ export function ReportsPage({ role }) {
                 paginatedReports.map((report) => (
                   <ReportRow
                     key={report.id}
+                    canDelete={canDeleteReports}
+                    isMenuOpen={openReportMenuId === report.id}
+                    menuAnchor={reportMenuAnchor}
+                    onCloseMenu={closeReportMenu}
+                    onDelete={() => deleteReport(report)}
                     onEdit={() => openEdit(report)}
+                    onMenuToggle={toggleReportMenu}
+                    onPrint={() => printReportAsPdf(report, statusConfig[report.status] || statusConfig.draft)}
+                    onProtocol={() => setProtocolReport(report)}
+                    onRelease={() => releaseReport(report)}
+                    onVersions={() => setVersionsReport(report)}
                     onView={() => setViewerReport(report)}
                     report={report}
                   />
@@ -516,12 +615,38 @@ export function ReportsPage({ role }) {
       {viewerReport ? (
         <ReportViewModal onClose={() => setViewerReport(null)} report={viewerReport} />
       ) : null}
+
+      {versionsReport ? (
+        <ReportVersionsModal onClose={() => setVersionsReport(null)} report={versionsReport} />
+      ) : null}
+
+      {protocolReport ? (
+        <DeliveryProtocolModal
+          onClose={() => setProtocolReport(null)}
+          onSave={(protocol) => saveDeliveryProtocol(protocolReport, protocol)}
+          report={protocolReport}
+          viewerProfile={viewerProfile}
+        />
+      ) : null}
     </div>
   )
 }
 
-function ReportRow({ onEdit, onView, report }) {
+function ReportRow({ canDelete, isMenuOpen, menuAnchor, onCloseMenu, onDelete, onEdit, onMenuToggle, onPrint, onProtocol, onRelease, onVersions, onView, report }) {
   const currentStatus = statusConfig[report.status] || statusConfig.draft
+
+  function run(action) {
+    onCloseMenu()
+    action?.()
+  }
+
+  function toggleMenu(event) {
+    const rect = event.currentTarget.getBoundingClientRect()
+    onMenuToggle(report.id, {
+      left: Math.max(16, Math.min(window.innerWidth - 240, rect.right - 224)),
+      top: rect.bottom + 6,
+    })
+  }
 
   return (
     <tr className="transition hover:bg-[#303030]">
@@ -541,12 +666,54 @@ function ReportRow({ onEdit, onView, report }) {
         </span>
       </td>
       <td className="sticky right-0 bg-[#262626] px-4 py-3 text-right shadow-[-10px_0_12px_-12px_rgba(0,0,0,0.75)]">
-        <div className="flex justify-end gap-2">
+        <div className="relative flex justify-end gap-2">
           <IconButton label="Visualizar" name="eye" onClick={onView} />
-          <IconButton label="Editar" name="edit" onClick={onEdit} />
+          <button
+            aria-label="Abrir ações do relatório"
+            className={`grid size-8 place-items-center rounded-lg border transition ${
+              isMenuOpen
+                ? 'border-[#3b82f6] bg-[#3b82f6]/15 text-[#3b82f6]'
+                : 'border-[#404040] bg-[#1a1a1a] text-[#a3a3a3] hover:bg-[#333333] hover:text-[#e5e5e5]'
+            }`}
+            onClick={toggleMenu}
+            type="button"
+          >
+            <ReportIcon className="size-4" name="more" />
+          </button>
+          {isMenuOpen && menuAnchor ? createPortal(
+            <div
+              className="fixed w-56 overflow-hidden rounded-lg border border-[#404040] bg-[#1a1a1a] py-1 text-left shadow-2xl"
+              style={{ left: menuAnchor.left, top: menuAnchor.top, zIndex: 99999 }}
+            >
+              <ReportMenuButton onClick={() => run(onVersions)}>Controle de versões</ReportMenuButton>
+              <ReportMenuButton onClick={() => run(onEdit)}>Editar</ReportMenuButton>
+              <ReportMenuButton onClick={() => run(onPrint)}>Imprimir</ReportMenuButton>
+              <ReportMenuButton onClick={() => run(onProtocol)}>Protocolo de entrega</ReportMenuButton>
+              <ReportMenuButton disabled={report.status === 'finalized'} onClick={() => run(onRelease)}>Liberar relatório</ReportMenuButton>
+              <ReportMenuButton danger disabled={!canDelete} onClick={() => run(onDelete)}>Excluir relatório</ReportMenuButton>
+            </div>,
+            document.body,
+          ) : null}
         </div>
       </td>
     </tr>
+  )
+}
+
+function ReportMenuButton({ children, danger = false, disabled = false, onClick }) {
+  return (
+    <button
+      className={`block w-full px-3 py-2 text-left text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-45 ${
+        danger
+          ? 'text-red-300 hover:bg-red-950/30'
+          : 'text-[#e5e5e5] hover:bg-[#303030]'
+      }`}
+      disabled={disabled}
+      onClick={onClick}
+      type="button"
+    >
+      {children}
+    </button>
   )
 }
 
@@ -610,6 +777,12 @@ function ReportEditorModalV3({
     updateField('requestedBy', '')
   }
 
+  function appendFiles(field, files) {
+    const names = Array.from(files || []).map((file) => file.name).filter(Boolean)
+    if (!names.length) return
+    onChange((current) => ({ ...current, [field]: [...(current[field] || []), ...names] }))
+  }
+
   function applyTemplate(template) {
     setTemplatesOpen(false)
     onChange((current) => ({
@@ -655,6 +828,7 @@ function ReportEditorModalV3({
                 <select className={`${inputClass} md:w-52`} onChange={(event) => updateField('status', event.target.value)} value={editor.status}>
                   <option value="draft">Rascunho</option>
                   <option value="finalized">Finalizado</option>
+                  <option value="sent">Enviado</option>
                 </select>
               </DarkField>
 
@@ -728,7 +902,7 @@ function ReportEditorModalV3({
                 </div>
               </DarkField>
 
-              <DarkField label="Solicitante *">
+              <DarkField label="MÃ©dico responsÃ¡vel *">
                 <div className="relative">
                   <input
                     className={inputClass}
@@ -771,6 +945,20 @@ function ReportEditorModalV3({
                 <input className={`${inputClass} [color-scheme:dark]`} onChange={(event) => updateField('dueAt', event.target.value)} type="datetime-local" value={editor.dueAt} />
               </DarkField>
 
+              <DarkField label="Assinatura digital *">
+                <input className={inputClass} onChange={(event) => updateField('digitalSignature', sanitizePlainText(event.target.value))} placeholder="CRM, certificado ou assinatura eletrÃ´nica" value={editor.digitalSignature} />
+              </DarkField>
+
+              <DarkField label="Importar PDF">
+                <input accept="application/pdf" className={inputClass} multiple onChange={(event) => appendFiles('importedPdfs', event.target.files)} type="file" />
+                {editor.importedPdfs?.length ? <p className="mt-1 text-xs text-[#a3a3a3]">{editor.importedPdfs.join(', ')}</p> : null}
+              </DarkField>
+
+              <DarkField label="Imagens">
+                <input accept="image/*" className={inputClass} multiple onChange={(event) => appendFiles('imageFiles', event.target.files)} type="file" />
+                {editor.imageFiles?.length ? <p className="mt-1 text-xs text-[#a3a3a3]">{editor.imageFiles.join(', ')}</p> : null}
+              </DarkField>
+
               <label className="flex min-h-11 items-center gap-3 rounded-sm border border-[#404040] bg-[#171717] px-3 text-sm font-semibold text-[#e5e5e5]">
                 <input
                   checked={Boolean(editor.hideDate)}
@@ -798,6 +986,11 @@ function ReportEditorModalV3({
                 value={editor.contentHtml}
               />
             </DarkField>
+
+            <div className="mt-5 rounded-xl border border-[#404040] bg-[#171717] p-5">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#a3a3a3]">PrÃ©-visualizaÃ§Ã£o</p>
+              <div className="min-h-24 text-sm leading-6 text-[#e5e5e5]" dangerouslySetInnerHTML={{ __html: sanitizePreviewHtml(editor.contentHtml) || '<p>O conteÃºdo do relatÃ³rio aparecerÃ¡ aqui.</p>' }} />
+            </div>
           </main>
         </div>
 
@@ -821,6 +1014,93 @@ function ReportEditorModalV3({
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+function ReportVersionsModal({ onClose, report }) {
+  const versions = [
+    {
+      date: report.updatedAt || report.createdAt,
+      label: report.updatedAt ? 'VersÃ£o atualizada' : 'VersÃ£o inicial',
+      user: report.createdByName || 'Sistema',
+    },
+    ...(report.contentJson?.versions || []),
+  ].filter(Boolean)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-2xl border border-[#404040] bg-[#262626] p-6 shadow-xl" onClick={(event) => event.stopPropagation()}>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-bold text-[#f5f5f5]">Controle de versÃµes</h2>
+            <p className="mt-1 text-xs text-[#a3a3a3]">{report.orderNumber || report.exam || 'RelatÃ³rio'}</p>
+          </div>
+          <button className="rounded-lg p-1.5 transition hover:bg-[#333333]" onClick={onClose} type="button">
+            <ReportIcon className="size-4 text-[#a3a3a3]" name="x" />
+          </button>
+        </div>
+        <div className="mt-5 grid gap-3">
+          {versions.map((version, index) => (
+            <div className="rounded-lg border border-[#404040] bg-[#1a1a1a] p-3" key={`${version.date}-${index}`}>
+              <p className="text-sm font-semibold text-[#e5e5e5]">{version.label || `VersÃ£o ${versions.length - index}`}</p>
+              <p className="mt-1 text-xs text-[#a3a3a3]">{formatDateTime(version.date)} - {version.user || 'UsuÃ¡rio nÃ£o informado'}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DeliveryProtocolModal({ onClose, onSave, report, viewerProfile }) {
+  const [protocol, setProtocol] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    responsible: viewerProfile?.name || viewerProfile?.email || '',
+    patientSignature: '',
+  })
+
+  function update(field, value) {
+    setProtocol((current) => ({ ...current, [field]: value }))
+  }
+
+  function submit(event) {
+    event.preventDefault()
+    onSave({
+      ...protocol,
+      recordedAt: new Date().toISOString(),
+      reportId: report.id,
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <form className="w-full max-w-xl rounded-2xl border border-[#404040] bg-[#262626] p-6 shadow-xl" onClick={(event) => event.stopPropagation()} onSubmit={submit}>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-bold text-[#f5f5f5]">Protocolo de entrega</h2>
+            <p className="mt-1 text-xs text-[#a3a3a3]">{report.patientName} - {report.exam}</p>
+          </div>
+          <button className="rounded-lg p-1.5 transition hover:bg-[#333333]" onClick={onClose} type="button">
+            <ReportIcon className="size-4 text-[#a3a3a3]" name="x" />
+          </button>
+        </div>
+        <div className="mt-5 grid gap-4">
+          <DarkField label="Data de entrega">
+            <input className={`${inputClass} [color-scheme:dark]`} onChange={(event) => update('date', event.target.value)} required type="date" value={protocol.date} />
+          </DarkField>
+          <DarkField label="ResponsÃ¡vel pela entrega">
+            <input className={inputClass} onChange={(event) => update('responsible', sanitizePlainText(event.target.value))} required value={protocol.responsible} />
+          </DarkField>
+          <DarkField label="Assinatura digital do paciente">
+            <textarea className={`${inputClass} min-h-24 py-2`} onChange={(event) => update('patientSignature', sanitizePlainText(event.target.value))} placeholder="Nome completo, token ou confirmaÃ§Ã£o eletrÃ´nica" required value={protocol.patientSignature} />
+          </DarkField>
+        </div>
+        <div className="mt-6 flex justify-end gap-3">
+          <button className="rounded-sm border border-[#404040] bg-[#1a1a1a] px-4 py-2 text-sm font-semibold text-[#e5e5e5]" onClick={onClose} type="button">Cancelar</button>
+          <button className="rounded-sm bg-[#3b82f6] px-4 py-2 text-sm font-semibold text-white" type="submit">Registrar entrega</button>
+        </div>
+      </form>
     </div>
   )
 }
@@ -1018,6 +1298,7 @@ function isReportEditorValid(editor) {
     editor.diagnosis,
     editor.conclusion,
     editor.status,
+    editor.digitalSignature,
     stripHtml(editor.contentHtml),
   ].every((value) => String(value || '').trim())
 }
@@ -1320,6 +1601,16 @@ function ReportIcon({ className = 'size-4', name }) {
         <path d="M7 8V4h10v4" />
         <path d="M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2" />
         <path d="M7 14h10v7H7zM17 12h.01" />
+      </svg>
+    )
+  }
+
+  if (name === 'more') {
+    return (
+      <svg {...common}>
+        <circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none" />
+        <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+        <circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none" />
       </svg>
     )
   }

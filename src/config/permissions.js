@@ -56,6 +56,7 @@ const ROLE_ROUTES = {
     '/perfil',
   ],
   medico: [
+    '/inicio', '/home', '/dashboard',
     '/agenda',
     '/pacientes',
     '/laudos',
@@ -64,6 +65,7 @@ const ROLE_ROUTES = {
     '/perfil',
   ],
   secretaria: [
+    '/inicio', '/home', '/dashboard',
     '/agenda',
     '/pacientes',
     '/comunicacao', '/mensagens',
@@ -147,6 +149,7 @@ export const ROLE_NAV_ITEMS = {
     { path: '/configuracoes', label: 'Configurações' },
   ],
   medico: [
+    { path: '/inicio', label: 'Painel' },
     { path: '/agenda', label: 'Agenda' },
     { path: '/pacientes', label: 'Pacientes' },
     { path: '/laudos', label: 'Relatórios' },
@@ -154,6 +157,7 @@ export const ROLE_NAV_ITEMS = {
     { path: '/configuracoes', label: 'Configurações' },
   ],
   secretaria: [
+    { path: '/inicio', label: 'Painel' },
     { path: '/agenda', label: 'Agenda' },
     { path: '/pacientes', label: 'Pacientes' },
     { path: '/comunicacao', label: 'Comunicação' },

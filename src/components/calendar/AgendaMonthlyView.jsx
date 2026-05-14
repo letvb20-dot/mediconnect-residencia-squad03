@@ -92,14 +92,19 @@ export function AgendaMonthlyView({ baseDate, appointments, onDayClick }) {
 
 function getStatusToneClass(status) {
   switch (status) {
+    case 'Confirmado':
     case 'Confirmada':
       return 'agenda-event-confirmed'
     case 'Em triagem':
       return 'agenda-event-triage'
+    case 'Cancelado':
     case 'Cancelada':
       return 'agenda-event-cancelled'
     case 'Bloqueado':
       return 'agenda-event-blocked'
+    case 'Realizado':
+      return 'agenda-event-finished'
+    case 'Agendado':
     case 'Aguardando':
     default:
       return 'agenda-event-waiting'
@@ -108,10 +113,17 @@ function getStatusToneClass(status) {
 
 function getDotColor(status) {
   switch (status) {
+    case 'Confirmado':
     case 'Confirmada':
       return 'bg-[#10b981]'
     case 'Em triagem':
       return 'bg-[#f59e0b]'
+    case 'Realizado':
+      return 'bg-[#60a5fa]'
+    case 'Cancelado':
+    case 'Cancelada':
+      return 'bg-[#f87171]'
+    case 'Agendado':
     case 'Aguardando':
       return 'bg-[#a3a3a3]'
     case 'Bloqueado':

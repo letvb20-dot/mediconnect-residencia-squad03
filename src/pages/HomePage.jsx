@@ -14,7 +14,7 @@ export function HomePage({ navigate, profile, role, user }) {
     let active = true
 
     homeRepository
-      .getDashboardOverview()
+      .getDashboardOverview({ profile, role, user })
       .then((data) => {
         if (active) setOverview(data)
       })
@@ -28,7 +28,7 @@ export function HomePage({ navigate, profile, role, user }) {
     return () => {
       active = false
     }
-  }, [])
+  }, [profile, role, user])
 
   if (loading) {
     return <p className="p-8 text-center text-sm text-[#a3a3a3]">Carregando painel...</p>
@@ -167,7 +167,7 @@ export function HomePage({ navigate, profile, role, user }) {
       </section>
       </div>
       {canManageUsers ? (
-        <aside className="min-w-0 self-start 2xl:sticky 2xl:top-6">
+        <aside className="min-w-0 self-start 2xl:sticky 2xl:top-6 2xl:pt-[104px]">
           <UsersPage embedded role={role} />
         </aside>
       ) : null}

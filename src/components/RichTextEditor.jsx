@@ -4,7 +4,9 @@ import StarterKit from '@tiptap/starter-kit'
 import TextAlign from '@tiptap/extension-text-align'
 import Underline from '@tiptap/extension-underline'
 
-export function RichTextEditor({ onChange, value }) {
+const DEFAULT_CHARACTER_LIMIT = 12000
+
+export function RichTextEditor({ characterLimit = DEFAULT_CHARACTER_LIMIT, onChange, value }) {
   const lastSyncedHtmlRef = useRef(value || '')
   const applyingExternalContentRef = useRef(false)
   const tiptapEditor = useEditor({
@@ -19,6 +21,13 @@ export function RichTextEditor({ onChange, value }) {
     editorProps: {
       attributes: {
         class: 'report-rich-surface min-h-[560px] px-4 py-3 text-sm leading-6 text-[#e5e5e5] outline-none',
+      },
+      handlePaste(view, event) {
+        const text = event.clipboardData?.getData('text/plain') || ''
+        return insertLimitedText(view, text, characterLimit)
+      },
+      handleTextInput(view, from, to, text) {
+        return insertLimitedText(view, text, characterLimit, from, to)
       },
     },
     shouldRerenderOnTransaction: false,
@@ -99,6 +108,18 @@ export function RichTextEditor({ onChange, value }) {
       <EditorContent editor={tiptapEditor} />
     </div>
   )
+}
+
+function insertLimitedText(view, text, characterLimit, from = view.state.selection.from, to = view.state.selection.to) {
+  const currentTextLength = view.state.doc.textContent.length
+  const selectedLength = view.state.doc.textBetween(from, to).length
+  const available = characterLimit - (currentTextLength - selectedLength)
+
+  if (available <= 0) return true
+  if (text.length <= available) return false
+
+  view.dispatch(view.state.tr.insertText(text.slice(0, available), from, to))
+  return true
 }
 
 function ToolbarButton({ active = false, disabled = false, label, name, onClick }) {

@@ -4,15 +4,31 @@ import { authRepository } from '../repositories/authRepository.js'
 import { patientRepository } from '../repositories/patientRepository.js'
 import { maskBrazilianPhone, maskCpf } from '../utils/inputSanitizers.js'
 
-import { BrandLogo } from '../components/Brand.jsx'
-import loginClinicImage from '../assets/figma/login-clinic.png'
+import { StethoscopeIcon } from '../components/Brand.jsx'
+
+// ─── Estilos ────────────────────────────────────────────────────────────────
+
+const dotPanelStyle = {
+  backgroundColor: '#071627',
+  backgroundImage: 'radial-gradient(rgba(255,255,255,0.08) 1px, transparent 1px)',
+  backgroundSize: '26px 26px',
+}
+
+const lightInputClass =
+  'h-11 w-full rounded-lg border border-gray-200 bg-white pl-10 pr-4 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
+
+const lightPasswordInputClass =
+  'h-11 w-full rounded-lg border border-gray-200 bg-white pl-10 pr-11 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
+
+const lightInputSimpleClass =
+  'h-11 w-full rounded-lg border border-gray-200 bg-white px-4 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
+
+// ─── Página de Login ─────────────────────────────────────────────────────────
 
 export function LoginPage({ navigate }) {
-  const [form, setForm] = useState({
-    email: '',
-    password: '',
-  })
+  const [form, setForm] = useState({ email: '', password: '' })
   const [showPassword, setShowPassword] = useState(false)
+  const [rememberMe, setRememberMe] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -24,7 +40,6 @@ export function LoginPage({ navigate }) {
     event.preventDefault()
     setLoading(true)
     setError('')
-
     try {
       await authRepository.login(form)
       navigate('/inicio')
@@ -36,127 +51,177 @@ export function LoginPage({ navigate }) {
   }
 
   return (
-    <main className="auth-dark min-h-screen text-white">
+    <main className="min-h-screen">
       <div className="grid min-h-screen lg:grid-cols-2">
-        <section className="relative hidden min-h-screen overflow-hidden lg:block">
-          <img
-            alt=""
-            className="absolute inset-0 h-full w-full object-cover"
-            src={loginClinicImage}
-          />
+
+        {/* Painel esquerdo (dark navy + dots) */}
+        <section
+          className="relative hidden min-h-screen overflow-hidden lg:flex lg:flex-col"
+          style={dotPanelStyle}
+        >
           <div
             aria-hidden="true"
-            className="absolute inset-0"
+            className="pointer-events-none absolute right-0 top-0 h-[480px] w-[480px]"
             style={{
               background:
-                'linear-gradient(126.72deg, rgba(10, 10, 10, 0.92) 0%, rgba(23, 23, 23, 0.72) 52%, rgba(59, 130, 246, 0.28) 100%)',
+                'radial-gradient(ellipse at top right, rgba(59,130,246,0.22) 0%, transparent 65%)',
             }}
           />
 
-          <div className="relative flex min-h-screen flex-col justify-between px-[43px] py-[43px] xl:px-12 xl:py-12">
-            <LoginLogo />
+          <div className="relative flex flex-1 flex-col justify-between px-12 py-10">
+            <RightLogo dark />
 
-            <div className="max-w-[488px] pb-0">
-              <h1 className="text-[32px] font-bold leading-[40px] tracking-[-0.02em] xl:text-4xl xl:leading-[45px]">
-                Gestão clínica
+            <div className="max-w-[440px]">
+              <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm text-white/80">
+                <span className="text-[#3b82f6]">✦</span>
+                Inteligência Artificial para sua clínica
+              </div>
+
+              <h1 className="text-[34px] font-bold leading-[1.22] tracking-tight text-white">
+                A gestão da sua clínica,
                 <br />
-                <span className="text-[#3b82f6]">inteligente</span> com IA
-                <br />
-                preditiva.
+                potencializada por IA.
               </h1>
-              <p className="mt-5 max-w-[352px] text-sm leading-[23px] text-white/60 xl:text-base xl:leading-[26px]">
-                Reduza o absenteísmo, organize sua agenda e melhore a experiência dos seus pacientes.
+
+              <p className="mt-4 max-w-[390px] text-sm leading-6 text-white/55">
+                Agendamentos inteligentes, prontuários assistidos e insights em tempo real.
+                Tudo em uma única plataforma pensada para profissionais de saúde.
               </p>
 
-              <dl className="mt-[38px] flex flex-wrap gap-8">
-                <LoginMetric label="Acurácia IA" value="87%" />
-                <LoginMetric label="Absenteísmo" value="↓42%" />
-                <LoginMetric label="Clínicas" value="+2.8k" />
-              </dl>
+              <ul className="mt-8 flex flex-col gap-4">
+                <LeftFeature icon={<ActivityIcon />} text="Prontuário eletrônico com sugestões automáticas" />
+                <LeftFeature icon={<SparkleIcon />}  text="Análises preditivas e relatórios em segundos" />
+                <LeftFeature icon={<ShieldIcon />}   text="Conformidade LGPD e dados criptografados" />
+              </ul>
+            </div>
+
+            <div className="flex items-center justify-between text-xs text-white/30">
+              <span>© 2026 Mediconnect</span>
+              <div className="flex gap-5">
+                {['Privacidade', 'Termos', 'Suporte'].map((label) => (
+                  <button key={label} className="transition hover:text-white/60" type="button">
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </section>
 
-        <section className="relative flex min-h-screen items-center justify-center px-6 py-12 sm:px-10 lg:px-[60px] xl:px-[68px]">
-          <div className="w-full max-w-[448px] lg:translate-y-3">
-            <div className="mb-12 lg:hidden">
-              <LoginLogo />
-            </div>
+        {/* Painel direito (branco) */}
+        <section className="flex min-h-screen items-center justify-center bg-white px-6 py-12 sm:px-10 lg:px-16">
+          <div className="w-full max-w-[420px]">
 
-            <div>
-              <h2 className="text-[30px] font-bold leading-9 text-white">Entrar</h2>
-              <p className="mt-1 text-sm leading-5 text-white/40">
-                Bem-vindo(a) de volta! Acesse sua conta.
-              </p>
-            </div>
+            <RightLogo />
+
+            <h2 className="mt-8 text-[28px] font-bold leading-tight text-gray-900">
+              Bem-vindo de volta
+            </h2>
+            <p className="mt-1.5 text-sm text-gray-500">
+              Acesse sua conta para continuar gerenciando sua clínica.
+            </p>
 
             {error && (
-              <div className="mt-4 rounded bg-red-500/10 p-3 text-sm font-semibold text-red-500 border border-red-500/20">
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-600">
                 {error}
               </div>
             )}
 
-            <form className="mt-8 grid gap-5" onSubmit={handleSubmit}>
-              <LoginField htmlFor="login-email" label="E-mail">
-                <input
-                  autoComplete="email"
-                  className={authInputClass}
-                  id="login-email"
-                  onChange={(event) => updateField('email', event.target.value)}
-                  placeholder="seu@email.com"
-                  type="email"
-                  value={form.email}
-                />
-              </LoginField>
+            <form className="mt-7 grid gap-5" onSubmit={handleSubmit}>
 
-              <LoginField
-                action={
+              <LightField htmlFor="login-email" label="E-mail">
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                    <MailIcon />
+                  </span>
+                  <input
+                    autoComplete="email"
+                    className={lightInputClass}
+                    id="login-email"
+                    onChange={(e) => updateField('email', e.target.value)}
+                    placeholder="seu@email.com"
+                    required
+                    type="email"
+                    value={form.email}
+                  />
+                </div>
+              </LightField>
+
+              <div className="grid gap-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-gray-700" htmlFor="login-password">
+                    Senha
+                  </label>
                   <button
-                    className="text-xs font-medium leading-4 text-[#3b82f6] transition hover:text-[#66a3ff]"
+                    className="text-sm text-[#3b82f6] transition hover:text-blue-700"
                     onClick={() => navigate('/recuperar-senha')}
                     type="button"
                   >
-                    Esqueceu a senha?
+                    Esqueceu?
                   </button>
-                }
-                htmlFor="login-password"
-                label="Senha"
-              >
+                </div>
                 <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                    <LockIcon />
+                  </span>
                   <input
                     autoComplete="current-password"
-                    className={authPasswordInputClass}
+                    className={lightPasswordInputClass}
                     id="login-password"
-                    onChange={(event) => updateField('password', event.target.value)}
+                    onChange={(e) => updateField('password', e.target.value)}
                     placeholder="••••••••"
+                    required
                     type={showPassword ? 'text' : 'password'}
                     value={form.password}
                   />
                   <button
                     aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
-                    className="absolute right-3 top-1/2 grid size-5 -translate-y-1/2 place-items-center text-white/30 transition hover:text-white/60"
-                    onClick={() => setShowPassword((current) => !current)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition hover:text-gray-600"
+                    onClick={() => setShowPassword((p) => !p)}
                     type="button"
                   >
                     <EyeIcon />
                   </button>
                 </div>
-              </LoginField>
+              </div>
+
+              <label className="flex cursor-pointer items-center gap-2.5 text-sm text-gray-600">
+                <input
+                  checked={rememberMe}
+                  className="size-4 rounded border-gray-300 accent-[#3b82f6]"
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  type="checkbox"
+                />
+                Manter-me conectado
+              </label>
 
               <button
-                className="inline-flex h-11 w-full items-center justify-center rounded-[6px] border border-[#3b82f6] bg-[#3b82f6] px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_15px_rgba(59,130,246,0.2),0_4px_6px_rgba(59,130,246,0.2)] transition hover:bg-[#3478ed] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3b82f6] disabled:opacity-50"
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#3b82f6] text-sm font-semibold text-white shadow-sm transition hover:bg-blue-600 disabled:opacity-50"
                 disabled={loading}
                 type="submit"
               >
-                {loading ? 'Entrando...' : 'Entrar'}
+                {loading ? 'Entrando...' : <><span>Entrar</span><span>→</span></>}
               </button>
             </form>
+
+            <p className="mt-6 text-center text-sm text-gray-500">
+              Não tem uma conta?{' '}
+              <button
+                className="font-medium text-[#3b82f6] transition hover:text-blue-700"
+                onClick={() => navigate('/cadastro')}
+                type="button"
+              >
+                Criar conta gratuita
+              </button>
+            </p>
           </div>
         </section>
       </div>
     </main>
   )
 }
+
+// ─── Página de Cadastro ───────────────────────────────────────────────────────
 
 export function RegisterPage({ navigate }) {
   const [form, setForm] = useState({
@@ -178,24 +243,20 @@ export function RegisterPage({ navigate }) {
         : field === 'phone_mobile'
           ? maskBrazilianPhone(value)
           : value
-
     setForm((current) => ({ ...current, [field]: nextValue }))
   }
 
   async function handleSubmit(event) {
     event.preventDefault()
     setError('')
-
     if (form.password.length < 6) {
       setError('A senha deve ter pelo menos 6 caracteres.')
       return
     }
-
     if (form.password !== form.confirm_password) {
       setError('A confirmação de senha não confere.')
       return
     }
-
     setLoading(true)
     try {
       await patientRepository.registerWithPassword(form)
@@ -209,103 +270,107 @@ export function RegisterPage({ navigate }) {
   }
 
   return (
-    <AuthLayout
-      description="Crie seu acesso de paciente com CPF, celular e senha."
-      title="Cadastro de paciente"
-    >
+    <AuthLayout description="Crie seu acesso de paciente com CPF, celular e senha." title="Cadastro de paciente">
       {error ? (
-        <div className="mt-4 rounded bg-red-500/10 p-3 text-sm font-semibold text-red-500 border border-red-500/20">
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-600">
           {error}
         </div>
       ) : null}
       <form className="mt-8 grid gap-5" onSubmit={handleSubmit}>
-        <AuthField label="Nome completo">
+        <LightField label="Nome completo">
           <input
             autoComplete="name"
-            className={authInputClass}
-            onChange={(event) => updateField('full_name', event.target.value)}
+            className={lightInputSimpleClass}
+            onChange={(e) => updateField('full_name', e.target.value)}
             required
             value={form.full_name}
           />
-        </AuthField>
-        <AuthField label="E-mail">
+        </LightField>
+        <LightField label="E-mail">
           <input
             autoComplete="email"
-            className={authInputClass}
-            onChange={(event) => updateField('email', event.target.value)}
+            className={lightInputSimpleClass}
+            onChange={(e) => updateField('email', e.target.value)}
+            placeholder="seu@email.com"
             required
             type="email"
             value={form.email}
           />
-        </AuthField>
+        </LightField>
         <div className="grid gap-5 sm:grid-cols-2">
-          <AuthField label="CPF">
+          <LightField label="CPF">
             <input
               autoComplete="off"
-              className={authInputClass}
+              className={lightInputSimpleClass}
               maxLength={14}
-              onChange={(event) => updateField('cpf', event.target.value)}
+              onChange={(e) => updateField('cpf', e.target.value)}
               required
               value={form.cpf}
             />
-          </AuthField>
-          <AuthField label="Celular">
+          </LightField>
+          <LightField label="Celular">
             <input
               autoComplete="tel"
-              className={authInputClass}
+              className={lightInputSimpleClass}
               maxLength={15}
-              onChange={(event) => updateField('phone_mobile', event.target.value)}
+              onChange={(e) => updateField('phone_mobile', e.target.value)}
               required
               value={form.phone_mobile}
             />
-          </AuthField>
+          </LightField>
         </div>
-        <AuthField label="Data de nascimento">
+        <LightField label="Data de nascimento">
           <input
-            className={`${authInputClass} [color-scheme:dark]`}
-            onChange={(event) => updateField('birth_date', event.target.value)}
+            className={lightInputSimpleClass}
+            onChange={(e) => updateField('birth_date', e.target.value)}
             type="date"
             value={form.birth_date}
           />
-        </AuthField>
+        </LightField>
         <div className="grid gap-5 sm:grid-cols-2">
-          <AuthField label="Senha">
+          <LightField label="Senha">
             <input
               autoComplete="new-password"
-              className={authInputClass}
+              className={lightInputSimpleClass}
               minLength={6}
-              onChange={(event) => updateField('password', event.target.value)}
+              onChange={(e) => updateField('password', e.target.value)}
               required
               type="password"
               value={form.password}
             />
-          </AuthField>
-          <AuthField label="Confirmar senha">
+          </LightField>
+          <LightField label="Confirmar senha">
             <input
               autoComplete="new-password"
-              className={authInputClass}
+              className={lightInputSimpleClass}
               minLength={6}
-              onChange={(event) => updateField('confirm_password', event.target.value)}
+              onChange={(e) => updateField('confirm_password', e.target.value)}
               required
               type="password"
               value={form.confirm_password}
             />
-          </AuthField>
+          </LightField>
         </div>
         <button
-          className="inline-flex h-11 w-full items-center justify-center rounded-[6px] bg-[#3b82f6] text-sm font-semibold text-white shadow-[0_10px_15px_rgba(59,130,246,0.2)] transition hover:bg-[#3478ed] disabled:opacity-60"
+          className="inline-flex h-11 w-full items-center justify-center rounded-lg bg-[#3b82f6] text-sm font-semibold text-white shadow-sm transition hover:bg-blue-600 disabled:opacity-60"
           disabled={loading}
           type="submit"
         >
           {loading ? 'Cadastrando...' : 'Cadastrar'}
         </button>
       </form>
-      <button className="mt-5 text-sm font-semibold text-[#3b82f6]" onClick={() => navigate('/login')} type="button">
-        Voltar para login
+      <button
+        className="mt-5 text-sm font-medium text-[#3b82f6] transition hover:text-blue-700"
+        onClick={() => navigate('/login')}
+        type="button"
+      >
+        ← Voltar para login
       </button>
     </AuthLayout>
   )
 }
+
+// ─── Página de Recuperar Senha ────────────────────────────────────────────────
 
 export function ForgotPasswordPage({ navigate }) {
   const [sent, setSent] = useState(false)
@@ -333,76 +398,113 @@ export function ForgotPasswordPage({ navigate }) {
       title="Recuperar senha"
     >
       {sent ? (
-        <div className="mt-8 rounded-[6px] border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm leading-6 text-emerald-300">
+        <div className="mt-8 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-700">
           Link de recuperação enviado para o e-mail informado. Siga as instruções do link!
         </div>
       ) : (
-        <form
-          className="mt-8 grid gap-5"
-          onSubmit={handleSubmit}
-        >
+        <form className="mt-8 grid gap-5" onSubmit={handleSubmit}>
           {error && (
-            <div className="rounded bg-red-500/10 p-3 text-sm font-semibold text-red-500 border border-red-500/20">
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-600">
               {error}
             </div>
           )}
-          <AuthField label="E-mail cadastrado">
-            <input autoComplete="email" className={authInputClass} onChange={e => setEmail(e.target.value)} value={email} type="email" />
-          </AuthField>
-          <button 
-            className="inline-flex h-11 w-full items-center justify-center rounded-[6px] bg-[#3b82f6] text-sm font-semibold text-white shadow-[0_10px_15px_rgba(59,130,246,0.2)] transition hover:bg-[#3478ed] disabled:opacity-50" 
+          <LightField label="E-mail cadastrado">
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                <MailIcon />
+              </span>
+              <input
+                autoComplete="email"
+                className={lightInputClass}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="seu@email.com"
+                required
+                type="email"
+                value={email}
+              />
+            </div>
+          </LightField>
+          <button
+            className="inline-flex h-11 w-full items-center justify-center rounded-lg bg-[#3b82f6] text-sm font-semibold text-white shadow-sm transition hover:bg-blue-600 disabled:opacity-50"
             disabled={loading}
             type="submit"
           >
-            {loading ? "Enviando..." : "Enviar link"}
+            {loading ? 'Enviando...' : 'Enviar link'}
           </button>
         </form>
       )}
-      <button className="mt-5 text-sm font-semibold text-[#3b82f6]" onClick={() => navigate('/login')} type="button">
-        Voltar para login
+      <button
+        className="mt-5 text-sm font-medium text-[#3b82f6] transition hover:text-blue-700"
+        onClick={() => navigate('/login')}
+        type="button"
+      >
+        ← Voltar para login
       </button>
     </AuthLayout>
   )
 }
 
+// ─── Layout compartilhado ─────────────────────────────────────────────────────
+
 function AuthLayout({ children, description, title }) {
   return (
-    <main className="auth-dark min-h-screen text-white">
+    <main className="min-h-screen">
       <div className="grid min-h-screen lg:grid-cols-2">
-        <section className="relative hidden min-h-screen overflow-hidden lg:block">
-          <img alt="" className="absolute inset-0 h-full w-full object-cover" src={loginClinicImage} />
+
+        <section
+          className="relative hidden min-h-screen overflow-hidden lg:flex lg:flex-col"
+          style={dotPanelStyle}
+        >
           <div
             aria-hidden="true"
-            className="absolute inset-0"
+            className="pointer-events-none absolute right-0 top-0 h-[480px] w-[480px]"
             style={{
               background:
-                'linear-gradient(126.72deg, rgba(10, 10, 10, 0.92) 0%, rgba(23, 23, 23, 0.72) 52%, rgba(59, 130, 246, 0.28) 100%)',
+                'radial-gradient(ellipse at top right, rgba(59,130,246,0.22) 0%, transparent 65%)',
             }}
           />
-          <div className="relative flex min-h-screen flex-col justify-between px-[43px] py-[43px] xl:px-12 xl:py-12">
-            <LoginLogo />
-            <div className="max-w-[488px]">
-              <h1 className="text-[32px] font-bold leading-[40px] tracking-[-0.02em] xl:text-4xl xl:leading-[45px]">
-                Cuidado conectado
+          <div className="relative flex flex-1 flex-col justify-between px-12 py-10">
+            <RightLogo dark />
+            <div className="max-w-[440px]">
+              <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm text-white/80">
+                <span className="text-[#3b82f6]">✦</span>
+                Inteligência Artificial para sua clínica
+              </div>
+              <h1 className="text-[34px] font-bold leading-[1.22] tracking-tight text-white">
+                A gestão da sua clínica,
                 <br />
-                para equipes de
-                <br />
-                <span className="text-[#3b82f6]">saúde.</span>
+                potencializada por IA.
               </h1>
-              <p className="mt-5 max-w-[360px] text-sm leading-[23px] text-white/60 xl:text-base xl:leading-[26px]">
-                Segurança e continuidade para equipes de saúde.
+              <p className="mt-4 max-w-[390px] text-sm leading-6 text-white/55">
+                Agendamentos inteligentes, prontuários assistidos e insights em tempo real.
+                Tudo em uma única plataforma pensada para profissionais de saúde.
               </p>
+              <ul className="mt-8 flex flex-col gap-4">
+                <LeftFeature icon={<ActivityIcon />} text="Prontuário eletrônico com sugestões automáticas" />
+                <LeftFeature icon={<SparkleIcon />}  text="Análises preditivas e relatórios em segundos" />
+                <LeftFeature icon={<ShieldIcon />}   text="Conformidade LGPD e dados criptografados" />
+              </ul>
+            </div>
+            <div className="flex items-center justify-between text-xs text-white/30">
+              <span>© 2026 Mediconnect</span>
+              <div className="flex gap-5">
+                {['Privacidade', 'Termos', 'Suporte'].map((label) => (
+                  <button key={label} className="transition hover:text-white/60" type="button">
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </section>
 
-        <section className="flex min-h-screen items-center justify-center px-6 py-12 sm:px-10 lg:px-[60px] xl:px-[68px]">
-          <div className="w-full max-w-[448px] lg:translate-y-3">
-            <div className="mb-12 lg:hidden">
-              <LoginLogo />
+        <section className="flex min-h-screen items-center justify-center bg-white px-6 py-12 sm:px-10 lg:px-16">
+          <div className="w-full max-w-[420px]">
+            <div className="mb-8 lg:hidden">
+              <RightLogo />
             </div>
-            <h2 className="text-[30px] font-bold leading-9 text-white">{title}</h2>
-            <p className="mt-1 text-sm leading-5 text-white/40">{description}</p>
+            <h2 className="text-[28px] font-bold leading-tight text-gray-900">{title}</h2>
+            <p className="mt-1.5 text-sm text-gray-500">{description}</p>
             {children}
           </div>
         </section>
@@ -411,64 +513,95 @@ function AuthLayout({ children, description, title }) {
   )
 }
 
-const authInputClass =
-  'auth-input h-11 w-full rounded-[6px] border px-4 text-sm outline-none transition focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20'
-const authPasswordInputClass =
-  'auth-input h-11 w-full rounded-[6px] border py-2 pl-4 pr-11 text-sm outline-none transition focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20'
+// ─── Sub-componentes ──────────────────────────────────────────────────────────
 
-function AuthField({ children, label }) {
+function RightLogo({ dark = false }) {
   return (
-    <label className="grid gap-1.5 text-xs font-medium leading-4 text-[#a3a3a3]">
-      <span>{label}</span>
-      {children}
-    </label>
+    <div className="flex items-center gap-3">
+      <div className="flex size-10 shrink-0 items-center justify-center rounded-[10px] bg-[#3b82f6]">
+        <StethoscopeIcon className="size-5 text-white" />
+      </div>
+      <div>
+        <p className={`font-bold leading-tight ${dark ? 'text-white' : 'text-gray-900'}`}>
+          Mediconnect
+        </p>
+        <p className={`text-xs ${dark ? 'text-white/50' : 'text-gray-500'}`}>
+          Gestão clínica com IA
+        </p>
+      </div>
+    </div>
   )
 }
 
-function LoginField({ action, children, htmlFor, label }) {
+function LeftFeature({ icon, text }) {
+  return (
+    <li className="flex items-center gap-3">
+      <div className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-[#3b82f6]">
+        {icon}
+      </div>
+      <span className="text-sm text-white/65">{text}</span>
+    </li>
+  )
+}
+
+function LightField({ children, htmlFor, label }) {
   return (
     <div className="grid gap-1.5">
-      <span className="flex min-h-4 items-center justify-between gap-4 text-xs font-medium leading-4 text-[#a3a3a3]">
-        <label htmlFor={htmlFor}>{label}</label>
-        {action}
-      </span>
+      <label className="text-sm font-medium text-gray-700" htmlFor={htmlFor}>
+        {label}
+      </label>
       {children}
     </div>
   )
 }
 
-function LoginLogo() {
+// ─── Ícones ───────────────────────────────────────────────────────────────────
+
+function MailIcon() {
   return (
-    <BrandLogo />
+    <svg aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
+    </svg>
   )
 }
 
-function LoginMetric({ label, value }) {
+function LockIcon() {
   return (
-    <div>
-      <dt className="text-[21px] font-bold leading-7 text-[#3b82f6] xl:text-2xl xl:leading-8">{value}</dt>
-      <dd className="mt-0.5 text-[11px] leading-4 text-white/50 xl:text-xs">{label}</dd>
-    </div>
+    <svg aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+    </svg>
   )
 }
 
 function EyeIcon() {
   return (
-    <svg aria-hidden="true" className="size-4" fill="none" viewBox="0 0 16 16">
-      <path
-        d="M1.375 8.23c-.06-.16-.06-.34 0-.5a7.16 7.16 0 0 1 13.25 0c.06.16.06.34 0 .5a7.16 7.16 0 0 1-13.25 0Z"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="1.33"
-      />
-      <path
-        d="M8 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="1.33"
-      />
+    <svg aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+    </svg>
+  )
+}
+
+function ActivityIcon() {
+  return (
+    <svg aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 12h3l3-9 4 18 3-9h5" />
+    </svg>
+  )
+}
+
+function SparkleIcon() {
+  return (
+    <svg aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z" />
+    </svg>
+  )
+}
+
+function ShieldIcon() {
+  return (
+    <svg aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
     </svg>
   )
 }

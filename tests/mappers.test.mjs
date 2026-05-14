@@ -4,7 +4,7 @@ import test from 'node:test'
 import { appointmentMapper } from '../src/mappers/appointmentMapper.js'
 import { reportMapper } from '../src/mappers/reportMapper.js'
 
-test('appointmentMapper envia valores aceitos pela API Supabase', () => {
+test('appointmentMapper envia apenas campos aceitos pelo contrato da API', () => {
   const payload = appointmentMapper.toApi(
     {
       patientId: 'patient-1',
@@ -13,7 +13,7 @@ test('appointmentMapper envia valores aceitos pela API Supabase', () => {
       time: '10:30',
       mode: 'Teleconsulta',
       status: 'Agendado',
-      notes: '',
+      notes: 'algumas anotacoes',
     },
     'supabase',
   )
@@ -23,7 +23,10 @@ test('appointmentMapper envia valores aceitos pela API Supabase', () => {
   assert.equal(payload.appointment_type, 'telemedicina')
   assert.equal(payload.status, 'requested')
   assert.equal(payload.duration_minutes, 30)
-  assert.equal('notes' in payload, true)
+  // Contrato OpenAPI: doctor_id, patient_id, scheduled_at, duration_minutes, status, created_by
+  // (appointment_type aceito pela tabela). `notes` e `observations` não fazem parte do contrato.
+  assert.equal('notes' in payload, false)
+  assert.equal('observations' in payload, false)
 })
 
 test('appointmentMapper converte resposta da API para labels da agenda', () => {

@@ -222,7 +222,7 @@ export function MessagesPage({ role }) {
     ])
     notificationRepository.notifyCurrentUser({
       domain: 'communication',
-      title: 'ComunicaÃ§Ã£o registrada',
+      title: 'Comunicação registrada',
       detail: `${channels[composer.channel].label} para ${composer.patient.trim()} foi ${composer.channel === 'sms' && smsSent ? 'enviado' : 'registrado'}.`,
       patientId: composer.patientId,
     }).catch(() => null)
@@ -438,7 +438,7 @@ export function MessagesPage({ role }) {
                     onClick={() => {
                       setComposer({
                         patientId: '',
-                        patient: campaign.count,
+                        patient: '',
                         phone: '',
                         channel: 'whatsapp',
                         template: campaign.title,

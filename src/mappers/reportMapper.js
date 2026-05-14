@@ -26,9 +26,12 @@ export const reportMapper = {
   },
 
   toApi(uiData) {
+    // ReportInput (campos documentados):
+    // patient_id*, status, exam, requested_by, cid_code, diagnosis, conclusion,
+    // content_html, content_json, hide_date, hide_signature, due_at
+    // Não envia: id, order_number, created_by, updated_by, created_at, updated_at (geridos pelo banco)
     return cleanPayload({
       patient_id: uiData.patientId,
-      order_number: emptyToUndefined(uiData.orderNumber),
       status: normalizeApiStatus(uiData.status),
       exam: emptyToUndefined(uiData.exam),
       requested_by: emptyToUndefined(uiData.requestedBy),
@@ -40,19 +43,16 @@ export const reportMapper = {
       hide_date: uiData.hideDate === undefined ? undefined : Boolean(uiData.hideDate),
       hide_signature: uiData.hideSignature === undefined ? undefined : Boolean(uiData.hideSignature),
       due_at: emptyToUndefined(uiData.dueAt),
-      created_by: emptyToUndefined(uiData.createdBy),
-      updated_by: emptyToUndefined(uiData.updatedBy),
     })
   },
 }
 
 function normalizeStatus(status) {
+  // Enum API: draft | completed
+  // UI usa 'finalized' como alias de 'completed' (retrocompat).
   const normalized = String(status || '').toLowerCase()
-  if (['sent', 'enviado', 'delivered', 'emailed'].includes(normalized)) {
-    return 'sent'
-  }
 
-  if (['finalized', 'finalizado', 'finished', 'completed', 'complete', 'done'].includes(normalized)) {
+  if (['finalized', 'finalizado', 'finished', 'completed', 'complete', 'done', 'sent', 'enviado'].includes(normalized)) {
     return 'finalized'
   }
 
@@ -60,8 +60,9 @@ function normalizeStatus(status) {
 }
 
 function normalizeApiStatus(status) {
-  if (status === 'sent' || status === 'enviado') return 'sent'
-  return status === 'finalized' || status === 'completed' ? 'completed' : 'draft'
+  // Enum documentado: draft | completed
+  if (status === 'finalized' || status === 'completed' || status === 'sent') return 'completed'
+  return 'draft'
 }
 
 function emptyToUndefined(value) {

@@ -16,6 +16,7 @@ const PatientsPage = lazyPage(() => import('./pages/PatientsPage.jsx'), 'Patient
 const ProfilePage = lazyPage(() => import('./pages/ProfilePage.jsx'), 'ProfilePage')
 const ReportsPage = lazyPage(() => import('./pages/ReportsPage.jsx'), 'ReportsPage')
 const SettingsPage = lazyPage(() => import('./pages/SettingsPage.jsx'), 'SettingsPage')
+const UsersPage = lazyPage(() => import('./pages/UsersPage.jsx'), 'UsersPage')
 const VisitsPage = lazyPage(() => import('./pages/VisitsPage.jsx'), 'VisitsPage')
 
 const PANEL_PATHS = ['/inicio', '/home', '/dashboard']
@@ -215,7 +216,7 @@ function RouteErrorFallback() {
   return (
     <div className="flex min-h-[40vh] items-center justify-center px-4">
       <div className="max-w-xl rounded-2xl border border-red-500/40 bg-[#262626] p-6 text-center shadow-sm">
-        <h2 className="text-lg font-bold text-[#e5e5e5]">NÃ£o foi possÃ­vel carregar esta tela</h2>
+        <h2 className="text-lg font-bold text-[#e5e5e5]">Não foi possível carregar esta tela</h2>
         <p className="mt-2 text-sm leading-6 text-[#a3a3a3]">
           Ocorreu um erro ao abrir o modulo. Recarregue a pagina e tente novamente.
         </p>
@@ -313,16 +314,7 @@ function resolveRoute(pathname, navigate, role, profile, user) {
     }
   }
 
-  if (pathname === '/camunicacao') {
-    navigate('/comunicacao', { replace: true })
-    return {
-      element: <MessagesPage navigate={navigate} role={role} />,
-      title: 'Comunicação',
-      withShell: true,
-    }
-  }
-
-  if (pathname === '/comunicacao' || pathname === '/mensagens') {
+  if (pathname === '/comunicacao' || pathname === '/mensagens' || pathname === '/camunicacao') {
     return {
       element: <MessagesPage navigate={navigate} role={role} />,
       title: 'Comunicação',
@@ -331,10 +323,9 @@ function resolveRoute(pathname, navigate, role, profile, user) {
   }
 
   if (pathname === '/usuarios') {
-    navigate('/inicio', { replace: true })
     return {
-      element: <HomePage navigate={navigate} profile={profile} role={role} user={user} />,
-      title: 'Painel',
+      element: <UsersPage navigate={navigate} profile={profile} role={role} />,
+      title: 'Usuários',
       withShell: true,
     }
   }

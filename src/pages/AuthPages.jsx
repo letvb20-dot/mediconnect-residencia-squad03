@@ -260,8 +260,10 @@ export function RegisterPage({ navigate }) {
     }
     setLoading(true)
     try {
-      await patientRepository.registerWithPassword(form)
-      window.alert('Cadastro realizado. Você já pode fazer login.')
+      // A API só oferece auto-cadastro via Magic Link (não há endpoint público
+      // com senha). O paciente recebe um email para acessar a plataforma.
+      await patientRepository.registerPublic(form)
+      window.alert('Cadastro realizado. Verifique seu email para acessar a plataforma.')
       navigate('/login')
     } catch (err) {
       setError(err.message || 'Erro ao realizar cadastro.')

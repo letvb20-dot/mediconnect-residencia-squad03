@@ -93,10 +93,12 @@ export const appointmentMapper = {
 
   toApi(uiData, dialect = 'api') {
     if (dialect === 'supabase') {
-      // Monta o scheduled_at no formato ISO assumindo fuso local
-      const scheduledAt = new Date(`${uiData.date}T${uiData.time}:00`).toISOString()
-      const highPriority = Boolean(uiData.highPriority)
-      const notes = withPriorityMarker(uiData.notes, highPriority)
+      // Contrato OpenAPI /rest/v1/appointments:
+      // doctor_id, patient_id, scheduled_at, duration_minutes, status, created_by
+      // (appointment_type não está no contrato mas tabela parece aceitar — manter)
+      const scheduledAt = uiData.date && uiData.time
+        ? new Date(`${uiData.date}T${uiData.time}:00`).toISOString()
+        : undefined
 
       return {
         patient_id: uiData.patientId,
@@ -104,8 +106,6 @@ export const appointmentMapper = {
         scheduled_at: scheduledAt,
         appointment_type: uiData.mode === 'Teleconsulta' ? 'telemedicina' : 'presencial',
         status: toApiStatus(uiData.status),
-        notes: emptyToUndefined(notes),
-        observations: emptyToUndefined(notes),
         duration_minutes: Number(uiData.durationMinutes) || 30,
         created_by: emptyToUndefined(uiData.createdBy),
       }

@@ -742,7 +742,7 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
               <DarkField className="md:col-span-3" label="Outros documentos">
                 <input className={darkInput} name="otherDocuments" onChange={handleChange} value={formData.otherDocuments} />
               </DarkField>
-              <DarkField className="md:col-span-3" label="NÃºmero do documento">
+              <DarkField className="md:col-span-3" label="Número do documento">
                 <input className={darkInput} maxLength={11} name="documentNumber" onChange={handleChange} value={formData.documentNumber} />
               </DarkField>
               <DarkField className="md:col-span-3" label="Sexo">
@@ -751,7 +751,7 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
                   <option>Feminino</option>
                   <option>Masculino</option>
                   <option>Intersexo</option>
-                  <option>Prefere nÃ£o informar</option>
+                  <option>Prefere não informar</option>
                 </select>
               </DarkField>
               <DarkField className="md:col-span-3" label={requiredLabel('Idade')}>
@@ -781,15 +781,15 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
               <DarkField className="md:col-span-6" label="Nome do pai">
                 <input className={darkInput} name="fatherName" onChange={handleChange} value={formData.fatherName} />
               </DarkField>
-              <DarkField className="md:col-span-3" label="RaÃ§a">
+              <DarkField className="md:col-span-3" label="Raça">
                 <select className={darkInput} name="race" onChange={handleChange} value={formData.race}>
                   <option value="">Selecione</option>
                   <option>Branca</option>
                   <option>Preta</option>
                   <option>Parda</option>
                   <option>Amarela</option>
-                  <option>IndÃ­gena</option>
-                  <option>NÃ£o informada</option>
+                  <option>Indígena</option>
+                  <option>Não informada</option>
                 </select>
               </DarkField>
               <DarkField className="md:col-span-3" label="Naturalidade">
@@ -798,19 +798,19 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
               <DarkField className="md:col-span-3" label="Nacionalidade">
                 <input className={darkInput} name="nationality" onChange={handleChange} value={formData.nationality} />
               </DarkField>
-              <DarkField className="md:col-span-3" label="ProfissÃ£o">
+              <DarkField className="md:col-span-3" label="Profissão">
                 <input className={darkInput} name="profession" onChange={handleChange} value={formData.profession} />
               </DarkField>
-              <DarkField className="md:col-span-6" label="ProfissÃ£o da mÃ£e">
+              <DarkField className="md:col-span-6" label="Profissão da mãe">
                 <input className={darkInput} name="motherProfession" onChange={handleChange} value={formData.motherProfession} />
               </DarkField>
-              <DarkField className="md:col-span-6" label="ProfissÃ£o do pai">
+              <DarkField className="md:col-span-6" label="Profissão do pai">
                 <input className={darkInput} name="fatherProfession" onChange={handleChange} value={formData.fatherProfession} />
               </DarkField>
-              <DarkField className="md:col-span-6" label="Nome do responsÃ¡vel">
+              <DarkField className="md:col-span-6" label="Nome do responsável">
                 <input className={darkInput} name="responsibleName" onChange={handleChange} value={formData.responsibleName} />
               </DarkField>
-              <DarkField className="md:col-span-3" label="CPF do responsÃ¡vel">
+              <DarkField className="md:col-span-3" label="CPF do responsável">
                 <input className={darkInput} maxLength={14} name="responsibleCpf" onChange={handleChange} value={formData.responsibleCpf} />
               </DarkField>
               <DarkField className="md:col-span-3" label="Nome do esposo(a)">
@@ -1180,16 +1180,16 @@ function PatientSummary({ patient }) {
             ['Nome social', patient.socialName],
             ['RG', patient.rg],
             ['Outros documentos', patient.otherDocuments],
-            ['NÃºmero do documento', patient.documentNumber],
+            ['Número do documento', patient.documentNumber],
             ['Sexo', patient.sex],
-            ['ProfissÃ£o da mÃ£e', patient.motherProfession],
-            ['ProfissÃ£o do pai', patient.fatherProfession],
-            ['RaÃ§a', patient.race],
+            ['Profissão da mãe', patient.motherProfession],
+            ['Profissão do pai', patient.fatherProfession],
+            ['Raça', patient.race],
             ['Naturalidade', patient.naturality],
             ['Nacionalidade', patient.nationality],
-            ['ProfissÃ£o', patient.profession],
-            ['ResponsÃ¡vel', patient.responsibleName],
-            ['CPF do responsÃ¡vel', patient.responsibleCpf],
+            ['Profissão', patient.profession],
+            ['Responsável', patient.responsibleName],
+            ['CPF do responsável', patient.responsibleCpf],
             ['Esposo(a)', patient.spouseName],
             ['CPF', patient.cpf || patient.document],
             ['Data de nascimento', formatDisplayDate(patient.birthDate || patient.birth_date)],

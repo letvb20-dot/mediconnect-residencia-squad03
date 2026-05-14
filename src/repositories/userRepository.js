@@ -1,18 +1,17 @@
-import { apiConfig, apiEndpoint, getAuthenticatedHeaders } from '../config/api.js'
+import { apiConfig, getAuthenticatedHeaders } from '../config/api.js'
 import { normalizeRole } from '../config/permissions.js'
-import { fetchJsonWithFallback, getResponseError, normalizeCollection } from './repositoryUtils.js'
+import { getResponseError, normalizeCollection } from './repositoryUtils.js'
 
-const USER_PROFILE_TABLES = ['user_info', 'profiles', 'user_profiles']
+const USER_PROFILE_TABLES = ['profiles', 'user_profiles']
 const USER_LIST_KEYS = ['users', 'usuarios', 'data', 'items', 'results']
 
 export const userRepository = {
+  // GET /rest/v1/profiles - listagem indireta (não está no contrato; é uma necessidade da UI)
   async getAll() {
     let lastResponse = null
 
     for (const table of USER_PROFILE_TABLES) {
-      const query = new URLSearchParams({
-        select: '*',
-      })
+      const query = new URLSearchParams({ select: '*' })
       const response = await fetch(`${apiConfig.restUrl}/${table}?${query.toString()}`, {
         headers: getAuthenticatedHeaders(),
       }).catch(() => null)
@@ -28,6 +27,7 @@ export const userRepository = {
         return users.map((user) => mergeUserRoles(user, rolesByUserId))
       }
 
+      // 404/406 -> próxima tabela; outros erros estouram
       if (![404, 406].includes(response.status)) {
         throw new Error(await getResponseError(response, 'Erro ao listar usuários.'))
       }
@@ -36,30 +36,24 @@ export const userRepository = {
     throw new Error(await getResponseError(lastResponse, 'Tabela de perfis de usuários não encontrada.'))
   },
 
+  // POST /functions/v1/user-info-by-id
+  // Body: { user_id }
   async getById(userId) {
-    return fetchJsonWithFallback(
-      [
-        {
-          url: apiEndpoint('/user-info-by-id'),
-          options: {
-            method: 'POST',
-            headers: getAuthenticatedHeaders(),
-            body: JSON.stringify({ user_id: userId, userId }),
-          },
-        },
-        {
-          url: `${apiConfig.functionsUrl}/user-info-by-id`,
-          options: {
-            method: 'POST',
-            headers: getAuthenticatedHeaders(),
-            body: JSON.stringify({ user_id: userId, userId }),
-          },
-        },
-      ],
-      'Erro ao buscar usuário.',
-    )
+    const response = await fetch(`${apiConfig.functionsUrl}/user-info-by-id`, {
+      method: 'POST',
+      headers: getAuthenticatedHeaders(),
+      body: JSON.stringify({ user_id: userId }),
+    })
+
+    if (!response.ok) {
+      throw new Error(await getResponseError(response, 'Erro ao buscar usuário.'))
+    }
+
+    return response.json()
   },
 
+  // POST /functions/v1/create-user
+  // Body documentado: email*, full_name*, role*, phone?, create_patient_record?, cpf?, phone_mobile?
   async create(data) {
     const response = await fetch(`${apiConfig.functionsUrl}/create-user`, {
       method: 'POST',
@@ -74,46 +68,35 @@ export const userRepository = {
     return response.json()
   },
 
+  // POST /functions/v1/create-user-with-password
+  // Body documentado: email*, password*, full_name*, phone?, role?, roles?, create_patient_record?, cpf?, phone_mobile?
   async createWithPassword(data) {
     const body = {
-      ...buildCreateUserBody(data),
+      ...buildCreateUserWithPasswordBody(data),
       password: data.password,
     }
 
-    return fetchJsonWithFallback(
-      [
-        {
-          url: apiEndpoint('/create-user-with-password'),
-          options: {
-            method: 'POST',
-            headers: getAuthenticatedHeaders(),
-            body: JSON.stringify(body),
-          },
-        },
-        {
-          url: `${apiConfig.functionsUrl}/create-user-with-password`,
-          options: {
-            method: 'POST',
-            headers: getAuthenticatedHeaders(),
-            body: JSON.stringify(body),
-          },
-        },
-      ],
-      'Erro ao criar usuário com senha.',
-    )
+    const response = await fetch(`${apiConfig.functionsUrl}/create-user-with-password`, {
+      method: 'POST',
+      headers: getAuthenticatedHeaders(),
+      body: JSON.stringify(body),
+    })
+
+    if (!response.ok) {
+      throw new Error(await getResponseError(response, 'Erro ao criar usuário com senha.'))
+    }
+
+    return response.json()
   },
 
+  // PATCH /rest/v1/{profiles|user_profiles}?id=eq.{id}
+  // Atualização direta da tabela de perfis (não há endpoint dedicado na API)
   async update(userId, data) {
     let lastResponse = null
     const body = cleanPayload({
       email: data.email?.trim(),
       full_name: data.full_name?.trim(),
       phone: data.phone?.trim(),
-      phone_mobile: data.phone?.trim(),
-      cpf: data.cpf?.trim(),
-      role: data.role,
-      crm: data.crm?.trim(),
-      crm_uf: data.crm_uf?.trim() || data.crmUf?.trim(),
     })
 
     for (const table of USER_PROFILE_TABLES) {
@@ -139,11 +122,13 @@ export const userRepository = {
     throw new Error(await getResponseError(lastResponse, 'Tabela de perfis de usuários não encontrada.'))
   },
 
+  // POST /functions/v1/delete-user
+  // Body: { userId }
   async remove(userId) {
     const response = await fetch(`${apiConfig.functionsUrl}/delete-user`, {
       method: 'POST',
       headers: getAuthenticatedHeaders(),
-      body: JSON.stringify({ userId, user_id: userId }),
+      body: JSON.stringify({ userId }),
     })
 
     if (!response.ok) {
@@ -156,21 +141,43 @@ export const userRepository = {
 
 function buildCreateUserBody(data) {
   const role = normalizeRole(data.role) || data.role
+  const createPatientRecord = Boolean(data.create_patient_record)
   const body = {
     email: data.email?.trim(),
     full_name: data.full_name?.trim(),
     phone: data.phone?.trim(),
-    phone_mobile: data.phone_mobile?.trim() || data.phone?.trim(),
-    cpf: data.cpf?.trim(),
     role,
-    roles: data.roles || (role ? [role] : undefined),
-    create_patient_record: Boolean(data.create_patient_record),
-    crm: data.crm?.trim(),
-    crm_uf: data.crm_uf?.trim() || data.crmUf?.trim(),
-    specialty: data.specialty?.trim() || data.specialidade?.trim(),
+    create_patient_record: createPatientRecord,
+    // cpf / phone_mobile só são obrigatórios quando create_patient_record = true
+    cpf: createPatientRecord ? onlyDigits(data.cpf) : undefined,
+    phone_mobile: createPatientRecord
+      ? (data.phone_mobile?.trim() || data.phone?.trim())
+      : undefined,
   }
 
   return cleanPayload(body)
+}
+
+function buildCreateUserWithPasswordBody(data) {
+  const role = normalizeRole(data.role) || data.role
+  const createPatientRecord = Boolean(data.create_patient_record)
+  const body = {
+    email: data.email?.trim(),
+    full_name: data.full_name?.trim(),
+    phone: data.phone?.trim(),
+    role,
+    create_patient_record: createPatientRecord,
+    cpf: createPatientRecord ? onlyDigits(data.cpf) : undefined,
+    phone_mobile: createPatientRecord
+      ? (data.phone_mobile?.trim() || data.phone?.trim())
+      : undefined,
+  }
+
+  return cleanPayload(body)
+}
+
+function onlyDigits(value) {
+  return String(value || '').replace(/\D/g, '') || undefined
 }
 
 function normalizeListedUser(user) {
@@ -255,7 +262,7 @@ function flattenRoleCandidates(candidates) {
 
 function resolveUserStatus(user, emailConfirmedAt) {
   if (user.deleted_at || user.blocked_at || user.banned_until) return 'blocked'
-  if (emailConfirmedAt || user.email_confirmed || user.confirmed || user.active || user.is_active) return 'active'
+  if (emailConfirmedAt || user.email_confirmed === true || user.confirmed === true || user.active === true || user.is_active === true) return 'active'
 
   const rawStatus = String(
     firstValue(user, ['status', 'situacao', 'account_status', 'invite_status']) || '',

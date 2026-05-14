@@ -5,37 +5,44 @@ const availabilityBaseUrl = `${apiConfig.restUrl}/doctor_availability`
 const exceptionsBaseUrl = `${apiConfig.restUrl}/doctor_exceptions`
 
 export const availabilityRepository = {
+  // GET /rest/v1/doctor_availability
+  // Filtros documentados: doctor_id, weekday (0-6), active, appointment_type, select
   async getAll(filters = {}) {
-    const rows = await fetchAvailabilityRows(filters)
-    return filterAvailabilityRows(rows.map(mapAvailability), filters)
-  },
+    const query = buildAvailabilityQuery(filters)
+    const response = await fetch(`${availabilityBaseUrl}?${query.toString()}`, {
+      headers: getAuthenticatedHeaders(),
+    })
 
-  async create(data) {
-    let lastResponse = null
-
-    for (const payload of buildAvailabilityPayloads(data)) {
-      const response = await fetch(availabilityBaseUrl, {
-        method: 'POST',
-        headers: getAuthenticatedHeaders({ Prefer: 'return=representation' }),
-        body: JSON.stringify(payload),
-      })
-
-      if (response.ok) {
-        return mapAvailability(normalizeItem(await response.json()))
-      }
-
-      lastResponse = response
-      if (response.status !== 400) break
+    if (!response.ok) {
+      throw new Error(await getResponseError(response, 'Falha ao listar disponibilidades.'))
     }
 
-    throw new Error(await getResponseError(lastResponse, 'Falha ao criar disponibilidade.'))
+    return normalizeCollection(await response.json(), []).map(mapAvailability)
   },
 
+  // POST /rest/v1/doctor_availability
+  // Body documentado: doctor_id*, weekday* (0-6), start_time*, end_time*, slot_minutes?, appointment_type?, active?
+  async create(data) {
+    const response = await fetch(availabilityBaseUrl, {
+      method: 'POST',
+      headers: getAuthenticatedHeaders({ Prefer: 'return=representation' }),
+      body: JSON.stringify(toAvailabilityPayload(data)),
+    })
+
+    if (!response.ok) {
+      throw new Error(await getResponseError(response, 'Falha ao criar disponibilidade.'))
+    }
+
+    return mapAvailability(normalizeItem(await response.json()))
+  },
+
+  // PATCH /rest/v1/doctor_availability?id=eq.{uuid}
+  // Body documentado: start_time?, end_time?, slot_minutes?, active?, appointment_type?
   async update(id, data) {
     const response = await fetch(`${availabilityBaseUrl}?id=eq.${encodeURIComponent(id)}`, {
       method: 'PATCH',
       headers: getAuthenticatedHeaders({ Prefer: 'return=representation' }),
-      body: JSON.stringify(toAvailabilityPayload(data)),
+      body: JSON.stringify(toAvailabilityUpdatePayload(data)),
     })
 
     if (!response.ok) {
@@ -45,6 +52,7 @@ export const availabilityRepository = {
     return mapAvailability(normalizeItem(await response.json()))
   },
 
+  // DELETE /rest/v1/doctor_availability?id=eq.{uuid}
   async remove(id) {
     const response = await fetch(`${availabilityBaseUrl}?id=eq.${encodeURIComponent(id)}`, {
       method: 'DELETE',
@@ -58,174 +66,107 @@ export const availabilityRepository = {
     return true
   },
 
+  // GET /rest/v1/doctor_exceptions
+  // Filtros documentados: doctor_id, date, kind (bloqueio|disponibilidade_extra)
   async getExceptions(filters = {}) {
-    const query = buildRestQuery(filters)
+    const query = new URLSearchParams()
+    query.set('select', filters.select || '*')
+    if (filters.doctorId) query.set('doctor_id', `eq.${filters.doctorId}`)
+    if (filters.date) query.set('date', `eq.${filters.date}`)
+    if (filters.kind) query.set('kind', `eq.${filters.kind}`)
+
     const response = await fetch(`${exceptionsBaseUrl}?${query.toString()}`, {
       headers: getAuthenticatedHeaders(),
     })
 
     if (!response.ok) {
-      throw new Error(await getResponseError(response, 'Falha ao listar excecoes de agenda.'))
+      throw new Error(await getResponseError(response, 'Falha ao listar exceções de agenda.'))
     }
 
     return normalizeCollection(await response.json(), []).map(mapException)
   },
 
+  // POST /rest/v1/doctor_exceptions
+  // Body documentado: doctor_id*, date*, kind* (bloqueio|disponibilidade_extra), created_by*, start_time?, end_time?, reason?
   async createException(data) {
-    let lastResponse = null
+    const response = await fetch(exceptionsBaseUrl, {
+      method: 'POST',
+      headers: getAuthenticatedHeaders({ Prefer: 'return=representation' }),
+      body: JSON.stringify(toExceptionPayload(data)),
+    })
 
-    for (const payload of buildExceptionPayloads(data)) {
-      const response = await fetch(exceptionsBaseUrl, {
-        method: 'POST',
-        headers: getAuthenticatedHeaders({ Prefer: 'return=representation' }),
-        body: JSON.stringify(payload),
-      })
-
-      if (response.ok) {
-        return mapException(normalizeItem(await response.json()))
-      }
-
-      lastResponse = response
-      if (response.status !== 400) break
+    if (!response.ok) {
+      throw new Error(await getResponseError(response, 'Falha ao criar exceção de agenda.'))
     }
 
-    throw new Error(await getResponseError(lastResponse, 'Falha ao criar exceção de agenda.'))
+    return mapException(normalizeItem(await response.json()))
   },
 
-  async getAvailableSlots({ appointmentType, date, doctorId }) {
+  // POST /functions/v1/get-available-slots
+  // Body documentado: doctor_id*, date* (YYYY-MM-DD)
+  async getAvailableSlots({ date, doctorId }) {
     if (!doctorId || !date) {
       throw new Error('Selecione médico e data para calcular os horários disponíveis.')
     }
 
-    const payload = {
-      doctor_id: doctorId,
-      start_date: date,
-      end_date: date,
-      appointment_type: normalizeAppointmentType(appointmentType),
+    const response = await fetch(`${apiConfig.functionsUrl}/get-available-slots`, {
+      method: 'POST',
+      headers: getAuthenticatedHeaders(),
+      body: JSON.stringify({
+        doctor_id: doctorId,
+        date,
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(await getResponseError(response, 'Falha ao calcular slots disponíveis.'))
     }
 
-    const data = await fetchSlotsWithFallback([
-      {
-        url: `${apiConfig.functionsUrl.replace(/\/+$/, '')}/get-available-slots`,
-        body: {
-          doctor_id: payload.doctor_id,
-          start_date: payload.start_date,
-          end_date: payload.end_date,
-          appointment_type: payload.appointment_type,
-        },
-      },
-      {
-        url: `${apiConfig.apiUrl.replace(/\/+$/, '')}/get-available-slots`,
-        body: payload,
-      },
-    ])
-
+    const data = await response.json()
     return normalizeCollection(data, ['slots']).map(mapSlot)
   },
 }
 
-async function fetchSlotsWithFallback(requests) {
-  let lastResponse = null
-
-  for (const request of requests) {
-    const response = await fetch(request.url, {
-      method: 'POST',
-      headers: getAuthenticatedHeaders(),
-      body: JSON.stringify(request.body),
-    }).catch(() => null)
-
-    if (!response) continue
-    lastResponse = response
-    if (response.ok) return response.json()
-    if (![400, 404, 405].includes(response.status)) break
-  }
-
-  throw new Error(await getResponseError(lastResponse, 'Falha ao calcular slots disponíveis.'))
-}
-
-function buildRestQuery(filters) {
+function buildAvailabilityQuery(filters) {
   const query = new URLSearchParams()
   query.set('select', filters.select || '*')
-
   if (filters.doctorId) query.set('doctor_id', `eq.${filters.doctorId}`)
-  if (filters.weekday !== undefined) query.set('weekday', `eq.${filters.weekday}`)
-  if (filters.active !== undefined) query.set('active', `eq.${filters.active}`)
-  if (filters.appointmentType) query.set('appointment_type', `eq.${filters.appointmentType}`)
-  if (filters.date) query.set('date', `eq.${filters.date}`)
-  if (filters.kind) query.set('kind', `eq.${filters.kind}`)
+  if (filters.weekday !== undefined && filters.weekday !== null) {
+    query.set('weekday', `eq.${Number(filters.weekday)}`)
+  }
+  if (filters.active !== undefined && filters.active !== null) {
+    query.set('active', `eq.${Boolean(filters.active)}`)
+  }
+  if (filters.appointmentType) {
+    query.set('appointment_type', `eq.${normalizeAppointmentType(filters.appointmentType)}`)
+  }
   if (filters.order) query.set('order', filters.order)
-
   return query
 }
 
-async function fetchAvailabilityRows(filters) {
-  const queries = [
-    buildRestQuery(filters),
-    buildRestQuery({
-      doctorId: filters.doctorId,
-      select: '*',
-    }),
-    buildRestQuery({ select: '*' }),
-  ]
-  let lastResponse = null
-
-  for (const query of queries) {
-    const response = await fetch(`${availabilityBaseUrl}?${query.toString()}`, {
-      headers: getAuthenticatedHeaders(),
-    }).catch(() => null)
-
-    if (!response) continue
-    lastResponse = response
-
-    if (response.ok) {
-      return normalizeCollection(await response.json(), [])
-    }
-
-    if (![400, 404, 406].includes(response.status)) break
-  }
-
-  throw new Error(await getResponseError(lastResponse, 'Falha ao listar disponibilidades.'))
-}
-
-function filterAvailabilityRows(rows, filters) {
-  const normalizedType = normalizeAppointmentType(filters.appointmentType)
-
-  return rows.filter((row) => {
-    if (filters.doctorId && String(row.doctorId) !== String(filters.doctorId)) return false
-    if (filters.weekday !== undefined && Number(row.weekday) !== Number(filters.weekday)) return false
-    if (filters.active !== undefined && Boolean(row.active) !== Boolean(filters.active)) return false
-    if (filters.appointmentType && normalizeAppointmentType(row.appointmentType) !== normalizedType) return false
-
-    return true
-  })
-}
-
-function toAvailabilityPayload(data, { withSeconds = false } = {}) {
+function toAvailabilityPayload(data) {
   return cleanPayload({
     doctor_id: data.doctorId,
     weekday: Number(data.weekday),
-    start_time: formatTimeForApi(data.startTime, { withSeconds }),
-    end_time: formatTimeForApi(data.endTime, { withSeconds }),
-    slot_minutes: Number(data.slotMinutes) || 30,
+    start_time: formatTimeForApi(data.startTime),
+    end_time: formatTimeForApi(data.endTime),
+    slot_minutes: data.slotMinutes !== undefined ? Number(data.slotMinutes) : 30,
     appointment_type: normalizeAppointmentType(data.appointmentType),
-    active: data.active,
+    active: data.active === undefined ? true : Boolean(data.active),
   })
 }
 
-function buildAvailabilityPayloads(data) {
-  const fullPayload = toAvailabilityPayload(data)
-  const payloadWithSeconds = toAvailabilityPayload(data, { withSeconds: true })
-
-  return uniquePayloads([
-    fullPayload,
-    omitFields(fullPayload, ['appointment_type']),
-    omitFields(fullPayload, ['active']),
-    omitFields(fullPayload, ['appointment_type', 'active']),
-    payloadWithSeconds,
-    omitFields(payloadWithSeconds, ['appointment_type']),
-    omitFields(payloadWithSeconds, ['active']),
-    omitFields(payloadWithSeconds, ['appointment_type', 'active']),
-  ])
+function toAvailabilityUpdatePayload(data) {
+  // PATCH: enviar somente campos que vieram explicitamente (não incluir doctor_id nem weekday)
+  return cleanPayload({
+    start_time: data.startTime !== undefined ? formatTimeForApi(data.startTime) : undefined,
+    end_time: data.endTime !== undefined ? formatTimeForApi(data.endTime) : undefined,
+    slot_minutes: data.slotMinutes !== undefined ? Number(data.slotMinutes) : undefined,
+    active: data.active !== undefined ? Boolean(data.active) : undefined,
+    appointment_type: data.appointmentType !== undefined
+      ? normalizeAppointmentType(data.appointmentType)
+      : undefined,
+  })
 }
 
 function toExceptionPayload(data) {
@@ -235,19 +176,9 @@ function toExceptionPayload(data) {
     kind: data.kind,
     start_time: data.startTime || null,
     end_time: data.endTime || null,
-    reason: data.reason,
+    reason: data.reason || null,
     created_by: data.createdBy || getCurrentUserId(),
-  })
-}
-
-function buildExceptionPayloads(data) {
-  const fullPayload = toExceptionPayload(data)
-
-  return uniquePayloads([
-    fullPayload,
-    omitFields(fullPayload, ['start_time', 'end_time']),
-    omitFields(fullPayload, ['start_time', 'end_time', 'reason']),
-  ])
+  }, { keepNull: true })
 }
 
 function mapAvailability(item) {
@@ -297,34 +228,21 @@ function normalizeAppointmentType(type) {
   return normalized.includes('tele') ? 'telemedicina' : 'presencial'
 }
 
-function cleanPayload(payload) {
+function cleanPayload(payload, { keepNull = false } = {}) {
   return Object.fromEntries(
-    Object.entries(payload).filter(([, value]) => value !== undefined),
+    Object.entries(payload).filter(([, value]) => {
+      if (value === undefined) return false
+      if (!keepNull && value === null) return false
+      return true
+    }),
   )
 }
 
-function formatTimeForApi(value, { withSeconds = false } = {}) {
+function formatTimeForApi(value) {
+  // API aceita HH:MM. Aceita também HH:MM:SS (formato 'time'), mas HH:MM é suficiente.
   const match = String(value || '').match(/^(\d{2}):(\d{2})(?::(\d{2}))?$/)
   if (!match) return value
-
-  return withSeconds ? `${match[1]}:${match[2]}:${match[3] || '00'}` : `${match[1]}:${match[2]}`
-}
-
-function omitFields(payload, fields) {
-  return Object.fromEntries(
-    Object.entries(payload).filter(([field]) => !fields.includes(field)),
-  )
-}
-
-function uniquePayloads(payloads) {
-  const seen = new Set()
-
-  return payloads.filter((payload) => {
-    const signature = JSON.stringify(payload)
-    if (seen.has(signature)) return false
-    seen.add(signature)
-    return true
-  })
+  return `${match[1]}:${match[2]}`
 }
 
 function getCurrentUserId() {

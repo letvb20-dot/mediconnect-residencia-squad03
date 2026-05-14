@@ -217,7 +217,7 @@ function buildSatisfactionIndicators(appointments) {
     return {
       average: 0,
       responses: 0,
-      label: 'Sem avaliaÃ§Ãµes registradas',
+      label: 'Sem avaliações registradas',
     }
   }
 
@@ -225,7 +225,7 @@ function buildSatisfactionIndicators(appointments) {
   return {
     average: Math.round(average * 10) / 10,
     responses: ratedAppointments.length,
-    label: `${ratedAppointments.length} avaliaÃ§Ãµes`,
+    label: `${ratedAppointments.length} avaliações`,
   }
 }
 

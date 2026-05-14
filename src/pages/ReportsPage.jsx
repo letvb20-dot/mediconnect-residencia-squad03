@@ -321,7 +321,7 @@ export function ReportsPage({ role }) {
         await reportRepository.update(editor.id, payload)
         notificationRepository.notifyCurrentUser({
           domain: 'reports',
-          title: 'RelatÃ³rio atualizado',
+          title: 'Relatório atualizado',
           detail: `${payload.exam} de ${patientNameById[String(payload.patientId)] || 'paciente selecionado'} foi atualizado.`,
           patientId: payload.patientId,
           relatedUserIds: [payload.updatedBy, payload.createdBy, viewerProfile?.id, currentProfessional?.id, currentProfessional?.userId],
@@ -330,7 +330,7 @@ export function ReportsPage({ role }) {
         await reportRepository.create(payload)
         notificationRepository.notifyCurrentUser({
           domain: 'reports',
-          title: 'RelatÃ³rio criado',
+          title: 'Relatório criado',
           detail: `${payload.exam} de ${patientNameById[String(payload.patientId)] || 'paciente selecionado'} foi registrado.`,
           patientId: payload.patientId,
           relatedUserIds: [payload.createdBy, payload.updatedBy, viewerProfile?.id, currentProfessional?.id, currentProfessional?.userId],
@@ -347,7 +347,7 @@ export function ReportsPage({ role }) {
   }
 
   async function releaseReport(report) {
-    if (!window.confirm('Liberar este relatÃ³rio para impressÃ£o e envio ao paciente?')) return
+    if (!window.confirm('Liberar este relatório para impressão e envio ao paciente?')) return
 
     try {
       await reportRepository.update(report.id, {
@@ -357,25 +357,25 @@ export function ReportsPage({ role }) {
       })
       await loadReports()
     } catch (releaseError) {
-      alert(releaseError.message || 'Erro ao liberar relatÃ³rio.')
+      alert(releaseError.message || 'Erro ao liberar relatório.')
     }
   }
 
   async function deleteReport(report) {
     if (!canDeleteReports) {
-      alert('Apenas gestor ou administrador podem excluir relatÃ³rios.')
+      alert('Apenas gestor ou administrador podem excluir relatórios.')
       return
     }
 
-    if (!window.confirm('Este relatÃ³rio contÃ©m dados sensÃ­veis. Deseja continuar?')) return
-    const confirmation = window.prompt('Digite EXCLUIR para confirmar a remoÃ§Ã£o definitiva do relatÃ³rio.')
+    if (!window.confirm('Este relatório contém dados sensíveis. Deseja continuar?')) return
+    const confirmation = window.prompt('Digite EXCLUIR para confirmar a remoção definitiva do relatório.')
     if (confirmation !== 'EXCLUIR') return
 
     try {
       await reportRepository.remove(report.id)
       await loadReports()
     } catch (deleteError) {
-      alert(deleteError.message || 'Erro ao excluir relatÃ³rio.')
+      alert(deleteError.message || 'Erro ao excluir relatório.')
     }
   }
 
@@ -902,7 +902,7 @@ function ReportEditorModalV3({
                 </div>
               </DarkField>
 
-              <DarkField label="MÃ©dico responsÃ¡vel *">
+              <DarkField label="Médico responsável *">
                 <div className="relative">
                   <input
                     className={inputClass}
@@ -946,7 +946,7 @@ function ReportEditorModalV3({
               </DarkField>
 
               <DarkField label="Assinatura digital *">
-                <input className={inputClass} onChange={(event) => updateField('digitalSignature', sanitizePlainText(event.target.value))} placeholder="CRM, certificado ou assinatura eletrÃ´nica" value={editor.digitalSignature} />
+                <input className={inputClass} onChange={(event) => updateField('digitalSignature', sanitizePlainText(event.target.value))} placeholder="CRM, certificado ou assinatura eletrônica" value={editor.digitalSignature} />
               </DarkField>
 
               <DarkField label="Importar PDF">
@@ -988,8 +988,8 @@ function ReportEditorModalV3({
             </DarkField>
 
             <div className="mt-5 rounded-xl border border-[#404040] bg-[#171717] p-5">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#a3a3a3]">PrÃ©-visualizaÃ§Ã£o</p>
-              <div className="min-h-24 text-sm leading-6 text-[#e5e5e5]" dangerouslySetInnerHTML={{ __html: sanitizePreviewHtml(editor.contentHtml) || '<p>O conteÃºdo do relatÃ³rio aparecerÃ¡ aqui.</p>' }} />
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#a3a3a3]">Pré-visualização</p>
+              <div className="min-h-24 text-sm leading-6 text-[#e5e5e5]" dangerouslySetInnerHTML={{ __html: sanitizePreviewHtml(editor.contentHtml) || '<p>O conteúdo do relatório aparecerá aqui.</p>' }} />
             </div>
           </main>
         </div>
@@ -1022,7 +1022,7 @@ function ReportVersionsModal({ onClose, report }) {
   const versions = [
     {
       date: report.updatedAt || report.createdAt,
-      label: report.updatedAt ? 'VersÃ£o atualizada' : 'VersÃ£o inicial',
+      label: report.updatedAt ? 'Versão atualizada' : 'Versão inicial',
       user: report.createdByName || 'Sistema',
     },
     ...(report.contentJson?.versions || []),
@@ -1033,8 +1033,8 @@ function ReportVersionsModal({ onClose, report }) {
       <div className="w-full max-w-lg rounded-2xl border border-[#404040] bg-[#262626] p-6 shadow-xl" onClick={(event) => event.stopPropagation()}>
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-bold text-[#f5f5f5]">Controle de versÃµes</h2>
-            <p className="mt-1 text-xs text-[#a3a3a3]">{report.orderNumber || report.exam || 'RelatÃ³rio'}</p>
+            <h2 className="text-lg font-bold text-[#f5f5f5]">Controle de versões</h2>
+            <p className="mt-1 text-xs text-[#a3a3a3]">{report.orderNumber || report.exam || 'Relatório'}</p>
           </div>
           <button className="rounded-lg p-1.5 transition hover:bg-[#333333]" onClick={onClose} type="button">
             <ReportIcon className="size-4 text-[#a3a3a3]" name="x" />
@@ -1043,8 +1043,8 @@ function ReportVersionsModal({ onClose, report }) {
         <div className="mt-5 grid gap-3">
           {versions.map((version, index) => (
             <div className="rounded-lg border border-[#404040] bg-[#1a1a1a] p-3" key={`${version.date}-${index}`}>
-              <p className="text-sm font-semibold text-[#e5e5e5]">{version.label || `VersÃ£o ${versions.length - index}`}</p>
-              <p className="mt-1 text-xs text-[#a3a3a3]">{formatDateTime(version.date)} - {version.user || 'UsuÃ¡rio nÃ£o informado'}</p>
+              <p className="text-sm font-semibold text-[#e5e5e5]">{version.label || `Versão ${versions.length - index}`}</p>
+              <p className="mt-1 text-xs text-[#a3a3a3]">{formatDateTime(version.date)} - {version.user || 'Usuário não informado'}</p>
             </div>
           ))}
         </div>
@@ -1089,11 +1089,11 @@ function DeliveryProtocolModal({ onClose, onSave, report, viewerProfile }) {
           <DarkField label="Data de entrega">
             <input className={`${inputClass} [color-scheme:dark]`} onChange={(event) => update('date', event.target.value)} required type="date" value={protocol.date} />
           </DarkField>
-          <DarkField label="ResponsÃ¡vel pela entrega">
+          <DarkField label="Responsável pela entrega">
             <input className={inputClass} onChange={(event) => update('responsible', sanitizePlainText(event.target.value))} required value={protocol.responsible} />
           </DarkField>
           <DarkField label="Assinatura digital do paciente">
-            <textarea className={`${inputClass} min-h-24 py-2`} onChange={(event) => update('patientSignature', sanitizePlainText(event.target.value))} placeholder="Nome completo, token ou confirmaÃ§Ã£o eletrÃ´nica" required value={protocol.patientSignature} />
+            <textarea className={`${inputClass} min-h-24 py-2`} onChange={(event) => update('patientSignature', sanitizePlainText(event.target.value))} placeholder="Nome completo, token ou confirmação eletrônica" required value={protocol.patientSignature} />
           </DarkField>
         </div>
         <div className="mt-6 flex justify-end gap-3">
@@ -1325,7 +1325,7 @@ function printReportAsPdf(report, status) {
     : `${printDetail('Criado em', formatDate(report.createdAt))}${printDetail('Prazo', formatDateTime(report.dueAt))}`
   const signatureDetails = report.hideSignature ? '' : printDetail('Criado por', report.createdByName)
   const iframe = document.createElement('iframe')
-  iframe.setAttribute('title', 'ImpressÃ£o do relatÃ³rio')
+  iframe.setAttribute('title', 'Impressão do relatório')
   iframe.style.position = 'fixed'
   iframe.style.right = '0'
   iframe.style.bottom = '0'

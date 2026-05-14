@@ -91,7 +91,7 @@ export const medicalRecordRepository = {
       }
 
       if (![400, 404, 406].includes(response.status)) {
-        throw new Error(await getResponseError(response, 'Erro ao buscar prontuÃ¡rio.'))
+        throw new Error(await getResponseError(response, 'Erro ao buscar prontuário.'))
       }
     }
 
@@ -116,11 +116,11 @@ export const medicalRecordRepository = {
       }
 
       if (![400, 404, 406].includes(response.status)) {
-        throw new Error(await getResponseError(response, 'Erro ao atualizar prontuÃ¡rio.'))
+        throw new Error(await getResponseError(response, 'Erro ao atualizar prontuário.'))
       }
     }
 
-    throw new Error(await getResponseError(lastResponse, 'API de prontuÃ¡rios nÃ£o encontrada.'))
+    throw new Error(await getResponseError(lastResponse, 'API de prontuários não encontrada.'))
   },
 }
 

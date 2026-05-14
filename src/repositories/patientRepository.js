@@ -1,9 +1,10 @@
-import { apiConfig, apiEndpoint, getAnonHeaders, getAuthenticatedHeaders, getAuthSession } from '../config/api.js'
+import { apiConfig, getAnonHeaders, getAuthenticatedHeaders, getAuthSession } from '../config/api.js'
 import { cleanPersonName, formatBrazilianPhone, formatCpf, isValidPersonName, onlyDigits } from '../utils/brFormatters.js'
-import { fetchJsonWithFallback, getResponseError } from './repositoryUtils.js'
+import { getResponseError } from './repositoryUtils.js'
 
 export const patientRepository = {
-  // 1. Listar pacientes
+  // GET /rest/v1/patients
+  // Filtros documentados: select, limit, offset, order, full_name, cpf
   async getAll(filters = {}) {
     const query = new URLSearchParams()
     query.set('select', filters.select || '*')
@@ -39,46 +40,12 @@ export const patientRepository = {
     return visiblePatients.map((patient) => mapPatientToDirectory(patient, appointments))
   },
 
-  // 2. Criar paciente (direto)
+  // POST /functions/v1/create-patient
+  // Cria paciente como usuário autenticado (admin/secretária) com validação de CPF.
+  // Body documentado: email*, full_name*, cpf* (^\d{11}$), phone_mobile*, birth_date?
   async create(data) {
     validatePatientPayload(data)
-    const restPayload = buildPatientPayloads(data, { includeCreatedBy: true })[1]
-
-    return fetchJsonWithFallback(
-      [
-        {
-          url: apiEndpoint('/register-patient'),
-          options: {
-            method: 'POST',
-            headers: getAnonHeaders(),
-            body: JSON.stringify(buildRegisterPatientPayload(data)),
-          },
-        },
-        {
-          url: `${apiConfig.functionsUrl}/register-patient`,
-          options: {
-            method: 'POST',
-            headers: getAnonHeaders(),
-            body: JSON.stringify(buildRegisterPatientPayload(data)),
-          },
-        },
-        {
-          url: `${apiConfig.restUrl}/patients`,
-          options: {
-            method: 'POST',
-            headers: getAuthenticatedHeaders({ Prefer: 'return=representation' }),
-            body: JSON.stringify(restPayload),
-          },
-        },
-      ],
-      'Erro ao criar paciente.',
-    )
-  },
-
-  // 3. Criar paciente com validação de CPF (Edge Function)
-  async createWithValidation(data) {
-    validatePatientPayload(data)
-    const body = buildPatientBody(data, { includeCreatedBy: true })
+    const body = buildCreatePatientBody(data)
 
     const response = await fetch(`${apiConfig.functionsUrl}/create-patient`, {
       method: 'POST',
@@ -87,94 +54,58 @@ export const patientRepository = {
     })
 
     if (!response.ok) {
-      throw new Error(await getResponseError(response, 'Erro ao criar paciente com validação.'))
+      throw new Error(await getResponseError(response, 'Erro ao criar paciente.'))
     }
 
     return response.json()
   },
 
+  // POST /functions/v1/create-patient (alias mais explícito)
+  // Mesmo endpoint que `create`, mantido como método separado para retrocompatibilidade.
+  async createWithValidation(data) {
+    return this.create(data)
+  },
+
+  // POST /functions/v1/register-patient
+  // Auto-cadastro PÚBLICO (sem auth Bearer). phone_mobile deve ser ^\d{10,11}$
+  // Body documentado: email*, full_name* (min 3), phone_mobile* (^\d{10,11}$), cpf* (^\d{11}$), birth_date?, redirect_url?
   async registerPublic(data) {
     validatePatientPayload(data)
     const body = buildRegisterPatientPayload(data)
 
-    return fetchJsonWithFallback(
-      [
-        {
-          url: apiEndpoint('/register-patient'),
-          options: {
-            method: 'POST',
-            headers: getAnonHeaders(),
-            body: JSON.stringify(body),
-          },
-        },
-        {
-          url: `${apiConfig.functionsUrl}/register-patient`,
-          options: {
-            method: 'POST',
-            headers: getAnonHeaders(),
-            body: JSON.stringify(body),
-          },
-        },
-      ],
-      'Erro ao realizar auto-cadastro de paciente.',
-    )
-  },
-
-  async registerWithPassword(data) {
-    validatePatientPayload(data)
-    if (!data.password || String(data.password).length < 6) {
-      throw new Error('A senha deve ter pelo menos 6 caracteres.')
-    }
-
-    const body = cleanPayload({
-      ...buildRegisterPatientPayload(data),
-      password: data.password,
+    const response = await fetch(`${apiConfig.functionsUrl}/register-patient`, {
+      method: 'POST',
+      headers: getAnonHeaders(),
+      body: JSON.stringify(body),
     })
 
-    return fetchJsonWithFallback(
-      [
-        {
-          url: apiEndpoint('/register-patient-with-password'),
-          options: {
-            method: 'POST',
-            headers: getAnonHeaders(),
-            body: JSON.stringify(body),
-          },
-        },
-        {
-          url: `${apiConfig.functionsUrl}/register-patient-with-password`,
-          options: {
-            method: 'POST',
-            headers: getAnonHeaders(),
-            body: JSON.stringify(body),
-          },
-        },
-      ],
-      'Erro ao realizar cadastro de paciente com senha.',
-    )
-  },
-
-  // 4. Atualizar paciente
-  async update(patientId, data) {
-    validatePatientPayload(data)
-    let lastResponse = null
-
-    for (const body of buildPatientPayloads(data, { mode: 'update' })) {
-      const response = await fetch(`${apiConfig.restUrl}/patients?id=eq.${patientId}`, {
-        method: 'PATCH',
-        headers: getAuthenticatedHeaders({ Prefer: 'return=representation' }),
-        body: JSON.stringify(body),
-      })
-
-      if (response.ok) return response.json()
-
-      lastResponse = response
-      if (response.status !== 400) break
+    if (!response.ok) {
+      throw new Error(await getResponseError(response, 'Erro ao realizar auto-cadastro de paciente.'))
     }
 
-    throw new Error(await getResponseError(lastResponse, 'Erro ao atualizar paciente.'))
+    return response.json()
   },
 
+  // PATCH /rest/v1/patients?id=eq.{id}
+  // Body documentado: full_name?, phone_mobile?, email?
+  async update(patientId, data) {
+    validatePatientPayload(data)
+    const body = buildUpdatePatientBody(data)
+
+    const response = await fetch(`${apiConfig.restUrl}/patients?id=eq.${patientId}`, {
+      method: 'PATCH',
+      headers: getAuthenticatedHeaders({ Prefer: 'return=representation' }),
+      body: JSON.stringify(body),
+    })
+
+    if (!response.ok) {
+      throw new Error(await getResponseError(response, 'Erro ao atualizar paciente.'))
+    }
+
+    return response.json()
+  },
+
+  // POST /storage/v1/object/avatars/{path}
   async uploadAvatar(patientId, file) {
     if (!patientId) {
       throw new Error('Não foi possível identificar o paciente para enviar o avatar.')
@@ -205,6 +136,7 @@ export const patientRepository = {
     }
   },
 
+  // POST /storage/v1/object/avatars/{path} (reaproveita bucket de avatars)
   async uploadAttachment(patientId, file) {
     if (!patientId) {
       throw new Error('Não foi possível identificar o paciente para enviar o anexo.')
@@ -232,7 +164,7 @@ export const patientRepository = {
     }
   },
 
-  // 5. Deletar paciente
+  // DELETE /rest/v1/patients?id=eq.{id}
   async remove(patientId) {
     const response = await fetch(`${apiConfig.restUrl}/patients?id=eq.${patientId}`, {
       method: 'DELETE',
@@ -400,145 +332,101 @@ function summarizeAppointments(patientId, appointments) {
     .filter((appointment) => String(appointment.patient_id || appointment.patientId || appointment.paciente_id || '') === normalizedPatientId)
     .map((appointment) => ({
       ...appointment,
-      date: getAppointmentDate(appointment),
+      scheduledAt: parseScheduledAt(appointment),
     }))
-    .filter((appointment) => appointment.date)
-    .sort((a, b) => a.date - b.date)
+    .filter((appointment) => appointment.scheduledAt instanceof Date && !Number.isNaN(appointment.scheduledAt.getTime()))
 
-  const past = patientAppointments.filter((appointment) => appointment.date < now)
-  const future = patientAppointments.filter((appointment) => appointment.date >= now)
-  const last = past.at(-1)
-  const next = future[0]
+  const past = patientAppointments
+    .filter((appointment) => appointment.scheduledAt <= now)
+    .sort((a, b) => b.scheduledAt - a.scheduledAt)
+
+  const future = patientAppointments
+    .filter((appointment) => appointment.scheduledAt > now)
+    .sort((a, b) => a.scheduledAt - b.scheduledAt)
+
+  const lastVisitDate = past[0]?.scheduledAt
+  const nextVisitDate = future[0]?.scheduledAt
 
   return {
-    lastVisitIso: last ? formatDateInput(last.date) : null,
-    lastVisit: last ? formatAppointmentLabel(last.date) : '',
-    nextVisit: next ? formatAppointmentLabel(next.date) : '',
+    lastVisitIso: lastVisitDate ? lastVisitDate.toISOString() : null,
+    lastVisit: lastVisitDate ? formatRelativeDate(lastVisitDate) : '',
+    nextVisit: nextVisitDate ? formatScheduledDate(nextVisitDate) : '',
   }
 }
 
-function getAppointmentDate(appointment) {
-  if (appointment.scheduled_at) {
-    const date = new Date(appointment.scheduled_at)
-    return Number.isNaN(date.getTime()) ? null : date
-  }
-
-  const dateValue = appointment.date || appointment.appointment_date || appointment.data
-  const timeValue = appointment.time || appointment.appointment_time || appointment.hora || '00:00'
-  if (!dateValue) return null
-
-  const date = new Date(`${dateValue}T${timeValue}`)
+function parseScheduledAt(appointment) {
+  const value = appointment.scheduled_at || appointment.scheduledAt || appointment.appointment_date || appointment.date
+  if (!value) return null
+  const date = new Date(value)
   return Number.isNaN(date.getTime()) ? null : date
 }
 
-function formatAppointmentLabel(date) {
-  return new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date)
+function formatRelativeDate(date) {
+  const diffMs = Date.now() - date.getTime()
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+
+  if (diffDays <= 0) return 'Hoje'
+  if (diffDays === 1) return 'Há 1 dia'
+  if (diffDays < 30) return `Há ${diffDays} dias`
+  const months = Math.floor(diffDays / 30)
+  return months === 1 ? 'Há 1 mês' : `Há ${months} meses`
 }
 
-function formatDateInput(date) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function getFirstValue(source, keys, fallback = '') {
-  for (const key of keys) {
-    if (source?.[key]) return source[key]
-  }
-
-  return fallback || ''
-}
-
-function getAddressObject(patient) {
-  const address = patient?.address || patient?.endereco
-  if (address && typeof address === 'object') return address
-  return {}
+function formatScheduledDate(date) {
+  const formatter = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  return formatter.format(date)
 }
 
 function normalizeId(value) {
-  return String(value || '').trim()
+  return value === null || value === undefined ? '' : String(value)
 }
 
-function formatAddress(patient) {
-  return [
-    patient.addressStreet,
-    patient.addressNumber,
-    patient.addressComplement,
-    patient.city,
-    patient.state,
-    patient.zipCode,
-  ]
-    .filter(Boolean)
-    .join(', ')
+function normalizeCondition(value) {
+  if (!value) return 'Sem condição principal'
+  return String(value).trim() || 'Sem condição principal'
+}
+
+function getAddressObject(patient) {
+  if (!patient.address) return {}
+  if (typeof patient.address === 'object') return patient.address
+  return {}
+}
+
+function getFirstValue(source, keys, fallback = '') {
+  if (!source) return fallback
+  for (const key of keys) {
+    if (source[key]) return source[key]
+  }
+  return fallback
+}
+
+function formatAddress(directory) {
+  const parts = [
+    directory.addressStreet,
+    directory.addressNumber,
+    directory.addressComplement,
+    directory.city,
+    directory.state,
+  ].filter(Boolean)
+  return parts.join(', ')
 }
 
 function formatObjectAddress(address) {
   if (!address || typeof address !== 'object') return ''
+  return [address.street || address.logradouro, address.number || address.numero, address.city || address.cidade, address.state || address.uf].filter(Boolean).join(', ')
+}
 
-  return [
-    address.street || address.logradouro,
-    address.number || address.numero,
-    address.complement || address.complemento,
-    address.city || address.cidade,
-    address.state || address.estado || address.uf,
-    address.zipCode || address.zip_code || address.cep,
-  ]
-    .filter(Boolean)
-    .join(', ')
+function normalizeNotes(notes) {
+  if (!notes) return []
+  if (Array.isArray(notes)) return notes
+  return [{ text: String(notes) }]
 }
 
 function normalizeAttachments(value) {
   if (!value) return []
-
-  const attachments = Array.isArray(value) ? value : [value]
-  return attachments
-    .map((attachment) => {
-      if (typeof attachment === 'string') {
-        return {
-          name: attachment.split('/').pop() || 'Anexo do paciente',
-          path: attachment,
-          url: normalizeAvatarUrl(attachment),
-        }
-      }
-
-      const path = attachment.path || attachment.object_path || attachment.url || ''
-      return {
-        name: attachment.name || attachment.file_name || path.split('/').pop() || 'Anexo do paciente',
-        path,
-        url: attachment.url || normalizeAvatarUrl(path),
-      }
-    })
-    .filter((attachment) => attachment.path || attachment.url || attachment.name)
-}
-
-function normalizeNotes(notes) {
-  if (Array.isArray(notes)) return notes
-  if (!notes) return []
-  return [String(notes)]
-}
-
-function normalizeCondition(value) {
-  const input = String(value || '').trim()
-  if (!input) return 'Sem condição principal'
-
-  const normalized = input
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toLowerCase()
-
-  if (normalized === 'sem condicao principal' || normalized === 'sem condição principal') {
-    return 'Sem condição principal'
-  }
-
-  return input
+  if (Array.isArray(value)) return value
+  if (typeof value === 'object') return [value]
+  return []
 }
 
 function normalizeDecimal(value) {
@@ -573,99 +461,49 @@ function getPublicAvatarUrl(path) {
   return `${apiConfig.storageUrl}/object/public/avatars/${String(path || '').replace(/^\/+/, '')}`
 }
 
-function buildPatientBody(data, { includeCreatedBy = false } = {}) {
-  const body = {
+// =============================================================================
+// Payloads para os endpoints documentados
+// =============================================================================
+
+// /functions/v1/create-patient: email*, full_name*, cpf*, phone_mobile*, birth_date?
+function buildCreatePatientBody(data) {
+  return cleanPayload({
+    email: data.email?.trim(),
     full_name: cleanPersonName(data.name, data.full_name),
     cpf: onlyDigits(data.cpf),
-    social_name: cleanPersonName(data.socialName || data.social_name),
-    rg: onlyDigits(data.rg),
-    other_documents: data.otherDocuments || data.other_documents,
-    document_number: data.documentNumber || data.document_number,
-    sex: data.sex || data.sexo,
-    race: data.race || data.raca,
-    naturality: data.naturality || data.naturalidade,
-    nationality: data.nationality || data.nacionalidade,
-    profession: data.profession || data.profissao,
-    email: data.email?.trim(),
     phone_mobile: onlyDigits(data.phone || data.phone_mobile),
-    phone_landline: onlyDigits(data.phoneLandline || data.phone_landline),
-    birth_date: data.birthDate || data.birth_date || null,
-    city: data.city,
-    state: data.state,
-    zip_code: onlyDigits(data.zipCode || data.zip_code),
-    address_street: data.addressStreet || data.address_street,
-    address_number: data.addressNumber || data.address_number,
-    address_complement: data.addressComplement || data.address_complement,
-    phone_secondary: onlyDigits(data.phoneSecondary || data.phone_secondary),
-    insurance: data.insurance,
-    insurance_plan: data.plan || data.insurance_plan,
-    blood_type: data.bloodType || data.blood_type,
-    weight: normalizeDecimal(data.weight || data.peso),
-    height: normalizeDecimal(data.height || data.altura),
-    bmi: normalizeDecimal(data.bmi || data.imc),
-    allergies: data.allergies || data.alergias,
-    insurance_number: data.insuranceNumber || data.insurance_number,
-    insurance_card_valid_until: data.insuranceIndefiniteValidity ? null : data.insuranceCardValidUntil || data.insurance_card_valid_until,
-    insurance_indefinite_validity: data.insuranceIndefiniteValidity === undefined ? undefined : Boolean(data.insuranceIndefiniteValidity),
-    cns: onlyDigits(data.cns || data.sus_card || data.cartao_sus),
-    attachments: data.attachments,
-    observations: data.notesText || data.notes_text || data.notes,
-    mother_name: data.motherName || data.mother_name,
-    mother_profession: data.motherProfession || data.mother_profession,
-    father_name: data.fatherName || data.father_name,
-    father_profession: data.fatherProfession || data.father_profession,
-    responsible_name: data.responsibleName || data.responsible_name,
-    responsible_cpf: onlyDigits(data.responsibleCpf || data.responsible_cpf),
-    spouse_name: data.spouseName || data.spouse_name,
-    ethnicity: data.ethnicity,
-    marital_status: data.maritalStatus || data.marital_status,
-    lgpd_opt_in: data.lgpdOptIn === undefined ? undefined : Boolean(data.lgpdOptIn),
-    vip: data.vip === undefined ? undefined : Boolean(data.vip),
-  }
-
-  if (includeCreatedBy) {
-    body.created_by = data.createdBy || getCurrentUserId()
-  }
-
-  return cleanPayload(body)
+    birth_date: data.birthDate || data.birth_date || undefined,
+  })
 }
 
-function buildPatientPayloads(data, options = {}) {
-  const fullPayload = buildPatientBody(data, options)
-  const corePayload = pickFields(fullPayload, [
-    'full_name',
-    'cpf',
-    'email',
-    'phone_mobile',
-    'birth_date',
-    'created_by',
-  ])
-
-  if (options.mode === 'update') {
-    const documentedUpdatePayload = pickFields(fullPayload, [
-      'full_name',
-      'phone_mobile',
-      'email',
-    ])
-    return uniquePayloads([fullPayload, documentedUpdatePayload])
-  }
-
-  return uniquePayloads([fullPayload, corePayload])
-}
-
+// /functions/v1/register-patient: phone_mobile DEVE ser ^\d{10,11}$ (somente dígitos)
 function buildRegisterPatientPayload(data) {
   return cleanPayload({
+    email: data.email?.trim(),
     full_name: cleanPersonName(data.name, data.full_name),
     cpf: onlyDigits(data.cpf),
-    email: data.email?.trim(),
     phone_mobile: onlyDigits(data.phone || data.phone_mobile),
-    birth_date: data.birthDate || data.birth_date || null,
+    birth_date: data.birthDate || data.birth_date || undefined,
     redirect_url: data.redirectUrl || data.redirect_url || getDefaultRedirectUrl('/auth'),
+  })
+}
+
+// PATCH /rest/v1/patients: campos documentados são full_name, phone_mobile, email
+function buildUpdatePatientBody(data) {
+  return cleanPayload({
+    full_name: cleanPersonName(data.name, data.full_name) || undefined,
+    phone_mobile: data.phone || data.phone_mobile ? onlyDigits(data.phone || data.phone_mobile) : undefined,
+    email: data.email?.trim() || undefined,
   })
 }
 
 function validatePatientPayload(data) {
   const name = cleanPersonName(data?.name, data?.full_name)
+
+  // Para update parcial sem nome novo, não valida
+  if (!name && (data?.name === undefined && data?.full_name === undefined)) {
+    return
+  }
 
   if (!isValidPersonName(name)) {
     throw new Error('Informe um nome de paciente válido. O campo nome não pode ser um e-mail.')
@@ -701,11 +539,6 @@ function calculateAge(birthDate) {
   return age
 }
 
-function getCurrentUserId() {
-  const session = getAuthSession()
-  return session?.user?.id || session?.user_id || session?.sub || undefined
-}
-
 function getDefaultRedirectUrl(path) {
   if (typeof window === 'undefined') return undefined
   return `${window.location.origin}${path}`
@@ -716,23 +549,3 @@ function cleanPayload(payload) {
     Object.entries(payload).filter(([, value]) => value !== undefined && value !== null && value !== ''),
   )
 }
-
-function pickFields(payload, fields) {
-  return Object.fromEntries(
-    fields
-      .filter((field) => payload[field] !== undefined)
-      .map((field) => [field, payload[field]]),
-  )
-}
-
-function uniquePayloads(payloads) {
-  const seen = new Set()
-
-  return payloads.filter((payload) => {
-    const signature = JSON.stringify(payload)
-    if (seen.has(signature)) return false
-    seen.add(signature)
-    return true
-  })
-}
-

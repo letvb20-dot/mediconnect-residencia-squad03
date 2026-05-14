@@ -1,6 +1,6 @@
 import { authRepository } from './authRepository.js'
 import { normalizeRole, ROLE_LABELS } from '../config/permissions.js'
-import { apiConfig, apiEndpoint, getAuthenticatedHeaders } from '../config/api.js'
+import { apiConfig, getAuthenticatedHeaders } from '../config/api.js'
 import { getResponseError } from './repositoryUtils.js'
 
 export const profileRepository = {
@@ -45,28 +45,12 @@ export const profileRepository = {
 
   async updateAvatar(file) {
     const profile = await this.getCurrentUserProfile()
-    const formData = new FormData()
-    formData.append('avatar', file)
-    formData.append('file', file)
-
-    const apiResponse = await fetch(apiEndpoint('/upload-avatar'), {
-      method: 'POST',
-      headers: getAuthenticatedHeaders({ 'Content-Type': undefined }),
-      body: formData,
-    }).catch(() => null)
-
-    if (apiResponse?.ok) {
-      return normalizeAvatarResponse(await apiResponse.json().catch(() => ({})))
-    }
-
-    if (apiResponse && ![404, 405].includes(apiResponse.status)) {
-      throw new Error(await getResponseError(apiResponse, 'Falha ao enviar avatar.'))
-    }
 
     if (!profile.id) {
       throw new Error('Não foi possível identificar o usuário para enviar o avatar.')
     }
 
+    // POST /storage/v1/object/avatars/{path}
     const extension = file.name?.split('.').pop() || 'jpg'
     const objectPath = `${profile.id}/avatar.${extension}`
     const response = await fetch(`${apiConfig.storageUrl}/object/avatars/${objectPath}`, {
@@ -105,14 +89,6 @@ export const profileRepository = {
       path: objectPath,
     }
   },
-}
-
-function normalizeAvatarResponse(data) {
-  const path = data.path || data.key || ''
-  return {
-    avatarUrl: data.avatarUrl || data.avatar_url || data.publicUrl || data.public_url || data.url || getAvatarUrl(path),
-    path,
-  }
 }
 
 function getAvatarUrl(path) {

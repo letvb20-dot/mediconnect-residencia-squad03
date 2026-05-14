@@ -36,8 +36,8 @@ export function useAuth() {
         saveAuthSession({ ...session, role, profile, user: user || session?.user })
         setState((current) => ({ ...current, role, profile, user: user || current.user, loading: false }))
       })
-      .catch(() => {
-        if (!cancelled) setState((current) => ({ ...current, loading: false }))
+      .catch((error) => {
+        if (!cancelled) setState((current) => ({ ...current, loading: false, authError: error?.message || 'Erro ao carregar dados do usuário.' }))
       })
 
     return () => {
@@ -49,14 +49,16 @@ export function useAuth() {
 }
 
 function getStateFromSession(session) {
+  const hasValidToken = typeof session?.access_token === 'string' && session.access_token.length > 0
   const role = normalizeRole(session?.role)
 
   return {
     user: session?.user ?? null,
     role,
     profile: session?.profile ?? null,
-    isAuthenticated: !!session?.access_token,
-    loading: !!session?.access_token && !role,
+    isAuthenticated: hasValidToken,
+    loading: hasValidToken && !role,
+    authError: null,
   }
 }
 

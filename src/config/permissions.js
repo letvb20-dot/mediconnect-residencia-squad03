@@ -88,7 +88,7 @@ export const ROLE_CAPABILITIES = {
     ownAppointmentsOnly: false,
     canEditPatients: true,
     canViewReports: true,
-    canViewMedicalRecords: false,
+    canViewMedicalRecords: true,
   },
   gestor: {
     manageUsers: true,
@@ -97,7 +97,7 @@ export const ROLE_CAPABILITIES = {
     ownAppointmentsOnly: false,
     canEditPatients: true,
     canViewReports: true,
-    canViewMedicalRecords: false,
+    canViewMedicalRecords: true,
   },
   medico: {
     manageUsers: false,
@@ -106,7 +106,7 @@ export const ROLE_CAPABILITIES = {
     ownAppointmentsOnly: true,
     canEditPatients: false,
     canViewReports: true,
-    canViewMedicalRecords: false,
+    canViewMedicalRecords: true,
   },
   secretaria: {
     manageUsers: false,
@@ -171,10 +171,13 @@ export const ROLE_NAV_ITEMS = {
 
 // Verifica se um role pode acessar uma rota
 export function canAccess(role, pathname) {
-  if (String(pathname || '').startsWith('/prontuario')) return false
-
   const normalizedRole = normalizeRole(role)
   if (!normalizedRole) return false
+
+  if (String(pathname || '').startsWith('/prontuario')) {
+    return ROLE_CAPABILITIES[normalizedRole]?.canViewMedicalRecords === true
+  }
+
   const allowed = ROLE_ROUTES[normalizedRole]
   if (allowed === '*') return true
   if (!Array.isArray(allowed)) return false

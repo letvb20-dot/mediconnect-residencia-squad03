@@ -1,5 +1,5 @@
 import { apiConfig, getAuthenticatedHeaders } from '../config/api.js'
-import { fetchJsonWithFallback, getResponseError, normalizeCollection } from './repositoryUtils.js'
+import { getResponseError, normalizeCollection } from './repositoryUtils.js'
 
 const MESSAGE_TABLES = ['communication_logs', 'message_logs', 'messages']
 const TEMPLATE_TABLES = ['communication_templates', 'message_templates']
@@ -13,27 +13,15 @@ export const communicationRepository = {
       patient_id: patientId || undefined,
     }
 
-    await fetchJsonWithFallback(
-      [
-        {
-          url: `${apiConfig.functionsUrl.replace(/\/+$/, '')}/send-sms`,
-          options: {
-            method: 'POST',
-            headers: getAuthenticatedHeaders(),
-            body: JSON.stringify(payload),
-          },
-        },
-        {
-          url: `${apiConfig.functionsUrl.replace(/\/+$/, '')}/enviar-sms-via-twilio`,
-          options: {
-            method: 'POST',
-            headers: getAuthenticatedHeaders(),
-            body: JSON.stringify(payload),
-          },
-        },
-      ],
-      'Falha no envio de SMS via Twilio.',
-    )
+    const response = await fetch(`${apiConfig.functionsUrl}/send-sms`, {
+      method: 'POST',
+      headers: getAuthenticatedHeaders(),
+      body: JSON.stringify(payload),
+    })
+
+    if (!response.ok) {
+      throw new Error(await getResponseError(response, 'Falha no envio de SMS via Twilio.'))
+    }
 
     await createMessageLog({
       patientId,

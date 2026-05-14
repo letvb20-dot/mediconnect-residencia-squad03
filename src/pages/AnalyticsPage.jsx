@@ -104,11 +104,11 @@ export function AnalyticsPage() {
         ))}
       </section> : null}
 
-      {!loading && !error ? <section className="grid gap-4 md:grid-cols-4" aria-label="MÃ©tricas de atendimento e financeiro">
-        <MiniMetric title="MÃ©tricas de atendimento" value={`${attendanceMetrics.completed || 0}/${attendanceMetrics.scheduled || 0}`} detail="realizadas sobre agendadas" />
+      {!loading && !error ? <section className="grid gap-4 md:grid-cols-4" aria-label="Métricas de atendimento e financeiro">
+        <MiniMetric title="Métricas de atendimento" value={`${attendanceMetrics.completed || 0}/${attendanceMetrics.scheduled || 0}`} detail="realizadas sobre agendadas" />
         <MiniMetric title="Faturamento anual" value={formatCurrency(annualRevenue)} detail="ano corrente" />
-        <MiniMetric title="Taxa de no-show" value={`${attendanceMetrics.noShowRate || 0}%`} detail={`${attendanceMetrics.noShow || 0} ausÃªncias`} />
-        <MiniMetric title="SatisfaÃ§Ã£o" value={satisfactionIndicators.average ? `${satisfactionIndicators.average}/5` : '-'} detail={satisfactionIndicators.label || 'sem respostas'} />
+        <MiniMetric title="Taxa de no-show" value={`${attendanceMetrics.noShowRate || 0}%`} detail={`${attendanceMetrics.noShow || 0} ausências`} />
+        <MiniMetric title="Satisfação" value={satisfactionIndicators.average ? `${satisfactionIndicators.average}/5` : '-'} detail={satisfactionIndicators.label || 'sem respostas'} />
       </section> : null}
 
       {!loading && !error ? <section className="grid gap-6 lg:grid-cols-2" aria-label="Gráficos principais">
@@ -167,7 +167,7 @@ export function AnalyticsPage() {
             </thead>
             <tbody className="divide-y divide-[#404040] bg-[#262626]">
               {doctorPerformance.length ? doctorPerformance.map((doctor) => {
-                const noShowRate = (doctor.noShow / doctor.consultas) * 100
+                const noShowRate = doctor.consultas > 0 ? (doctor.noShow / doctor.consultas) * 100 : 0
                 return (
                   <tr className="transition hover:bg-[#303030]" key={doctor.name}>
                     <td className="px-4 py-3 font-semibold text-[#f5f5f5]">{doctor.name}</td>

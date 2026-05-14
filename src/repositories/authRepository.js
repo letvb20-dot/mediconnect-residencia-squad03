@@ -1,6 +1,5 @@
 import {
   apiConfig,
-  apiEndpoint,
   clearAuthSession,
   getAnonHeaders,
   getAuthenticatedHeaders,
@@ -11,6 +10,7 @@ import {
 import { getResponseError } from './repositoryUtils.js'
 
 export const authRepository = {
+  // POST /auth/v1/token?grant_type=password
   async login({ email, password }) {
     const response = await fetch(`${apiConfig.supabaseUrl}/auth/v1/token?grant_type=password`, {
       method: 'POST',
@@ -31,38 +31,26 @@ export const authRepository = {
     return session
   },
 
+  // POST /functions/v1/request-password-reset
   async requestPasswordReset(email) {
     const payload = {
       email: email?.trim(),
       redirect_url: getDefaultRedirectUrl('/login'),
     }
-    const apiResponse = await fetch(apiEndpoint('/request-password-reset'), {
-      method: 'POST',
-      headers: getAnonHeaders(),
-      body: JSON.stringify(payload),
-    }).catch(() => null)
-
-    if (apiResponse?.ok) {
-      return true
-    }
-
-    if (apiResponse && !shouldFallback(apiResponse)) {
-      throw new Error(await getResponseError(apiResponse, 'Erro ao solicitar reset de senha.'))
-    }
-
-    const supabaseResponse = await fetch(`${apiConfig.supabaseUrl}/auth/v1/recover`, {
+    const response = await fetch(`${apiConfig.functionsUrl}/request-password-reset`, {
       method: 'POST',
       headers: getAnonHeaders(),
       body: JSON.stringify(payload),
     })
 
-    if (!supabaseResponse.ok) {
-      throw new Error(await getResponseError(supabaseResponse, 'Erro ao enviar link de recuperacao.'))
+    if (!response.ok) {
+      throw new Error(await getResponseError(response, 'Erro ao solicitar reset de senha.'))
     }
 
     return true
   },
 
+  // POST /auth/v1/otp
   async sendMagicLink(email) {
     const response = await fetch(`${apiConfig.supabaseUrl}/auth/v1/otp`, {
       method: 'POST',
@@ -77,22 +65,10 @@ export const authRepository = {
     return true
   },
 
+  // POST /functions/v1/user-info
   async getUser() {
-    const apiResponse = await fetch(`${apiConfig.functionsUrl.replace(/\/+$/, '')}/user-info`, {
+    const response = await fetch(`${apiConfig.functionsUrl}/user-info`, {
       method: 'POST',
-      headers: getAuthenticatedHeaders(),
-    }).catch(() => null)
-
-    if (apiResponse?.ok) {
-      return apiResponse.json()
-    }
-
-    if (apiResponse && !shouldFallback(apiResponse)) {
-      throw new Error(await getResponseError(apiResponse, 'Erro ao resgatar perfil de usuário.'))
-    }
-
-    const response = await fetch(`${apiConfig.supabaseUrl}/auth/v1/user`, {
-      method: 'GET',
       headers: getAuthenticatedHeaders(),
     })
 
@@ -111,15 +87,9 @@ export const authRepository = {
     return hasAuthenticatedSession()
   },
 
+  // POST /auth/v1/logout
   async logout() {
     try {
-      const apiResponse = await fetch(apiEndpoint('/logout'), {
-        method: 'POST',
-        headers: getAuthenticatedHeaders(),
-      }).catch(() => null)
-
-      if (apiResponse?.ok || (apiResponse && !shouldFallback(apiResponse))) return
-
       await fetch(`${apiConfig.supabaseUrl}/auth/v1/logout`, {
         method: 'POST',
         headers: getAuthenticatedHeaders(),
@@ -130,10 +100,6 @@ export const authRepository = {
       clearAuthSession()
     }
   },
-}
-
-function shouldFallback(response) {
-  return [404, 405].includes(response.status)
 }
 
 function getDefaultRedirectUrl(path) {

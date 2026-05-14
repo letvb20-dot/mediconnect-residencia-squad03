@@ -1,7 +1,9 @@
-import { apiConfig, apiEndpoint, getAuthenticatedHeaders } from '../config/api.js'
-import { fetchJsonWithFallback, getResponseError, normalizeItem } from './repositoryUtils.js'
+import { apiConfig, getAuthenticatedHeaders } from '../config/api.js'
+import { getResponseError, normalizeItem } from './repositoryUtils.js'
 
 export const professionalRepository = {
+  // GET /rest/v1/doctors
+  // Filtros documentados: select, active, specialty
   async getAll(filters = {}) {
     const query = new URLSearchParams()
     query.set('select', filters.select || '*')
@@ -20,50 +22,30 @@ export const professionalRepository = {
     return (Array.isArray(data) ? data : []).map(mapProfessional)
   },
 
+  // POST /functions/v1/create-doctor
+  // Body documentado: email*, full_name*, cpf* (^\d{11}$), crm*, crm_uf* (^[A-Z]{2}$), specialty?, phone_mobile?
   async create(data) {
     const body = cleanPayload({
+      email: data.email?.trim(),
       full_name: data.fullName || data.full_name || data.name,
-      email: data.email,
-      cpf: data.cpf,
-      crm: data.crm,
-      crm_uf: data.crmUf || data.crm_uf,
-      phone_mobile: data.phoneMobile || data.phone_mobile || data.phone,
-      phone2: data.phone2 || data.phoneSecondary || data.phone_secondary,
-      rg: data.rg,
-      active: data.active,
-      temp_password: data.tempPassword || data.temp_password,
+      cpf: onlyDigits(data.cpf),
+      crm: data.crm?.trim(),
+      crm_uf: (data.crmUf || data.crm_uf || '').toString().trim().toUpperCase(),
       specialty: data.specialty || data.specialidade,
-      birth_date: data.birthDate || data.birth_date,
-      cep: data.cep || data.zipCode || data.zip_code,
-      street: data.street || data.addressStreet || data.address_street,
-      number: data.number || data.addressNumber || data.address_number,
-      complement: data.complement || data.addressComplement || data.address_complement,
-      neighborhood: data.neighborhood || data.bairro,
-      city: data.city || data.cidade,
-      state: data.state || data.estado,
+      phone_mobile: data.phoneMobile || data.phone_mobile || data.phone,
     })
-    const result = await fetchJsonWithFallback(
-      [
-        {
-          url: `${apiConfig.functionsUrl}/create-doctor`,
-          options: {
-            method: 'POST',
-            headers: getAuthenticatedHeaders(),
-            body: JSON.stringify(body),
-          },
-        },
-        {
-          url: apiEndpoint('/create-doctor'),
-          options: {
-            method: 'POST',
-            headers: getAuthenticatedHeaders(),
-            body: JSON.stringify(body),
-          },
-        },
-      ],
-      'Erro ao criar médico.',
-    )
 
+    const response = await fetch(`${apiConfig.functionsUrl}/create-doctor`, {
+      method: 'POST',
+      headers: getAuthenticatedHeaders(),
+      body: JSON.stringify(body),
+    })
+
+    if (!response.ok) {
+      throw new Error(await getResponseError(response, 'Erro ao criar médico.'))
+    }
+
+    const result = await response.json()
     return mapProfessional(normalizeItem(result, ['doctor']))
   },
 
@@ -106,6 +88,11 @@ function mapProfessional(doctor) {
 
 function normalizeValue(value) {
   return String(value || '').trim().toLowerCase()
+}
+
+function onlyDigits(value) {
+  const digits = String(value || '').replace(/\D/g, '')
+  return digits || undefined
 }
 
 function cleanPayload(payload) {

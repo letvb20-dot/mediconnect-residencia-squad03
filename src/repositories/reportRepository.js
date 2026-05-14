@@ -3,6 +3,8 @@ import { reportMapper } from '../mappers/reportMapper.js'
 import { getResponseError, normalizeItem } from './repositoryUtils.js'
 
 export const reportRepository = {
+  // GET /rest/v1/reports
+  // Filtros documentados: patient_id, status (draft|completed), created_by, order
   async getInitialReports(filters = {}) {
     const query = new URLSearchParams()
     query.set('select', '*')
@@ -26,53 +28,40 @@ export const reportRepository = {
       query.set('created_by', `in.(${filters.createdByValues.join(',')})`)
     }
 
-    let response = await fetch(`${apiConfig.restUrl}/reports?${query.toString()}`, {
+    const response = await fetch(`${apiConfig.restUrl}/reports?${query.toString()}`, {
       headers: getAuthenticatedHeaders(),
     })
-
-    if (!response.ok && response.status === 400 && filters.status) {
-      query.delete('status')
-      response = await fetch(`${apiConfig.restUrl}/reports?${query.toString()}`, {
-        headers: getAuthenticatedHeaders(),
-      })
-    }
 
     if (!response.ok) {
       throw new Error(await getResponseError(response, 'Falha ao buscar relatórios médicos.'))
     }
 
     const data = await response.json()
-    const reports = filterReportsByStatus(Array.isArray(data) ? data : [], filters.status)
+    const reports = Array.isArray(data) ? data : []
     const doctorNameById = await getDoctorNameMap().catch(() => new Map())
 
     return reports.map((report) => reportMapper.toUi(resolveRequester(report, doctorNameById)))
   },
 
+  // POST /rest/v1/reports
   async create(uiData) {
-    let lastResponse = null
+    const payload = reportMapper.toApi(uiData)
 
-    for (const payload of buildCreatePayloads(reportMapper.toApi(uiData))) {
-      const response = await fetch(`${apiConfig.restUrl}/reports`, {
-        method: 'POST',
-        headers: getAuthenticatedHeaders({ Prefer: 'return=representation' }),
-        body: JSON.stringify(payload),
-      })
+    const response = await fetch(`${apiConfig.restUrl}/reports`, {
+      method: 'POST',
+      headers: getAuthenticatedHeaders({ Prefer: 'return=representation' }),
+      body: JSON.stringify(payload),
+    })
 
-      if (response.ok) {
-        const data = await response.json()
-        return reportMapper.toUi(normalizeItem(data))
-      }
-
-      lastResponse = response
-
-      if (response.status !== 400) {
-        break
-      }
+    if (!response.ok) {
+      throw new Error(await getResponseError(response, 'Falha ao criar relatório médico.'))
     }
 
-    throw new Error(await getResponseError(lastResponse, 'Falha ao criar relatório médico.'))
+    const data = await response.json()
+    return reportMapper.toUi(normalizeItem(data))
   },
 
+  // PATCH /rest/v1/reports?id=eq.{uuid}
   async update(id, uiData) {
     const response = await fetch(`${apiConfig.restUrl}/reports?id=eq.${id}`, {
       method: 'PATCH',
@@ -88,6 +77,7 @@ export const reportRepository = {
     return reportMapper.toUi(normalizeItem(data))
   },
 
+  // DELETE /rest/v1/reports?id=eq.{uuid} (não documentado mas é DELETE padrão PostgREST)
   async remove(id) {
     const response = await fetch(`${apiConfig.restUrl}/reports?id=eq.${encodeURIComponent(id)}`, {
       method: 'DELETE',
@@ -95,7 +85,7 @@ export const reportRepository = {
     })
 
     if (!response.ok) {
-      throw new Error(await getResponseError(response, 'Falha ao excluir relatÃ³rio mÃ©dico.'))
+      throw new Error(await getResponseError(response, 'Falha ao excluir relatório médico.'))
     }
 
     return true
@@ -149,61 +139,8 @@ function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
 }
 
-function buildCreatePayloads(payload) {
-  return uniquePayloads([
-    omitFields(payload, ['order_number', 'created_by', 'updated_by']),
-    omitFields(payload, ['order_number', 'created_by', 'updated_by', 'content_json']),
-    omitFields(payload, ['order_number', 'created_by', 'updated_by', 'content_json', 'hide_date', 'hide_signature', 'due_at']),
-    pickFields(payload, ['patient_id', 'status', 'exam', 'requested_by', 'cid_code', 'diagnosis', 'conclusion', 'content_html']),
-    payload,
-  ])
-}
-
-function omitFields(payload, fields) {
-  return Object.fromEntries(
-    Object.entries(payload).filter(([field]) => !fields.includes(field)),
-  )
-}
-
-function pickFields(payload, fields) {
-  return Object.fromEntries(
-    fields
-      .filter((field) => payload[field] !== undefined)
-      .map((field) => [field, payload[field]]),
-  )
-}
-
-function uniquePayloads(payloads) {
-  const seen = new Set()
-
-  return payloads.filter((payload) => {
-    const signature = JSON.stringify(payload)
-    if (seen.has(signature)) return false
-    seen.add(signature)
-    return true
-  })
-}
-
+// Converte status da UI para o enum documentado (draft | completed)
 function toApiReportStatus(status) {
-  if (status === 'finalized') return 'completed'
-  if (status === 'sent') return 'sent'
-  return status
-}
-
-function filterReportsByStatus(reports, status) {
-  if (!status) return reports
-
-  const expected = toApiReportStatus(status)
-  return reports.filter((report) => {
-    const normalized = String(report.status || '').toLowerCase()
-    if (expected === 'completed') {
-      return ['completed', 'finalized', 'finalizado', 'finished', 'done'].includes(normalized)
-    }
-
-    if (expected === 'sent') {
-      return ['sent', 'enviado', 'delivered', 'emailed'].includes(normalized)
-    }
-
-    return normalized === expected
-  })
+  if (status === 'finalized' || status === 'completed' || status === 'sent') return 'completed'
+  return status === 'draft' ? 'draft' : status
 }

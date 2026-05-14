@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom'
 import { normalizeRole } from '../config/permissions.js'
 import { StethoscopeIcon } from '../components/Brand.jsx'
 import { RichTextEditor } from '../components/RichTextEditor.jsx'
-import { DarkField, appCardClass as cardClass, appInputClass as inputClass, appLabelClass as labelClass } from '../components/ui.jsx'
+import { DarkField, appCardClass as cardClass, appInputClass as inputClass, appLabelClass as labelClass, appTextareaClass as textareaClass } from '../components/ui.jsx'
 import { reportTemplates } from '../data/reportTemplates.js'
 import { patientRepository } from '../repositories/patientRepository.js'
 import { notificationRepository } from '../repositories/notificationRepository.js'
@@ -682,7 +682,7 @@ function ReportRow({ canDelete, isMenuOpen, menuAnchor, onCloseMenu, onDelete, o
           </button>
           {isMenuOpen && menuAnchor ? createPortal(
             <div
-              className="fixed w-56 overflow-hidden rounded-lg border border-[#404040] bg-[#1a1a1a] py-1 text-left shadow-2xl"
+              className="report-action-menu fixed w-56 overflow-hidden rounded-lg border border-[#404040] bg-[#1a1a1a] py-1 text-left shadow-2xl"
               style={{ left: menuAnchor.left, top: menuAnchor.top, zIndex: 99999 }}
             >
               <ReportMenuButton onClick={() => run(onVersions)}>Controle de versões</ReportMenuButton>
@@ -935,11 +935,11 @@ function ReportEditorModalV3({
               </DarkField>
 
               <DarkField label="Diagnóstico *">
-                <input className={inputClass} onChange={(event) => updateField('diagnosis', sanitizePlainText(event.target.value))} value={editor.diagnosis} />
+                <textarea className={`${textareaClass} min-h-32`} onChange={(event) => updateField('diagnosis', sanitizePlainText(event.target.value))} value={editor.diagnosis} />
               </DarkField>
 
               <DarkField label="Conclusão *">
-                <input className={inputClass} onChange={(event) => updateField('conclusion', sanitizePlainText(event.target.value))} value={editor.conclusion} />
+                <textarea className={`${textareaClass} min-h-32`} onChange={(event) => updateField('conclusion', sanitizePlainText(event.target.value))} value={editor.conclusion} />
               </DarkField>
               <DarkField label="Prazo">
                 <input className={`${inputClass} [color-scheme:dark]`} onChange={(event) => updateField('dueAt', event.target.value)} type="datetime-local" value={editor.dueAt} />
@@ -1141,7 +1141,7 @@ function ReportViewModal({ onClose, report }) {
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-2">
             <DetailCard label="Paciente" value={report.patientName} />
             <DetailCard label="Solicitante" value={report.requestedBy || '-'} />
             <DetailCard label="Criado em" value={formatDate(report.createdAt)} />
@@ -1150,12 +1150,12 @@ function ReportViewModal({ onClose, report }) {
             <DetailCard label="Prazo" value={formatDateTime(report.dueAt)} />
           </div>
 
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
             <DetailBlock label="Exame" value={report.exam || '-'} />
             <DetailBlock label="CID-10" value={report.cidCode || '-'} />
           </div>
 
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
             <DetailBlock label="Diagnóstico" value={report.diagnosis || '-'} />
             <DetailBlock label="Conclusão" value={report.conclusion || '-'} />
           </div>
@@ -1209,18 +1209,18 @@ function SearchMenu({ emptyText, items, onSelect }) {
 
 function DetailCard({ label, value }) {
   return (
-    <div className="rounded-xl border border-[#404040] bg-[#1a1a1a] p-4">
+    <div className="rounded-lg border border-[#404040] bg-[#1a1a1a] px-3 py-2.5">
       <p className="text-xs font-semibold uppercase tracking-wide text-[#a3a3a3]">{label}</p>
-      <p className="mt-2 text-sm text-[#e5e5e5]">{value}</p>
+      <p className="mt-1 text-sm leading-5 text-[#e5e5e5]">{value}</p>
     </div>
   )
 }
 
 function DetailBlock({ label, value }) {
   return (
-    <div className="rounded-xl border border-[#404040] bg-[#1a1a1a] p-4">
+    <div className="rounded-lg border border-[#404040] bg-[#1a1a1a] px-3 py-2.5">
       <p className="text-xs font-semibold uppercase tracking-wide text-[#a3a3a3]">{label}</p>
-      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[#e5e5e5]">{value}</p>
+      <p className="mt-1 whitespace-pre-wrap text-sm leading-5 text-[#e5e5e5]">{value}</p>
     </div>
   )
 }

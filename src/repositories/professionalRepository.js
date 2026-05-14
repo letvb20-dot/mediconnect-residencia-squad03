@@ -27,12 +27,12 @@ export const professionalRepository = {
   async create(data) {
     const body = cleanPayload({
       email: data.email?.trim(),
-      full_name: data.fullName || data.full_name || data.name,
+      full_name: String(data.fullName || data.full_name || data.name || '').trim(),
       cpf: onlyDigits(data.cpf),
-      crm: data.crm?.trim(),
+      crm: onlyDigits(data.crm),
       crm_uf: (data.crmUf || data.crm_uf || '').toString().trim().toUpperCase(),
-      specialty: data.specialty || data.specialidade,
-      phone_mobile: data.phoneMobile || data.phone_mobile || data.phone,
+      specialty: String(data.specialty || data.specialidade || '').trim(),
+      phone_mobile: onlyDigits(data.phoneMobile || data.phone_mobile || data.phone),
     })
 
     const response = await fetch(`${apiConfig.functionsUrl}/create-doctor`, {

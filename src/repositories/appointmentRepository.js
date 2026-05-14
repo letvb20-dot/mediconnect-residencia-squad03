@@ -1,4 +1,4 @@
-import { apiConfig, getAuthenticatedHeaders } from '../config/api.js'
+import { apiConfig, getAuthenticatedHeaders, getAuthSession } from '../config/api.js'
 import { appointmentMapper } from '../mappers/appointmentMapper.js'
 import { getResponseError, normalizeItem } from './repositoryUtils.js'
 
@@ -26,7 +26,7 @@ export const appointmentRepository = {
   // POST /rest/v1/appointments
   // Body documentado: doctor_id*, patient_id*, scheduled_at*, created_by*, duration_minutes?, status?
   async create(uiData) {
-    const payload = buildAppointmentPayload(uiData)
+    const payload = buildAppointmentPayload(uiData, { requireCreatedBy: true })
 
     const response = await fetch(`${apiConfig.restUrl}/appointments`, {
       method: 'POST',
@@ -68,15 +68,22 @@ export const appointmentRepository = {
 }
 
 // Constrói apenas com os campos documentados no contrato OpenAPI
-function buildAppointmentPayload(uiData) {
+function buildAppointmentPayload(uiData, { requireCreatedBy = false } = {}) {
   const fullPayload = appointmentMapper.toApi(uiData, 'supabase')
+  if (requireCreatedBy && !fullPayload.created_by) {
+    fullPayload.created_by = getCurrentUserId()
+  }
+
+  if (requireCreatedBy && !fullPayload.created_by) {
+    throw new Error('Nao foi possivel identificar o usuario logado para criar o agendamento.')
+  }
+
   return pickFields(fullPayload, [
     'doctor_id',
     'patient_id',
     'scheduled_at',
     'duration_minutes',
     'status',
-    'appointment_type',
     'created_by',
   ])
 }
@@ -113,4 +120,9 @@ function toApiStatus(status) {
   }
 
   return map[normalized] || status
+}
+
+function getCurrentUserId() {
+  const session = getAuthSession()
+  return session?.user?.id || session?.user_id || session?.sub || undefined
 }

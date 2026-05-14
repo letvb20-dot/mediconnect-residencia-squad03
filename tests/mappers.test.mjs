@@ -20,11 +20,10 @@ test('appointmentMapper envia apenas campos aceitos pelo contrato da API', () =>
 
   assert.equal(payload.patient_id, 'patient-1')
   assert.equal(payload.doctor_id, 'doctor-1')
-  assert.equal(payload.appointment_type, 'telemedicina')
   assert.equal(payload.status, 'requested')
   assert.equal(payload.duration_minutes, 30)
+  assert.equal('appointment_type' in payload, false)
   // Contrato OpenAPI: doctor_id, patient_id, scheduled_at, duration_minutes, status, created_by
-  // (appointment_type aceito pela tabela). `notes` e `observations` não fazem parte do contrato.
   assert.equal('notes' in payload, false)
   assert.equal('observations' in payload, false)
 })
@@ -48,6 +47,7 @@ test('appointmentMapper converte resposta da API para labels da agenda', () => {
 
 test('reportMapper remove campos vazios e normaliza status', () => {
   const payload = reportMapper.toApi({
+    orderNumber: 'REL-2026-001',
     patientId: 'patient-1',
     status: 'finalized',
     exam: '',
@@ -55,9 +55,19 @@ test('reportMapper remove campos vazios e normaliza status', () => {
     contentHtml: '<p>Conclusao clinica</p>',
   })
 
+  assert.equal(payload.order_number, 'REL-2026-001')
   assert.equal(payload.patient_id, 'patient-1')
   assert.equal(payload.status, 'completed')
   assert.equal(payload.requested_by, 'Dra. Leticia')
   assert.equal(payload.content_html, '<p>Conclusao clinica</p>')
   assert.equal('exam' in payload, false)
+})
+
+test('reportMapper normaliza status finalizado em portugues para completed', () => {
+  const payload = reportMapper.toApi({
+    patientId: 'patient-1',
+    status: 'Finalizado',
+  })
+
+  assert.equal(payload.status, 'completed')
 })

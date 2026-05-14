@@ -95,7 +95,6 @@ export const appointmentMapper = {
     if (dialect === 'supabase') {
       // Contrato OpenAPI /rest/v1/appointments:
       // doctor_id, patient_id, scheduled_at, duration_minutes, status, created_by
-      // (appointment_type não está no contrato mas tabela parece aceitar — manter)
       const scheduledAt = uiData.date && uiData.time
         ? new Date(`${uiData.date}T${uiData.time}:00`).toISOString()
         : undefined
@@ -104,7 +103,6 @@ export const appointmentMapper = {
         patient_id: uiData.patientId,
         doctor_id: uiData.professionalId || null,
         scheduled_at: scheduledAt,
-        appointment_type: uiData.mode === 'Teleconsulta' ? 'telemedicina' : 'presencial',
         status: toApiStatus(uiData.status),
         duration_minutes: Number(uiData.durationMinutes) || 30,
         created_by: emptyToUndefined(uiData.createdBy),

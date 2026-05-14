@@ -192,6 +192,36 @@ button:disabled {
   fill: #f9fafb;
 }
 
+.metric-tone-blue {
+  background: #1d2f4f;
+  color: #60a5fa;
+}
+
+.metric-tone-violet {
+  background: #322b3d;
+  color: #a78bfa;
+}
+
+.metric-tone-green {
+  background: #123328;
+  color: #34d399;
+}
+
+[data-theme='light'] .metric-tone-blue {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+[data-theme='light'] .metric-tone-violet {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+[data-theme='light'] .metric-tone-green {
+  background: #dcfce7;
+  color: #047857;
+}
+
 .auth-dark {
   background: #0a0a0a;
   color: #ffffff;
@@ -478,6 +508,20 @@ button:disabled {
   background: #e8edf4;
 }
 
+[data-theme='light'] .report-action-menu {
+  border-color: #c8d4e2;
+  background: #ffffff;
+}
+
+[data-theme='light'] .report-action-menu button:hover {
+  background: #dbe6f3;
+}
+
+[data-theme='light'] .report-action-menu button.text-red-300:hover {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
 .agenda-calendar-shell {
   border-color: #3b3b3b;
   background: #202020;
@@ -540,36 +584,36 @@ button:disabled {
 
 .agenda-slot-waiting,
 .agenda-event-waiting {
-  border-color: #b7791f;
-  background: linear-gradient(180deg, #53350a 0%, #3f2a09 100%);
-  color: #fde68a;
+  border-color: #f59e0b;
+  background: linear-gradient(180deg, #ffe08a 0%, #ffc94d 100%);
+  color: #4a2d00;
 }
 
 .agenda-slot-confirmed,
 .agenda-event-confirmed {
-  border-color: #0891b2;
-  background: linear-gradient(180deg, #083344 0%, #0c2636 100%);
-  color: #a5f3fc;
+  border-color: #06b6d4;
+  background: linear-gradient(180deg, #8be9ff 0%, #35c8ed 100%);
+  color: #083344;
 }
 
 .agenda-slot-triage,
 .agenda-event-triage {
-  border-color: #9333ea;
-  background: linear-gradient(180deg, #3b0764 0%, #2e0a4f 100%);
-  color: #e9d5ff;
+  border-color: #a855f7;
+  background: linear-gradient(180deg, #d8b4fe 0%, #b76df5 100%);
+  color: #35105c;
 }
 
 .agenda-event-finished {
-  border-color: #2563eb;
-  background: linear-gradient(180deg, #172554 0%, #111c3d 100%);
-  color: #bfdbfe;
+  border-color: #3b82f6;
+  background: linear-gradient(180deg, #93c5fd 0%, #5b9df8 100%);
+  color: #172554;
 }
 
 .agenda-slot-cancelled,
 .agenda-event-cancelled {
-  border-color: #b91c1c;
-  background: linear-gradient(180deg, #4c0519 0%, #3b0713 100%);
-  color: #fecdd3;
+  border-color: #f43f5e;
+  background: linear-gradient(180deg, #fda4af 0%, #fb7185 100%);
+  color: #7f1d1d;
 }
 
 .agenda-slot-blocked,

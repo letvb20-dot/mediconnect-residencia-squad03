@@ -141,6 +141,7 @@ function isUuid(value) {
 
 // Converte status da UI para o enum documentado (draft | completed)
 function toApiReportStatus(status) {
-  if (status === 'finalized' || status === 'completed' || status === 'sent') return 'completed'
-  return status === 'draft' ? 'draft' : status
+  const normalized = String(status || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
+  if (['finalized', 'finalizado', 'completed', 'complete', 'done', 'sent', 'enviado'].includes(normalized)) return 'completed'
+  return 'draft'
 }

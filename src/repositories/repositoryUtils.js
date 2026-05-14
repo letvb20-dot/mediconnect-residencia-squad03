@@ -114,12 +114,12 @@ function getErrorMessage(error, text) {
     error.msg ||
     error.message ||
     error.error ||
+    problemDetails ||
     error.detail ||
     error.details ||
     error.hint ||
     formatFieldErrors(error.errors) ||
     formatFieldErrors(error.invalid_params) ||
-    problemDetails ||
     text
 }
 
@@ -128,6 +128,9 @@ function formatProblemDetails(error) {
 
   const parts = [
     typeof error.title === 'string' ? error.title : '',
+    typeof error.detail === 'string' ? error.detail : '',
+    formatFieldErrors(error.errors),
+    formatFieldErrors(error.invalid_params),
     typeof error.instance === 'string' ? error.instance : '',
   ].filter(Boolean)
 

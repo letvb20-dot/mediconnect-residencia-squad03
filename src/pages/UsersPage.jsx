@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 
 import { StethoscopeIcon } from '../components/Brand.jsx'
 import { ADMIN_CREATABLE_ROLES, GESTOR_CREATABLE_ROLES, hasCapability, normalizeRole, ROLE_LABELS } from '../config/permissions.js'
-import { authRepository } from '../repositories/authRepository.js'
 import { userRepository } from '../repositories/userRepository.js'
 import { sanitizeFieldValue } from '../utils/inputSanitizers.js'
 
@@ -42,7 +41,7 @@ const initialUserForm = {
   specialty: '',
 }
 
-export function UsersPage({ embedded = false, embeddedHeaderOnly = false, hideHeader = false, role: currentRole }) {
+export function UsersPage({ embedded = false, embeddedHeaderOnly = false, hideHeader = false, navigate, role: currentRole }) {
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -176,7 +175,6 @@ export function UsersPage({ embedded = false, embeddedHeaderOnly = false, hideHe
         window.alert(`Usuário criado com email e senha para ${form.email}.`)
       } else {
         await userRepository.create(form)
-        await authRepository.sendMagicLink(form.email)
         window.alert(`Usuário criado! Magic Link enviado para ${form.email}.`)
       }
       setModalOpen(false)
@@ -237,13 +235,24 @@ export function UsersPage({ embedded = false, embeddedHeaderOnly = false, hideHe
           <h1 className={`${embedded ? 'text-lg' : 'text-2xl'} font-bold tracking-tight text-[#e5e5e5]`}>Usuários do Sistema</h1>
           <p className="mt-1 text-sm text-[#a3a3a3]">Gerencie os usuários e seus perfis de acesso</p>
         </div>
-        <button
-          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#3b82f6] px-4 text-sm font-medium text-white shadow-sm transition hover:bg-[#2563eb] md:w-auto"
-          onClick={openCreateModal}
-          type="button"
-        >
-          + Novo usuário
-        </button>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          {embedded && navigate ? (
+            <button
+              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-[#404040] bg-[#303030] px-4 text-sm font-medium text-[#e5e5e5] shadow-sm transition hover:bg-[#3a3a3a] sm:w-auto"
+              onClick={() => navigate('/usuarios')}
+              type="button"
+            >
+              Ver usuários
+            </button>
+          ) : null}
+          <button
+            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#3b82f6] px-4 text-sm font-medium text-white shadow-sm transition hover:bg-[#2563eb] sm:w-auto"
+            onClick={openCreateModal}
+            type="button"
+          >
+            + Novo usuário
+          </button>
+        </div>
       </div> : null}
 
       {loading ? (

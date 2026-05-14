@@ -1,4 +1,4 @@
-import { apiConfig, getAnonHeaders, getAuthenticatedHeaders, getAuthSession } from '../config/api.js'
+import { apiConfig, getAuthenticatedHeaders, getPublicHeaders } from '../config/api.js'
 import { cleanPersonName, formatBrazilianPhone, formatCpf, isValidPersonName, onlyDigits } from '../utils/brFormatters.js'
 import { getResponseError } from './repositoryUtils.js'
 
@@ -33,18 +33,14 @@ export const patientRepository = {
       getAppointments({ doctorId }).catch(() => []),
     ])
 
-    const visiblePatients = doctorId
-      ? getPatientsFromDoctorAppointments(patients, appointments)
-      : patients
-
-    return visiblePatients.map((patient) => mapPatientToDirectory(patient, appointments))
+    return patients.map((patient) => mapPatientToDirectory(patient, appointments))
   },
 
   // POST /functions/v1/create-patient
   // Cria paciente como usuário autenticado (admin/secretária) com validação de CPF.
   // Body documentado: email*, full_name*, cpf* (^\d{11}$), phone_mobile*, birth_date?
   async create(data) {
-    validatePatientPayload(data)
+    validatePatientPayload(data, { requireRegistrationFields: true })
     const body = buildCreatePatientBody(data)
 
     const response = await fetch(`${apiConfig.functionsUrl}/create-patient`, {
@@ -70,17 +66,36 @@ export const patientRepository = {
   // Auto-cadastro PÚBLICO (sem auth Bearer). phone_mobile deve ser ^\d{10,11}$
   // Body documentado: email*, full_name* (min 3), phone_mobile* (^\d{10,11}$), cpf* (^\d{11}$), birth_date?, redirect_url?
   async registerPublic(data) {
-    validatePatientPayload(data)
+    validatePatientPayload(data, { requireRegistrationFields: true })
     const body = buildRegisterPatientPayload(data)
 
     const response = await fetch(`${apiConfig.functionsUrl}/register-patient`, {
       method: 'POST',
-      headers: getAnonHeaders(),
+      headers: getPublicHeaders(),
       body: JSON.stringify(body),
     })
 
     if (!response.ok) {
       throw new Error(await getResponseError(response, 'Erro ao realizar auto-cadastro de paciente.'))
+    }
+
+    return response.json()
+  },
+
+  // POST /functions/v1/register-patient-with-password
+  // Auto-cadastro publico com senha. Mesmo contrato do register-patient, acrescido de password*.
+  async registerPublicWithPassword(data) {
+    validatePatientPayload(data, { requireRegistrationFields: true, requirePassword: true })
+    const body = buildRegisterPatientWithPasswordPayload(data)
+
+    const response = await fetch(`${apiConfig.functionsUrl}/register-patient-with-password`, {
+      method: 'POST',
+      headers: getPublicHeaders(),
+      body: JSON.stringify(body),
+    })
+
+    if (!response.ok) {
+      throw new Error(await getResponseError(response, 'Erro ao realizar auto-cadastro de paciente com senha.'))
     }
 
     return response.json()
@@ -206,7 +221,7 @@ function mapPatientToDirectory(patient, appointments = []) {
     document: cpf || patient.document || patient.documento || '',
     socialName: patient.socialName || patient.social_name || patient.nome_social || '',
     rg: patient.rg || '',
-    otherDocuments: patient.otherDocuments || patient.other_documents || patient.outros_documentos || '',
+    otherDocuments: patient.otherDocuments || patient.other_documents || patient.document_type || patient.tipo_documento || patient.outros_documentos || '',
     documentNumber: patient.documentNumber || patient.document_number || patient.numero_documento || '',
     sex: patient.sex || patient.sexo || patient.gender || '',
     race: patient.race || patient.raca || patient.raça || '',
@@ -215,8 +230,8 @@ function mapPatientToDirectory(patient, appointments = []) {
     profession: patient.profession || patient.profissao || patient.profissão || '',
     motherProfession: patient.motherProfession || patient.mother_profession || patient.profissao_mae || '',
     fatherProfession: patient.fatherProfession || patient.father_profession || patient.profissao_pai || '',
-    responsibleName: patient.responsibleName || patient.responsible_name || patient.nome_responsavel || '',
-    responsibleCpf: formatCpf(patient.responsibleCpf || patient.responsible_cpf || patient.cpf_responsavel || ''),
+    responsibleName: patient.responsibleName || patient.responsible_name || patient.guardian_name || patient.nome_responsavel || '',
+    responsibleCpf: formatCpf(patient.responsibleCpf || patient.responsible_cpf || patient.guardian_cpf || patient.cpf_responsavel || ''),
     spouseName: patient.spouseName || patient.spouse_name || patient.nome_conjuge || patient.nome_esposo || '',
     phone: formatBrazilianPhone(patient.phone || patient.phone_mobile || patient.telefone || ''),
     avatarUrl: normalizeAvatarUrl(patient.avatarUrl || patient.avatar_url || patient.avatar_path),
@@ -290,41 +305,6 @@ async function getAppointments({ doctorId } = {}) {
   return response.json()
 }
 
-function getPatientsFromDoctorAppointments(patients, appointments) {
-  const patientById = new Map(
-    patients
-      .map((patient) => [normalizeId(patient.id), patient])
-      .filter(([id]) => id),
-  )
-  const visibleIds = new Set()
-
-  for (const appointment of appointments) {
-    const patientId = normalizeId(
-      appointment.patient_id ||
-      appointment.patientId ||
-      appointment.paciente_id ||
-      appointment.patients?.id ||
-      appointment.patient?.id ||
-      appointment.paciente?.id,
-    )
-
-    if (!patientId) continue
-
-    visibleIds.add(patientId)
-
-    if (!patientById.has(patientId)) {
-      const embeddedPatient = appointment.patients || appointment.patient || appointment.paciente
-      if (embeddedPatient) {
-        patientById.set(patientId, { ...embeddedPatient, id: embeddedPatient.id || patientId })
-      }
-    }
-  }
-
-  return [...visibleIds]
-    .map((patientId) => patientById.get(patientId))
-    .filter(Boolean)
-}
-
 function summarizeAppointments(patientId, appointments) {
   const now = new Date()
   const normalizedPatientId = String(patientId)
@@ -377,10 +357,6 @@ function formatScheduledDate(date) {
   return formatter.format(date)
 }
 
-function normalizeId(value) {
-  return value === null || value === undefined ? '' : String(value)
-}
-
 function normalizeCondition(value) {
   if (!value) return 'Sem condição principal'
   return String(value).trim() || 'Sem condição principal'
@@ -429,12 +405,6 @@ function normalizeAttachments(value) {
   return []
 }
 
-function normalizeDecimal(value) {
-  if (value === undefined || value === null || value === '') return undefined
-  const number = Number(String(value).replace(',', '.'))
-  return Number.isFinite(number) ? number : undefined
-}
-
 function sanitizeFileName(name) {
   return String(name || '')
     .normalize('NFD')
@@ -470,9 +440,44 @@ function buildCreatePatientBody(data) {
   return cleanPayload({
     email: data.email?.trim(),
     full_name: cleanPersonName(data.name, data.full_name),
+    social_name: cleanText(data.socialName || data.social_name),
     cpf: onlyDigits(data.cpf),
-    phone_mobile: onlyDigits(data.phone || data.phone_mobile),
+    rg: cleanText(data.rg),
+    document_type: cleanText(data.otherDocuments || data.documentType || data.document_type),
+    document_number: cleanText(data.documentNumber || data.document_number),
     birth_date: data.birthDate || data.birth_date || undefined,
+    phone_mobile: onlyDigits(data.phone || data.phone_mobile),
+    phone1: onlyDigits(data.phoneLandline || data.phone1),
+    phone2: onlyDigits(data.phoneSecondary || data.phone2),
+    sex: normalizePatientSex(data.sex || data.sexo),
+    race: normalizePatientRace(data.race || data.raca),
+    ethnicity: cleanText(data.ethnicity),
+    nationality: cleanText(data.nationality),
+    naturality: cleanText(data.naturality),
+    profession: cleanText(data.profession),
+    marital_status: cleanText(data.maritalStatus || data.marital_status),
+    mother_name: cleanPersonName(data.motherName, data.mother_name),
+    mother_profession: cleanText(data.motherProfession || data.mother_profession),
+    father_name: cleanPersonName(data.fatherName, data.father_name),
+    father_profession: cleanText(data.fatherProfession || data.father_profession),
+    guardian_name: cleanPersonName(data.responsibleName, data.guardian_name, data.responsible_name),
+    guardian_cpf: onlyDigits(data.responsibleCpf || data.guardian_cpf || data.responsible_cpf),
+    spouse_name: cleanPersonName(data.spouseName, data.spouse_name),
+    cep: onlyDigits(data.zipCode || data.cep),
+    street: cleanText(data.addressStreet || data.street),
+    number: cleanText(data.addressNumber || data.number),
+    complement: cleanText(data.addressComplement || data.complement),
+    neighborhood: cleanText(data.neighborhood),
+    city: cleanText(data.city),
+    state: normalizeState(data.state),
+    blood_type: cleanText(data.bloodType || data.blood_type),
+    weight_kg: normalizeDecimal(data.weight || data.weight_kg),
+    height_m: normalizeHeight(data.height || data.height_m),
+    bmi: normalizeDecimal(data.bmi),
+    legacy_code: cleanText(data.legacyCode || data.legacy_code),
+    rn_in_insurance: data.rnInInsurance ?? data.rn_in_insurance,
+    vip: data.vip === undefined ? undefined : Boolean(data.vip),
+    notes: cleanText(data.notesText || data.notes_text || data.notes),
   })
 }
 
@@ -497,7 +502,18 @@ function buildUpdatePatientBody(data) {
   })
 }
 
-function validatePatientPayload(data) {
+function buildRegisterPatientWithPasswordPayload(data) {
+  return cleanPayload({
+    email: data.email?.trim(),
+    password: data.password,
+    full_name: cleanPersonName(data.name, data.full_name),
+    cpf: onlyDigits(data.cpf),
+    phone_mobile: onlyDigits(data.phone || data.phone_mobile),
+    birth_date: data.birthDate || data.birth_date || undefined,
+  })
+}
+
+function validatePatientPayload(data, { requireRegistrationFields = false, requirePassword = false } = {}) {
   const name = cleanPersonName(data?.name, data?.full_name)
 
   // Para update parcial sem nome novo, não valida
@@ -507,6 +523,20 @@ function validatePatientPayload(data) {
 
   if (!isValidPersonName(name)) {
     throw new Error('Informe um nome de paciente válido. O campo nome não pode ser um e-mail.')
+  }
+  if (!requireRegistrationFields) return
+
+  if (onlyDigits(data?.cpf).length !== 11) {
+    throw new Error('Informe um CPF valido com 11 digitos.')
+  }
+
+  const phone = onlyDigits(data?.phone || data?.phone_mobile)
+  if (!/^\d{10,11}$/.test(phone)) {
+    throw new Error('Informe um celular valido com DDD e 10 ou 11 digitos.')
+  }
+
+  if (requirePassword && String(data?.password || '').length < 6) {
+    throw new Error('A senha deve ter pelo menos 6 caracteres.')
   }
 }
 
@@ -542,6 +572,57 @@ function calculateAge(birthDate) {
 function getDefaultRedirectUrl(path) {
   if (typeof window === 'undefined') return undefined
   return `${window.location.origin}${path}`
+}
+
+function cleanText(value) {
+  return String(value || '').trim() || undefined
+}
+
+function normalizeDecimal(value) {
+  if (value === undefined || value === null || value === '') return undefined
+  const normalized = Number(String(value).replace(',', '.'))
+  return Number.isFinite(normalized) ? normalized : undefined
+}
+
+function normalizeHeight(value) {
+  const height = normalizeDecimal(value)
+  if (height === undefined) return undefined
+  return height > 3 ? height / 100 : height
+}
+
+function normalizeState(value) {
+  const state = String(value || '').trim().toUpperCase()
+  return /^[A-Z]{2}$/.test(state) ? state : undefined
+}
+
+function normalizePatientSex(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return undefined
+  const normalized = raw.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
+  if (normalized.startsWith('masc')) return 'Masculino'
+  if (normalized.startsWith('fem')) return 'Feminino'
+  if (normalized.includes('outro')) return 'Outro'
+  if (normalized.includes('nao')) return 'Não informar'
+  return raw
+}
+
+function normalizePatientRace(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return undefined
+  const normalized = raw.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
+  const map = {
+    branca: 'Branca',
+    preta: 'Preta',
+    parda: 'Parda',
+    amarela: 'Amarela',
+    indigena: 'Indígena',
+  }
+
+  if (map[normalized]) return map[normalized]
+  if (normalized.includes('nao')) return 'Não declarada'
+  return raw
 }
 
 function cleanPayload(payload) {

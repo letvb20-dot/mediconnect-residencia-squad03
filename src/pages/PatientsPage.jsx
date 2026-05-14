@@ -49,6 +49,9 @@ const BRAZILIAN_STATES = [
 
 const INSURANCE_OPTIONS = ['Unimed', 'Bradesco Saúde', 'Amil']
 const BLOOD_TYPE_OPTIONS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
+const DOCUMENT_TYPE_OPTIONS = ['RG', 'CNH', 'Passaporte', 'RNE', 'Certidão de nascimento', 'Carteira profissional', 'Outro']
+const NATIONALITY_OPTIONS = ['Brasileira', 'Brasileira naturalizada', 'Estrangeira']
+const NATURALITY_OPTIONS = [...BRAZILIAN_STATES.map((state) => state.label), 'Exterior']
 
 export function PatientsPage({ navigate, role }) {
   const [rows, setRows] = useState([])
@@ -586,6 +589,7 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
   const [attachmentsOpen, setAttachmentsOpen] = useState(false)
   const isNewPatient = !patient
   const calculatedBmi = calculateBmi(formData.weight, formData.height)
+  const isMinorPatient = isMinorPatientRecord(formData)
 
   function handleChange(event) {
     const { checked, name, type, value } = event.target
@@ -737,10 +741,15 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
                 <input className={darkInput} maxLength={14} name="cpf" onChange={handleChange} required={isNewPatient} value={formData.cpf} />
               </DarkField>
               <DarkField className="md:col-span-3" label="RG">
-                <input className={darkInput} maxLength={11} name="rg" onChange={handleChange} value={formData.rg} />
+                <input className={darkInput} maxLength={12} name="rg" onChange={handleChange} value={formData.rg} />
               </DarkField>
               <DarkField className="md:col-span-3" label="Outros documentos">
-                <input className={darkInput} name="otherDocuments" onChange={handleChange} value={formData.otherDocuments} />
+                <select className={darkInput} name="otherDocuments" onChange={handleChange} value={formData.otherDocuments}>
+                  <option value="">Selecione</option>
+                  {withCurrentOption(DOCUMENT_TYPE_OPTIONS, formData.otherDocuments).map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
               </DarkField>
               <DarkField className="md:col-span-3" label="Número do documento">
                 <input className={darkInput} maxLength={11} name="documentNumber" onChange={handleChange} value={formData.documentNumber} />
@@ -750,8 +759,6 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
                   <option value="">Selecione</option>
                   <option>Feminino</option>
                   <option>Masculino</option>
-                  <option>Intersexo</option>
-                  <option>Prefere não informar</option>
                 </select>
               </DarkField>
               <DarkField className="md:col-span-3" label={requiredLabel('Idade')}>
@@ -793,14 +800,30 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
                 </select>
               </DarkField>
               <DarkField className="md:col-span-3" label="Naturalidade">
-                <input className={darkInput} name="naturality" onChange={handleChange} value={formData.naturality} />
+                <select className={darkInput} name="naturality" onChange={handleChange} value={formData.naturality}>
+                  <option value="">Selecione</option>
+                  {withCurrentOption(NATURALITY_OPTIONS, formData.naturality).map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
               </DarkField>
               <DarkField className="md:col-span-3" label="Nacionalidade">
-                <input className={darkInput} name="nationality" onChange={handleChange} value={formData.nationality} />
+                <select className={darkInput} name="nationality" onChange={handleChange} value={formData.nationality}>
+                  <option value="">Selecione</option>
+                  {withCurrentOption(NATIONALITY_OPTIONS, formData.nationality).map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
               </DarkField>
               <DarkField className="md:col-span-3" label="Profissão">
                 <input className={darkInput} name="profession" onChange={handleChange} value={formData.profession} />
               </DarkField>
+              <DarkField className="md:col-span-3" label="Nome do esposo(a)">
+                <input className={darkInput} name="spouseName" onChange={handleChange} value={formData.spouseName} />
+              </DarkField>
+              {isMinorPatient ? (
+                <>
+                  <p className="md:col-span-12 text-xs font-semibold uppercase tracking-wide text-[#51a2ff]">Campos somente para menores de idade</p>
               <DarkField className="md:col-span-6" label="Profissão da mãe">
                 <input className={darkInput} name="motherProfession" onChange={handleChange} value={formData.motherProfession} />
               </DarkField>
@@ -813,9 +836,8 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
               <DarkField className="md:col-span-3" label="CPF do responsável">
                 <input className={darkInput} maxLength={14} name="responsibleCpf" onChange={handleChange} value={formData.responsibleCpf} />
               </DarkField>
-              <DarkField className="md:col-span-3" label="Nome do esposo(a)">
-                <input className={darkInput} name="spouseName" onChange={handleChange} value={formData.spouseName} />
-              </DarkField>
+                </>
+              ) : null}
               <div className="md:col-span-12">
                 <button
                   className="flex w-full items-center justify-between rounded-lg border border-[#404040] bg-[#1a1a1a] p-4 text-left text-sm font-medium text-[#e5e5e5] transition hover:bg-[#333333]"
@@ -1172,6 +1194,8 @@ export function PatientDetailPage({ navigate, patient, role }) {
 }
 
 function PatientSummary({ patient }) {
+  const isMinorPatient = isMinorPatientRecord(patient)
+
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
       <div className="space-y-6">
@@ -1197,7 +1221,7 @@ function PatientSummary({ patient }) {
             ['Nome do pai', patient.fatherName],
             ['Etnia', patient.ethnicity],
             ['Estado civil', patient.maritalStatus],
-          ]}
+          ].filter(([label]) => isMinorPatient || !isMinorOnlyPatientInfoLabel(label))}
           title="Dados pessoais"
         />
         <PatientInfoSection
@@ -1510,10 +1534,14 @@ function SummaryTile({ label, tone = null, value }) {
 
 function InfoRow({ label, value }) {
   const displayValue = formatInfoValue(value)
+  const minorOnly = isMinorOnlyPatientInfoLabel(label)
 
   return (
     <div>
-      <dt className="font-semibold text-[#737373]">{label}</dt>
+      <dt className="flex flex-wrap items-center gap-2 font-semibold text-[#737373]">
+        <span>{label}</span>
+        {minorOnly ? <span className="rounded-sm bg-[#3b82f6]/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#51a2ff]">Menor de idade</span> : null}
+      </dt>
       <dd className="mt-1 break-words text-[#e5e5e5]">{displayValue || missingValue(label)}</dd>
     </div>
   )
@@ -2001,6 +2029,58 @@ function calculateBmi(weight, height) {
   if (!Number.isFinite(bmi)) return ''
 
   return bmi.toFixed(1)
+}
+
+function isMinorPatientRecord(patient) {
+  const birthDate = patient?.birthDate || patient?.birth_date
+  const rawAge = patient?.age ?? patient?.idade
+  const hasAge = rawAge !== undefined && rawAge !== null && String(rawAge).trim() !== ''
+
+  if (hasAge) {
+    const age = Number(rawAge)
+    if (Number.isFinite(age)) return age < 18 && (age > 0 || Boolean(birthDate))
+  }
+
+  const ageFromBirthDate = calculateAgeFromBirthDate(birthDate)
+  return Number.isFinite(ageFromBirthDate) && ageFromBirthDate < 18
+}
+
+function calculateAgeFromBirthDate(value) {
+  if (!value) return NaN
+
+  const birthDate = new Date(value)
+  if (Number.isNaN(birthDate.getTime())) return NaN
+
+  const today = new Date()
+  let age = today.getFullYear() - birthDate.getFullYear()
+  const currentMonth = today.getMonth()
+  const birthMonth = birthDate.getMonth()
+
+  if (currentMonth < birthMonth || (currentMonth === birthMonth && today.getDate() < birthDate.getDate())) {
+    age -= 1
+  }
+
+  return age
+}
+
+function isMinorOnlyPatientInfoLabel(label) {
+  const looseLabel = String(label || '').toLowerCase()
+  if (looseLabel.includes('respons')) return true
+  if (looseLabel.includes('profiss') && (looseLabel.includes('pai') || looseLabel.includes('m'))) return true
+
+  const normalized = normalizeFilterValue(label)
+  return [
+    'profissao da mae',
+    'profissao do pai',
+    'responsavel',
+    'cpf do responsavel',
+  ].includes(normalized)
+}
+
+function withCurrentOption(options, currentValue) {
+  const normalizedCurrent = String(currentValue || '').trim()
+  if (!normalizedCurrent || options.includes(normalizedCurrent)) return options
+  return [normalizedCurrent, ...options]
 }
 
 function formatAddress(patient) {

@@ -151,7 +151,7 @@ function buildCreateUserBody(data) {
     // cpf / phone_mobile só são obrigatórios quando create_patient_record = true
     cpf: createPatientRecord ? onlyDigits(data.cpf) : undefined,
     phone_mobile: createPatientRecord
-      ? (data.phone_mobile?.trim() || data.phone?.trim())
+      ? onlyDigits(data.phone_mobile || data.phone)
       : undefined,
   }
 
@@ -161,16 +161,20 @@ function buildCreateUserBody(data) {
 function buildCreateUserWithPasswordBody(data) {
   const role = normalizeRole(data.role) || data.role
   const createPatientRecord = Boolean(data.create_patient_record)
+  const isDoctor = role === 'medico'
   const body = {
     email: data.email?.trim(),
     full_name: data.full_name?.trim(),
     phone: data.phone?.trim(),
     role,
     create_patient_record: createPatientRecord,
-    cpf: createPatientRecord ? onlyDigits(data.cpf) : undefined,
+    cpf: onlyDigits(data.cpf),
     phone_mobile: createPatientRecord
-      ? (data.phone_mobile?.trim() || data.phone?.trim())
+      ? onlyDigits(data.phone_mobile || data.phone)
       : undefined,
+    crm: isDoctor ? onlyDigits(data.crm) : undefined,
+    crm_uf: isDoctor ? String(data.crm_uf || data.crmUf || '').trim().toUpperCase() : undefined,
+    specialty: isDoctor ? data.specialty?.trim() : undefined,
   }
 
   return cleanPayload(body)

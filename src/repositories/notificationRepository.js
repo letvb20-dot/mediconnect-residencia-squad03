@@ -17,8 +17,8 @@ export const notificationRepository = {
 
     const notification = {
       id: globalThis.crypto?.randomUUID?.() || `notification-${Date.now()}`,
-      title,
-      detail,
+      title: repairMojibake(title),
+      detail: repairMojibake(detail),
       domain,
       patientId: patientId || '',
       relatedUserIds: normalizeIds(relatedUserIds),
@@ -47,9 +47,17 @@ export const notificationRepository = {
 function getStoredNotifications() {
   try {
     const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
-    return Array.isArray(data) ? data : []
+    return Array.isArray(data) ? data.map(normalizeNotificationText) : []
   } catch {
     return []
+  }
+}
+
+function normalizeNotificationText(notification) {
+  return {
+    ...notification,
+    detail: repairMojibake(notification.detail),
+    title: repairMojibake(notification.title),
   }
 }
 
@@ -73,4 +81,21 @@ function isProfileInvolved(profile, relatedUserIds) {
 
 function normalizeIds(values) {
   return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))]
+}
+
+export function repairMojibake(value) {
+  const text = String(value || '')
+  if (!/[ÃÂâ]/.test(text)) return text
+
+  try {
+    const bytes = Uint8Array.from([...text].map((char) => char.charCodeAt(0) & 0xff))
+    const decoded = new TextDecoder('utf-8', { fatal: false }).decode(bytes)
+    return decoded.replace(/\uFFFD/g, '').trim() || text
+  } catch {
+    try {
+      return decodeURIComponent(escape(text))
+    } catch {
+      return text
+    }
+  }
 }

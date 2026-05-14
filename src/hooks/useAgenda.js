@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { isSameDay } from 'date-fns'
 
 import { appointmentRepository } from '../repositories/appointmentRepository.js'
-import { availabilityRepository } from '../repositories/availabilityRepository.js'
+import { AGENDA_EXCEPTIONS_CHANGED_EVENT, availabilityRepository } from '../repositories/availabilityRepository.js'
 import { notificationRepository } from '../repositories/notificationRepository.js'
 import { patientRepository } from '../repositories/patientRepository.js'
 import { professionalRepository } from '../repositories/professionalRepository.js'
@@ -27,6 +27,7 @@ export function useAgenda() {
   const [currentProfessional, setCurrentProfessional] = useState(null)
   const [viewerProfile, setViewerProfile] = useState(null)
   const [localAppointments, setLocalAppointments] = useState([])
+  const [agendaExceptions, setAgendaExceptions] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [availableSlots, setAvailableSlots] = useState([])
@@ -168,6 +169,38 @@ export function useAgenda() {
     }
   }, [agendaScope, baseDate, currentProfessional?.id, editingAppointment, form.mode, form.professionalId, modalOpen])
 
+  useEffect(() => {
+    let active = true
+
+    async function loadAgendaExceptions() {
+      const targetDoctorId = agendaScope === 'doctor'
+        ? currentProfessional?.id
+        : doctorFilter !== 'Todos'
+          ? doctorFilter
+          : ''
+
+      if (!targetDoctorId) {
+        setAgendaExceptions([])
+        return
+      }
+
+      try {
+        const exceptions = await availabilityRepository.getExceptions({ doctorId: targetDoctorId })
+        if (active) setAgendaExceptions(exceptions)
+      } catch {
+        if (active) setAgendaExceptions([])
+      }
+    }
+
+    loadAgendaExceptions()
+    window.addEventListener(AGENDA_EXCEPTIONS_CHANGED_EVENT, loadAgendaExceptions)
+
+    return () => {
+      active = false
+      window.removeEventListener(AGENDA_EXCEPTIONS_CHANGED_EVENT, loadAgendaExceptions)
+    }
+  }, [agendaScope, currentProfessional?.id, doctorFilter])
+
   const scopedAppointments = useMemo(() => {
     let filtered = localAppointments
 
@@ -198,8 +231,13 @@ export function useAgenda() {
     return sortAppointmentsByTime(filtered)
   }, [agendaScope, doctorFilter, doctorSearch, localAppointments, professionals, unitFilter])
 
+  const scopedExceptionMarkers = useMemo(
+    () => buildExceptionMarkers(agendaExceptions, professionals),
+    [agendaExceptions, professionals],
+  )
+
   const visibleAppointments = useMemo(() => {
-    let filtered = scopedAppointments
+    let filtered = [...scopedAppointments, ...scopedExceptionMarkers]
 
     if (status === 'Prioridade') {
       filtered = filtered.filter(isHighPriorityAppointment)
@@ -219,12 +257,12 @@ export function useAgenda() {
     }
 
     return sortAppointmentsByTime(filtered)
-  }, [activeView, baseDate, scopedAppointments, status])
+  }, [activeView, baseDate, scopedAppointments, scopedExceptionMarkers, status])
 
   const dailyOccupancyAppointments = useMemo(
     () =>
       sortAppointmentsByTime(
-        scopedAppointments.filter((appointment) => {
+        [...scopedAppointments, ...buildExceptionOccupancy(agendaExceptions, professionals)].filter((appointment) => {
           if (!appointment.date) return false
 
           const appointmentDate = parseLocalDate(appointment.date)
@@ -233,7 +271,7 @@ export function useAgenda() {
           return isSameDay(appointmentDate, baseDate)
         }),
       ),
-    [baseDate, scopedAppointments],
+    [agendaExceptions, baseDate, professionals, scopedAppointments],
   )
 
   function updateForm(field, value) {
@@ -535,6 +573,78 @@ function enrichAppointment(appointment, payload, patients, professionals) {
     createdBy: appointment.createdBy || payload.createdBy,
     createdByName: appointment.createdByName || payload.createdByName,
   }
+}
+
+function buildExceptionMarkers(exceptions, professionals) {
+  return exceptions.map((exception) => exceptionToAppointment(exception, professionals, exception.startTime || '00:00'))
+}
+
+function buildExceptionOccupancy(exceptions, professionals) {
+  return exceptions.flatMap((exception) => {
+    if (exception.kind !== 'bloqueio') {
+      return []
+    }
+
+    const start = normalizeTime(exception.startTime) || '07:00'
+    const end = normalizeTime(exception.endTime) || '19:00'
+    return generateTimes(start, end, 30).map((time) => exceptionToAppointment(exception, professionals, time))
+  })
+}
+
+function exceptionToAppointment(exception, professionals, time) {
+  const professional = professionals.find((item) => normalizeValue(item.id) === normalizeValue(exception.doctorId))
+  const isBlock = exception.kind === 'bloqueio'
+  const timeRange = [normalizeTime(exception.startTime), normalizeTime(exception.endTime)].filter(Boolean).join(' - ')
+
+  return {
+    id: `exception-${exception.id}-${time}`,
+    isException: true,
+    exceptionKind: exception.kind,
+    exceptionId: exception.id,
+    patient: isBlock ? 'Bloqueio de agenda' : 'Disponibilidade extra',
+    patientId: '',
+    professional: professional?.name || 'Médico(a)',
+    professionalId: exception.doctorId,
+    date: exception.date,
+    time: normalizeTime(time) || '00:00',
+    type: isBlock ? 'Exceção de disponibilidade' : 'Disponibilidade extra',
+    mode: timeRange || 'Dia inteiro',
+    durationMinutes: 30,
+    status: isBlock ? 'Bloqueado' : 'Confirmado',
+    notes: exception.reason || '',
+    room: isBlock ? 'Agenda bloqueada' : 'Agenda liberada',
+  }
+}
+
+function generateTimes(start, end, intervalMinutes) {
+  const startMinutes = minutesFromTime(start)
+  const endMinutes = minutesFromTime(end)
+  if (startMinutes === null || endMinutes === null || startMinutes >= endMinutes) return [start]
+
+  const times = []
+  for (let cursor = startMinutes; cursor < endMinutes; cursor += intervalMinutes) {
+    times.push(formatMinutes(cursor))
+  }
+  return times
+}
+
+function normalizeTime(value) {
+  const match = String(value || '').match(/^(\d{1,2}):(\d{2})/)
+  if (!match) return ''
+  return `${match[1].padStart(2, '0')}:${match[2]}`
+}
+
+function minutesFromTime(value) {
+  const time = normalizeTime(value)
+  if (!time) return null
+  const [hours, minutes] = time.split(':').map(Number)
+  return hours * 60 + minutes
+}
+
+function formatMinutes(totalMinutes) {
+  const hours = String(Math.floor(totalMinutes / 60)).padStart(2, '0')
+  const minutes = String(totalMinutes % 60).padStart(2, '0')
+  return `${hours}:${minutes}`
 }
 
 function getPatientName(patientId, patients) {

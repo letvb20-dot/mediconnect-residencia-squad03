@@ -56,7 +56,8 @@ export function AgendaDailyView({
           const occupiedSlotAppointments = occupiedAppointmentsByTime.get(time) || []
           const primaryAppointment = slotAppointments[0]
           const hasHiddenAppointment = !primaryAppointment && occupiedSlotAppointments.length > 0
-          const isBooked = Boolean(primaryAppointment) || hasHiddenAppointment
+          const primaryBlocksSlot = Boolean(primaryAppointment) && !isAvailabilityExtra(primaryAppointment)
+          const isBooked = primaryBlocksSlot || hasHiddenAppointment
           const isPast = isPastSlot(baseDate, time)
           const canCreateSlot = canCreateAppointment && !isBooked && !isPast
 
@@ -74,7 +75,7 @@ export function AgendaDailyView({
               <div>
                 <p className="text-xl font-bold leading-none">{time}</p>
                 <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] opacity-80">
-                  {isBooked ? 'Agendado' : isPast ? 'Encerrado' : 'Disponível'}
+                  {primaryAppointment?.status || (isBooked ? 'Agendado' : isPast ? 'Encerrado' : 'Disponível')}
                 </p>
               </div>
 
@@ -82,7 +83,7 @@ export function AgendaDailyView({
                 <div>
                   <button
                     className="text-left text-sm font-bold transition hover:opacity-85"
-                    onClick={() => onAppointmentClick?.(primaryAppointment)}
+                    onClick={() => !primaryAppointment.isException && onAppointmentClick?.(primaryAppointment)}
                     type="button"
                   >
                     {primaryAppointment.patient}
@@ -177,6 +178,10 @@ function groupAppointmentsByTime(appointments) {
     map.set(time, [...(map.get(time) || []), appointment])
     return map
   }, new Map())
+}
+
+function isAvailabilityExtra(appointment) {
+  return appointment?.isException && appointment?.exceptionKind === 'disponibilidade_extra'
 }
 
 function mergeSlotsWithAppointmentTimes(slots, appointments) {

@@ -3,6 +3,7 @@ import { getResponseError, normalizeCollection, normalizeItem } from './reposito
 
 const availabilityBaseUrl = `${apiConfig.restUrl}/doctor_availability`
 const exceptionsBaseUrl = `${apiConfig.restUrl}/doctor_exceptions`
+export const AGENDA_EXCEPTIONS_CHANGED_EVENT = 'mediconnect:agenda-exceptions-changed'
 
 export const availabilityRepository = {
   // GET /rest/v1/doctor_availability
@@ -103,19 +104,24 @@ export const availabilityRepository = {
   },
 
   // POST /functions/v1/get-available-slots
-  // Body documentado: doctor_id*, date* (YYYY-MM-DD)
-  async getAvailableSlots({ date, doctorId }) {
-    if (!doctorId || !date) {
+  // Body documentado: doctor_id*, start_date*, end_date*, appointment_type?
+  async getAvailableSlots({ date, startDate, endDate, doctorId, appointmentType }) {
+    const rangeStart = startDate || date
+    const rangeEnd = endDate || date || startDate
+
+    if (!doctorId || !rangeStart || !rangeEnd) {
       throw new Error('Selecione médico e data para calcular os horários disponíveis.')
     }
 
     const response = await fetch(`${apiConfig.functionsUrl}/get-available-slots`, {
       method: 'POST',
       headers: getAuthenticatedHeaders(),
-      body: JSON.stringify({
+      body: JSON.stringify(cleanPayload({
         doctor_id: doctorId,
-        date,
-      }),
+        start_date: rangeStart,
+        end_date: rangeEnd,
+        appointment_type: appointmentType ? normalizeAppointmentType(appointmentType) : undefined,
+      })),
     })
 
     if (!response.ok) {
@@ -145,11 +151,15 @@ function buildAvailabilityQuery(filters) {
 }
 
 function toAvailabilityPayload(data) {
+  const startTime = formatTimeForApi(data.startTime)
+  const endTime = formatTimeForApi(data.endTime)
+  validateAvailabilityPayload({ ...data, startTime, endTime })
+
   return cleanPayload({
     doctor_id: data.doctorId,
     weekday: Number(data.weekday),
-    start_time: formatTimeForApi(data.startTime),
-    end_time: formatTimeForApi(data.endTime),
+    start_time: startTime,
+    end_time: endTime,
     slot_minutes: data.slotMinutes !== undefined ? Number(data.slotMinutes) : 30,
     appointment_type: normalizeAppointmentType(data.appointmentType),
     active: data.active === undefined ? true : Boolean(data.active),
@@ -174,8 +184,8 @@ function toExceptionPayload(data) {
     doctor_id: data.doctorId,
     date: data.date,
     kind: data.kind,
-    start_time: data.startTime || null,
-    end_time: data.endTime || null,
+    start_time: data.startTime ? formatTimeForApi(data.startTime) : null,
+    end_time: data.endTime ? formatTimeForApi(data.endTime) : null,
     reason: data.reason || null,
     created_by: data.createdBy || getCurrentUserId(),
   }, { keepNull: true })
@@ -243,6 +253,34 @@ function formatTimeForApi(value) {
   const match = String(value || '').match(/^(\d{2}):(\d{2})(?::(\d{2}))?$/)
   if (!match) return value
   return `${match[1]}:${match[2]}`
+}
+
+function validateAvailabilityPayload(data) {
+  if (!data.doctorId) {
+    throw new Error('Selecione um médico para criar disponibilidade.')
+  }
+
+  const weekday = Number(data.weekday)
+  if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) {
+    throw new Error('Selecione um dia da semana válido para a disponibilidade.')
+  }
+
+  const startMinutes = minutesFromTime(data.startTime)
+  const endMinutes = minutesFromTime(data.endTime)
+  if (startMinutes === null || endMinutes === null || startMinutes >= endMinutes) {
+    throw new Error('O horário inicial da disponibilidade deve ser menor que o horário final.')
+  }
+
+  const slotMinutes = Number(data.slotMinutes ?? 30)
+  if (!Number.isFinite(slotMinutes) || slotMinutes < 5 || slotMinutes > 240) {
+    throw new Error('Informe um intervalo de slot válido.')
+  }
+}
+
+function minutesFromTime(value) {
+  const match = String(value || '').match(/^(\d{2}):(\d{2})$/)
+  if (!match) return null
+  return Number(match[1]) * 60 + Number(match[2])
 }
 
 function getCurrentUserId() {

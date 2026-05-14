@@ -27,11 +27,12 @@ export const reportMapper = {
 
   toApi(uiData) {
     // ReportInput (campos documentados):
-    // patient_id*, status, exam, requested_by, cid_code, diagnosis, conclusion,
+    // patient_id*, order_number, status, exam, requested_by, cid_code, diagnosis, conclusion,
     // content_html, content_json, hide_date, hide_signature, due_at
-    // Não envia: id, order_number, created_by, updated_by, created_at, updated_at (geridos pelo banco)
+    // Não envia: id, created_by, updated_by, created_at, updated_at (geridos pelo banco)
     return cleanPayload({
       patient_id: uiData.patientId,
+      order_number: emptyToUndefined(uiData.orderNumber),
       status: normalizeApiStatus(uiData.status),
       exam: emptyToUndefined(uiData.exam),
       requested_by: emptyToUndefined(uiData.requestedBy),
@@ -61,8 +62,15 @@ function normalizeStatus(status) {
 
 function normalizeApiStatus(status) {
   // Enum documentado: draft | completed
-  if (status === 'finalized' || status === 'completed' || status === 'sent') return 'completed'
+  const normalized = removeAccents(status).toLowerCase()
+  if (['finalized', 'finalizado', 'finished', 'completed', 'complete', 'done', 'sent', 'enviado'].includes(normalized)) {
+    return 'completed'
+  }
   return 'draft'
+}
+
+function removeAccents(value) {
+  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
 }
 
 function emptyToUndefined(value) {

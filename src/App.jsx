@@ -314,7 +314,7 @@ function resolveRoute(pathname, navigate, role, profile, user) {
     }
   }
 
-  if (pathname === '/comunicacao' || pathname === '/mensagens' || pathname === '/camunicacao') {
+  if (pathname === '/comunicacao' || pathname === '/mensagens') {
     return {
       element: <MessagesPage navigate={navigate} role={role} />,
       title: 'Comunicação',

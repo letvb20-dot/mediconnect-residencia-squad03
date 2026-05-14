@@ -17,7 +17,7 @@ import { AgendaMonthlyView } from '../components/calendar/AgendaMonthlyView.jsx'
 import { AgendaWeeklyView } from '../components/calendar/AgendaWeeklyView.jsx'
 import { StethoscopeIcon } from '../components/Brand.jsx'
 import { useAgenda } from '../hooks/useAgenda.js'
-import { availabilityRepository } from '../repositories/availabilityRepository.js'
+import { AGENDA_EXCEPTIONS_CHANGED_EVENT, availabilityRepository } from '../repositories/availabilityRepository.js'
 import { formatLocalDateInput, parseLocalDate } from '../utils/agendaDate.js'
 
 const statusFilters = [
@@ -136,6 +136,7 @@ export function AgendaPage({ navigate }) {
   }
 
   function openManage(appointment) {
+    if (appointment?.isException) return
     setModalPatientSearch('')
     setModalDoctorSearch('')
     openAppointmentModal(appointment)
@@ -694,8 +695,18 @@ function AvailabilitySidebar({ currentProfessional, isDoctorScope, professionals
       window.alert('Selecione ao menos um dia da semana.')
       return
     }
+    if (!isValidTimeRange(availabilityForm.startTime, availabilityForm.endTime)) {
+      window.alert('O horário inicial deve ser menor que o horário final.')
+      return
+    }
 
     try {
+      const conflictingWeekdays = await findConflictingAvailability(availabilityForm)
+      if (conflictingWeekdays.length) {
+        window.alert(`Já existe disponibilidade sobreposta para: ${conflictingWeekdays.join(', ')}.`)
+        return
+      }
+
       await Promise.all(
         availabilityForm.weekdays.map((weekday) =>
           availabilityRepository.create({
@@ -723,10 +734,32 @@ function AvailabilitySidebar({ currentProfessional, isDoctorScope, professionals
         createdBy: viewerProfile?.id || currentProfessional?.userId || currentProfessional?.id,
       })
       await loadExceptions()
+      window.dispatchEvent(new CustomEvent(AGENDA_EXCEPTIONS_CHANGED_EVENT))
       window.alert('Exceção cadastrada.')
     } catch (err) {
       window.alert(err.message || 'Erro ao criar exceção de agenda.')
     }
+  }
+
+  async function findConflictingAvailability(form) {
+    const conflicts = []
+
+    for (const weekday of form.weekdays) {
+      const rows = await availabilityRepository.getAll({
+        doctorId: form.doctorId,
+        weekday,
+        appointmentType: form.appointmentType,
+      })
+
+      if (rows.some((row) =>
+        row.active !== false &&
+        intervalsOverlap(form.startTime, form.endTime, row.startTime, row.endTime)
+      )) {
+        conflicts.push(getWeekdayLabel(weekday))
+      }
+    }
+
+    return conflicts
   }
 
   function updateAvailabilityFilter(field, value) {
@@ -980,6 +1013,27 @@ function formatDisplayDate(value) {
   if (!value) return '-'
   const [year, month, day] = String(value).split('-')
   return year && month && day ? `${day}/${month}/${year}` : value
+}
+
+function isValidTimeRange(startTime, endTime) {
+  const start = minutesFromTime(startTime)
+  const end = minutesFromTime(endTime)
+  return start !== null && end !== null && start < end
+}
+
+function intervalsOverlap(startA, endA, startB, endB) {
+  const aStart = minutesFromTime(startA)
+  const aEnd = minutesFromTime(endA)
+  const bStart = minutesFromTime(startB)
+  const bEnd = minutesFromTime(endB)
+  if ([aStart, aEnd, bStart, bEnd].some((value) => value === null)) return false
+  return aStart < bEnd && bStart < aEnd
+}
+
+function minutesFromTime(value) {
+  const match = String(value || '').match(/^(\d{1,2}):(\d{2})/)
+  if (!match) return null
+  return Number(match[1]) * 60 + Number(match[2])
 }
 
 function isSecretaryProfile(profile) {

@@ -168,7 +168,7 @@ export function HomePage({ navigate, profile, role, user }) {
       </div>
       {canManageUsers ? (
         <aside className="min-w-0 self-start 2xl:sticky 2xl:top-6 2xl:pt-[104px]">
-          <UsersPage embedded role={role} />
+          <UsersPage embedded navigate={navigate} role={role} />
         </aside>
       ) : null}
     </div>
@@ -187,7 +187,7 @@ function MetricCard({ metric }) {
           <p className="text-sm font-medium leading-5 text-[#a3a3a3]">{metric.label}</p>
           <p className="mt-3 text-[32px] font-bold leading-8 text-[#e5e5e5]">{metric.value}</p>
         </div>
-        <span className={`grid size-9 place-items-center rounded-md ${metricTone(metric.tone)}`}>
+        <span className={`metric-tone-icon grid size-9 place-items-center rounded-md ${metricTone(metric.tone)}`}>
           <SparkLineIcon className="size-5" />
         </span>
       </div>
@@ -247,9 +247,9 @@ function LineChart() {
 }
 
 function metricTone(tone) {
-  if (tone === 'violet') return 'bg-[#322b3d] text-[#8b5cf6]'
-  if (tone === 'green') return 'bg-[#123328] text-[#10b981]'
-  return 'bg-[#1d2f4f] text-[#3b82f6]'
+  if (tone === 'violet') return 'metric-tone-violet'
+  if (tone === 'green') return 'metric-tone-green'
+  return 'metric-tone-blue'
 }
 
 function getDisplayName(profile, user) {

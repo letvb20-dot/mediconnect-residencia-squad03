@@ -99,6 +99,16 @@ export function getAnonHeaders(extraHeaders = {}) {
   })
 }
 
+export function getPublicHeaders(extraHeaders = {}) {
+  assertApiConfig()
+
+  return cleanHeaders({
+    apikey: apiConfig.anonKey,
+    'Content-Type': 'application/json',
+    ...extraHeaders,
+  })
+}
+
 export function getAuthenticatedHeaders(extraHeaders = {}) {
   assertApiConfig()
 

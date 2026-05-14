@@ -39,10 +39,19 @@ export function maskCep(value) {
   return digits.replace(/(\d{5})(\d)/, '$1-$2')
 }
 
+export function maskRg(value) {
+  const digits = limitDigits(value, 9)
+  return digits
+    .replace(/(\d{2})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d{1})$/, '$1-$2')
+}
+
 export function sanitizeFieldValue(name, value, { allowEmail = false, allowPassword = false } = {}) {
   if (allowEmail || allowPassword || isEmailField(name) || isPasswordField(name)) return value
   if (isUfField(name)) return String(value || '').replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase()
 
+  if (isRgField(name)) return maskRg(value)
   if (isCpfField(name)) return maskCpf(value)
   if (isPhoneField(name)) return maskBrazilianPhone(value)
   if (isCepField(name)) return maskCep(value)
@@ -60,7 +69,11 @@ function isPasswordField(name) {
 }
 
 function isCpfField(name) {
-  return /cpf|document/i.test(String(name || ''))
+  return /cpf/i.test(String(name || ''))
+}
+
+function isRgField(name) {
+  return /^rg$/i.test(String(name || ''))
 }
 
 function isPhoneField(name) {

@@ -9,6 +9,13 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  --surface-elevated: #171717;
+  --text-primary: #e5e5e5;
+  --text-muted: #a3a3a3;
+  --border-default: #404040;
+  --accent-primary: #3b82f6;
+  --radius-input: 0.375rem;
 }
 
 * {
@@ -48,6 +55,12 @@ button:disabled {
   color: #333333;
   background: #d9e4f0;
   color-scheme: light;
+
+  --surface-elevated: #ffffff;
+  --text-primary: #333333;
+  --text-muted: #6b7280;
+  --border-default: #d6dee8;
+  --accent-primary: #2563eb;
 }
 
 [data-theme='light'] body {
@@ -439,8 +452,21 @@ button:disabled {
 }
 
 .settings-high-contrast {
-  filter: contrast(1.12);
+  --text-muted: #ffffff;
+  --text-secondary: #ffffff;
+  --border-default: #9ca3af;
+  border-width: 2px !important;
 }
+
+[data-theme='light'].settings-high-contrast {
+  --text-muted: #000000;
+  --text-secondary: #000000;
+  --border-default: #4b5563;
+}
+
+html.text-scale-sm { font-size: 14px; }
+html.text-scale-standard { font-size: 16px; }
+html.text-scale-lg { font-size: 18px; }
 
 .settings-compact main {
   padding-top: 1rem;

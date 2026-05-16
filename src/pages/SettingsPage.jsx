@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 
 import { settingsRepository } from '../repositories/settingsRepository.js'
 import { getStoredTheme, setStoredTheme } from '../utils/theme.js'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select.jsx'
+import { Switch } from '../components/ui/switch.jsx'
 
 const SETTINGS_UI_KEY = 'mediconnect.settings.ui'
 const cardClass = 'rounded-2xl border border-[#404040] bg-[#262626] shadow-sm'
@@ -65,7 +67,11 @@ function AppearanceSection() {
     localStorage.setItem(SETTINGS_UI_KEY, JSON.stringify(ui))
     document.documentElement.classList.toggle('settings-animations-off', !ui.animations)
     document.documentElement.classList.toggle('settings-high-contrast', ui.contrast)
-    document.documentElement.classList.toggle('settings-compact', ui.compact)
+    
+    document.documentElement.classList.remove('text-scale-sm', 'text-scale-standard', 'text-scale-lg')
+    if (ui.typographicScale) {
+      document.documentElement.classList.add(`text-scale-${ui.typographicScale}`)
+    }
   }, [ui])
 
   function handleThemeChange(nextTheme) {
@@ -120,13 +126,35 @@ function AppearanceSection() {
       <SettingsGroup>
         <ToggleRow checked={ui.animations} description="Transições suaves entre telas e componentes" label="Animações de interface" onChange={(value) => updateUi('animations', value)} />
         <ToggleRow checked={ui.contrast} description="Aumenta o contraste dos elementos para melhor acessibilidade" label="Modo de alto contraste" onChange={(value) => updateUi('contrast', value)} />
-        <ToggleRow checked={ui.compact} description="Reduz o espaçamento para exibir mais informações na tela" label="Densidade compacta" onChange={(value) => updateUi('compact', value)} />
-        <SettingRow label="Idioma do sistema">
-          <select className={inputClass} defaultValue="pt-br">
-            <option value="pt-br">Português (BR)</option>
-            <option value="en-us">English (US)</option>
-            <option value="es">Español</option>
-          </select>
+        
+        <SettingRow description="Define o tamanho base da interface" label="Escala Tipográfica">
+          <div className="w-48">
+            <Select value={ui.typographicScale} onValueChange={(val) => updateUi('typographicScale', val)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione o tamanho" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="sm">Pequena (14px)</SelectItem>
+                <SelectItem value="standard">Padrão (16px)</SelectItem>
+                <SelectItem value="lg">Grande (18px)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </SettingRow>
+
+        <SettingRow description="Idioma de exibição do sistema" label="Idioma do sistema">
+          <div className="w-48">
+            <Select value={ui.language} onValueChange={(val) => updateUi('language', val)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione o idioma" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pt-br">Português (BR)</SelectItem>
+                <SelectItem value="en-us">English (US)</SelectItem>
+                <SelectItem value="es">Español</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </SettingRow>
       </SettingsGroup>
     </SectionFrame>
@@ -298,23 +326,23 @@ function Subsection({ children, title }) {
 }
 
 function SettingsGroup({ children }) {
-  return <div className="rounded-xl border border-[#404040] bg-[#171717] px-6">{children}</div>
+  return <div className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-elevated)] px-6">{children}</div>
 }
 
 function ToggleRow({ checked, description, label, onChange }) {
   return (
     <SettingRow description={description} label={label}>
-      <ToggleSwitch checked={checked} onChange={onChange} />
+      <Switch checked={checked} onCheckedChange={onChange} />
     </SettingRow>
   )
 }
 
 function SettingRow({ children, description, label }) {
   return (
-    <div className={rowClass}>
+    <div className="flex items-center justify-between gap-6 border-b border-[var(--border-default)] py-4 last:border-0">
       <div className="min-w-0 flex-1 pr-4">
-        <p className="text-sm font-semibold text-[#e5e5e5]">{label}</p>
-        {description ? <p className="mt-1 text-xs leading-5 text-[#a3a3a3]">{description}</p> : null}
+        <p className="text-sm font-semibold text-[var(--text-primary)]">{label}</p>
+        {description ? <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">{description}</p> : null}
       </div>
       <div className="shrink-0">{children}</div>
     </div>
@@ -337,9 +365,9 @@ function ToggleSwitch({ checked, onChange }) {
 
 function getStoredUiSettings() {
   try {
-    return { animations: true, contrast: false, compact: false, ...JSON.parse(localStorage.getItem(SETTINGS_UI_KEY) || '{}') }
+    return { animations: true, contrast: false, typographicScale: 'standard', language: 'pt-br', ...JSON.parse(localStorage.getItem(SETTINGS_UI_KEY) || '{}') }
   } catch {
-    return { animations: true, contrast: false, compact: false }
+    return { animations: true, contrast: false, typographicScale: 'standard', language: 'pt-br' }
   }
 }
 

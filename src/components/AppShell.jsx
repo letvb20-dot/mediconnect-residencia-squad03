@@ -9,6 +9,7 @@ import {
   notificationRepository,
 } from '../repositories/notificationRepository.js'
 import { profileRepository } from '../repositories/profileRepository.js'
+import { useSocket } from '../providers/SocketProvider.jsx'
 import { BrandLogo } from './Brand.jsx'
 
 // Todos os itens de navegação com seus ícones e metadados
@@ -50,6 +51,23 @@ export function AppShell({ children, currentPath, navigate, role, routeTitle }) 
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [viewerProfile, setViewerProfile] = useState({ name: 'Usuário', role: 'Usuário do Sistema' })
   const [notifications, setNotifications] = useState([])
+  const { useSocketEvent } = useSocket()
+
+  useSocketEvent('nova_notificacao', (payload) => {
+    // Increment notifications unread
+    setNotifications((prev) => [payload, ...prev])
+    
+    const messageDetail = payload.detail || ''
+    const truncated = messageDetail.length > 50 ? `${messageDetail.substring(0, 50)}...` : messageDetail
+
+    // Dispatch Toast
+    window.dispatchEvent(new CustomEvent('app:show_toast', {
+      detail: {
+        title: payload.title || 'Nova Notificação',
+        description: truncated || 'Você tem uma atualização na agenda.'
+      }
+    }))
+  })
 
   const pageTitle = useMemo(() => {
     if (currentPath.startsWith('/pacientes/') && routeTitle) {
@@ -280,7 +298,7 @@ export function AppShell({ children, currentPath, navigate, role, routeTitle }) 
                 >
                   <BellIcon className="size-5" />
                   {notifications.some((notification) => !notification.read) ? (
-                    <span className="absolute right-0 top-0 grid size-4 place-items-center rounded-full bg-[#ef4444] text-[10px] font-bold leading-none text-white">
+                    <span className="absolute right-0 top-0 grid size-4 place-items-center rounded-full bg-red-500 text-[10px] font-bold leading-none text-white ring-2 ring-[var(--surface-elevated)]">
                       {notifications.filter((notification) => !notification.read).length}
                     </span>
                   ) : null}
@@ -289,31 +307,45 @@ export function AppShell({ children, currentPath, navigate, role, routeTitle }) 
                 {notificationsOpen ? (
                   <div
                     aria-label="Notificações"
-                    className="absolute right-0 top-12 z-30 w-80 rounded-md border border-[#404040] bg-[#262626] p-2 shadow-2xl shadow-black/30"
-                    role="menu"
+                    className="absolute right-0 top-12 z-50 w-80 rounded-md border border-[var(--border-default)] bg-[var(--surface-elevated)] p-2 shadow-md outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2"
+                    role="dialog"
+                    data-state="open"
                   >
                     <div className="flex items-center justify-between px-2 py-2">
-                      <p className="text-sm font-semibold text-[#e5e5e5]">Notificações</p>
+                      <p className="text-sm font-semibold text-[var(--text-primary)]">Notificações</p>
                     </div>
+                    <div className="my-1 h-px bg-[var(--border-default)]" />
                     <div className="max-h-[18rem] space-y-1 overflow-y-auto pr-1">
                       {notifications.length ? notifications.map((notification) => (
                         <button
-                          className="w-full rounded-sm border border-transparent px-2 py-2 text-left transition hover:border-[#404040] hover:bg-[#303030]"
+                          className="w-full rounded-sm border border-transparent px-2 py-2 text-left transition hover:border-[var(--border-default)] hover:bg-[#303030]"
                           key={notification.id}
                           onClick={() => handleNotificationClick(notification)}
                           role="menuitem"
                           type="button"
                         >
-                          <span className="flex items-start justify-between gap-3">
-                            <span className="min-w-0">
-                              <span className="block text-sm font-semibold text-[#e5e5e5]">{notification.title}</span>
-                              <span className="mt-0.5 block text-xs leading-5 text-[#a3a3a3]">{notification.detail}</span>
+                          <span className="flex items-start gap-3">
+                            <NotificationIcon domain={notification.domain} channel={notification.channel} />
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-sm font-semibold text-[var(--text-primary)]">{notification.title}</span>
+                              <span className="mt-0.5 block text-xs leading-5 text-[var(--text-muted)] truncate">{notification.detail}</span>
                             </span>
-                            <span className="shrink-0 text-[10px] font-semibold text-[#51a2ff]">{formatNotificationTime(notification.createdAt)}</span>
+                            <span className="shrink-0 text-[10px] font-semibold text-[var(--accent-primary, #3b82f6)]">{formatNotificationTime(notification.createdAt)}</span>
                           </span>
                         </button>
                       )) : (
-                        <p className="px-2 py-4 text-sm text-[#a3a3a3]">Sem notificações novas.</p>
+                        <div className="flex flex-col items-center justify-center gap-3 py-8 px-4 text-center">
+                          <svg className="size-12 text-[var(--text-muted)] opacity-30" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" viewBox="0 0 24 24">
+                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                            <path d="M17 6h3l-3 4h3" />
+                            <path d="M20 1h2l-2 3h2" />
+                          </svg>
+                          <div>
+                            <p className="text-sm font-semibold text-[var(--text-primary)]">Tudo tranquilo por aqui.</p>
+                            <p className="mt-1 text-xs text-[var(--text-muted)]">Você não tem novas notificações.</p>
+                          </div>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -603,4 +635,72 @@ function formatNotificationTime(value) {
   if (diffHours < 24) return `${diffHours} h`
 
   return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(date)
+}
+
+function NotificationIcon({ domain, channel }) {
+  if (domain === 'communication' || domain === 'comunicacao') {
+    if (channel === 'whatsapp') {
+      return (
+        <div className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--surface-elevated)] border border-[var(--border-default)] text-[var(--accent-primary)] shadow-sm">
+          <svg className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+          </svg>
+        </div>
+      )
+    }
+    if (channel === 'email') {
+      return (
+        <div className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--surface-elevated)] border border-[var(--border-default)] text-[var(--text-primary)] shadow-sm">
+          <svg className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+            <rect width="20" height="16" x="2" y="4" rx="2" />
+            <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+          </svg>
+        </div>
+      )
+    }
+    // SMS / Default Communication
+    return (
+      <div className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--surface-elevated)] border border-[var(--border-default)] text-[var(--text-primary)] shadow-sm">
+        <svg className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        </svg>
+      </div>
+    )
+  }
+
+  if (domain === 'medical-records' || domain === 'prontuario') {
+    return (
+      <div className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--surface-elevated)] border border-[var(--border-default)] text-[var(--accent-primary)] shadow-sm">
+        <svg className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+          <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2" />
+        </svg>
+      </div>
+    )
+  }
+
+  if (domain === 'reports' || domain === 'relatorios') {
+    return (
+      <div className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--surface-elevated)] border border-[var(--border-default)] text-[var(--text-primary)] shadow-sm">
+        <svg className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <path d="M14 2v6h6" />
+          <path d="M8 18h8" />
+          <path d="M8 14h8" />
+          <path d="M8 10h2" />
+        </svg>
+      </div>
+    )
+  }
+
+  // Default Agenda Icon
+  return (
+    <div className="grid size-8 shrink-0 place-items-center rounded-full bg-transparent text-[var(--text-muted)]">
+      <svg className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+        <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
+        <line x1="16" x2="16" y1="2" y2="6" />
+        <line x1="8" x2="8" y1="2" y2="6" />
+        <line x1="3" x2="21" y1="10" y2="10" />
+      </svg>
+    </div>
+  )
 }

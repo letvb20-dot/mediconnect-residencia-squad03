@@ -5,6 +5,8 @@ import { getStoredTheme, setStoredTheme } from '../utils/theme.js'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select.jsx'
 import { Switch } from '../components/ui/switch.jsx'
 
+import { useAccessibility } from '../contexts/AccessibilityContext.jsx'
+
 const SETTINGS_UI_KEY = 'mediconnect.settings.ui'
 const cardClass = 'rounded-2xl border border-[#404040] bg-[#262626] shadow-sm'
 const rowClass = 'flex items-center justify-between gap-6 border-b border-[#404040] py-4 last:border-0'
@@ -61,25 +63,10 @@ export function SettingsPage() {
 
 function AppearanceSection() {
   const [theme, setTheme] = useState(() => getStoredTheme())
-  const [ui, setUi] = useState(() => getStoredUiSettings())
-
-  useEffect(() => {
-    localStorage.setItem(SETTINGS_UI_KEY, JSON.stringify(ui))
-    document.documentElement.classList.toggle('settings-animations-off', !ui.animations)
-    document.documentElement.classList.toggle('settings-high-contrast', ui.contrast)
-    
-    document.documentElement.classList.remove('text-scale-sm', 'text-scale-standard', 'text-scale-lg')
-    if (ui.typographicScale) {
-      document.documentElement.classList.add(`text-scale-${ui.typographicScale}`)
-    }
-  }, [ui])
+  const { ui, updateUi } = useAccessibility()
 
   function handleThemeChange(nextTheme) {
     setTheme(setStoredTheme(nextTheme))
-  }
-
-  function updateUi(field, value) {
-    setUi((current) => ({ ...current, [field]: value }))
   }
 
   return (
@@ -161,19 +148,128 @@ function AppearanceSection() {
   )
 }
 
+function SkeletonToggleRow() {
+  return (
+    <div className="flex items-center justify-between gap-6 border-b border-[var(--border-default)] py-4 last:border-0">
+      <div className="min-w-0 flex-1 pr-4 space-y-2">
+        <div className="h-4 w-32 animate-pulse rounded bg-[#303030]"></div>
+        <div className="h-3 w-64 animate-pulse rounded bg-[#303030]"></div>
+      </div>
+      <div className="shrink-0">
+        <div className="h-6 w-11 animate-pulse rounded-full bg-[#303030]"></div>
+      </div>
+    </div>
+  )
+}
+
 function NotificationsSection() {
-  const [agenda, setAgenda] = useState(true)
-  const [communication, setCommunication] = useState(true)
-  const [records, setRecords] = useState(true)
-  const [reports, setReports] = useState(true)
+  const [prefs, setPrefs] = useState(null)
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    async function loadPreferences() {
+      try {
+        const token = localStorage.getItem('token') || ''
+        const res = await fetch('http://localhost:3333/usuarios/me/preferencias', {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        if (!res.ok) throw new Error('Falha ao buscar')
+        const data = await res.json()
+        setPrefs(data)
+      } catch (err) {
+        // Fallback temporário para manter a UI visualizável em caso de erro local (sem backend rodando)
+        setPrefs({
+          notificacoes_agenda: true,
+          notificacoes_comunicacao: true,
+          notificacoes_prontuario: true,
+          notificacoes_relatorios: true
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    
+    // Pequeno delay artificial apenas para demonstrar os Skeletons da interface
+    setTimeout(loadPreferences, 800)
+  }, [])
+
+  async function handleToggle(key, newValue) {
+    const previous = { ...prefs }
+    
+    // 1. Optimistic Update (UI imediata)
+    setPrefs(prev => ({ ...prev, [key]: newValue }))
+
+    try {
+      const token = localStorage.getItem('token') || ''
+      const res = await fetch('http://localhost:3333/usuarios/me/preferencias', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ [key]: newValue })
+      })
+
+      if (!res.ok) throw new Error('Erro na rede')
+      
+      window.dispatchEvent(new CustomEvent('app:show_toast', {
+        detail: { 
+          title: 'Preferência atualizada', 
+          description: 'Sua configuração de notificação foi salva.',
+          type: 'success'
+        }
+      }))
+    } catch (err) {
+      // 2. Reversão em caso de falha (Rollback) e Toast de Erro
+      setPrefs(previous)
+      window.dispatchEvent(new CustomEvent('app:show_toast', {
+        detail: { 
+          title: 'Erro ao salvar', 
+          description: 'Não foi possível salvar sua preferência. Tente novamente.',
+          type: 'error'
+        }
+      }))
+    }
+  }
 
   return (
     <SectionFrame description="Escolha quais eventos aparecem no sino de notificações." title="Notificações">
       <SettingsGroup>
-        <ToggleRow checked={agenda} description="Marcações, alterações e cancelamentos de consulta" label="Agenda" onChange={setAgenda} />
-        <ToggleRow checked={communication} description="Mensagens e contatos registrados" label="Comunicação" onChange={setCommunication} />
-        <ToggleRow checked={records} description="Criação e edição de prontuários" label="Prontuário" onChange={setRecords} />
-        <ToggleRow checked={reports} description="Criação e edição de relatórios" label="Relatórios" onChange={setReports} />
+        {isLoading || !prefs ? (
+          <>
+            <SkeletonToggleRow />
+            <SkeletonToggleRow />
+            <SkeletonToggleRow />
+            <SkeletonToggleRow />
+          </>
+        ) : (
+          <>
+            <ToggleRow 
+              checked={prefs.notificacoes_agenda} 
+              description="Marcações, alterações e cancelamentos de consulta" 
+              label="Agenda" 
+              onChange={(v) => handleToggle('notificacoes_agenda', v)} 
+            />
+            <ToggleRow 
+              checked={prefs.notificacoes_comunicacao} 
+              description="Mensagens SMS, Email e WhatsApp de pacientes" 
+              label="Comunicação" 
+              onChange={(v) => handleToggle('notificacoes_comunicacao', v)} 
+            />
+            <ToggleRow 
+              checked={prefs.notificacoes_prontuario} 
+              description="Criação e edição de prontuários" 
+              label="Prontuário" 
+              onChange={(v) => handleToggle('notificacoes_prontuario', v)} 
+            />
+            <ToggleRow 
+              checked={prefs.notificacoes_relatorios} 
+              description="Criação e edição de relatórios" 
+              label="Relatórios" 
+              onChange={(v) => handleToggle('notificacoes_relatorios', v)} 
+            />
+          </>
+        )}
       </SettingsGroup>
     </SectionFrame>
   )
@@ -361,14 +457,6 @@ function ToggleSwitch({ checked, onChange }) {
       <span className={`inline-block size-4 rounded-full bg-white shadow-md transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
     </button>
   )
-}
-
-function getStoredUiSettings() {
-  try {
-    return { animations: true, contrast: false, typographicScale: 'standard', language: 'pt-br', ...JSON.parse(localStorage.getItem(SETTINGS_UI_KEY) || '{}') }
-  } catch {
-    return { animations: true, contrast: false, typographicScale: 'standard', language: 'pt-br' }
-  }
 }
 
 function SettingsIcon({ className = 'size-4', name }) {

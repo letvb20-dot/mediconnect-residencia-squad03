@@ -9,7 +9,7 @@ const tabs = [
   { label: 'Finalizadas', value: 'finalizadas' },
 ]
 
-const cardClass = 'rounded-2xl border border-[#404040] bg-[#262626] shadow-sm'
+const cardClass = 'rounded-2xl border border-[var(--border-default)] bg-[var(--surface-elevated)] shadow-sm'
 
 export function VisitsPage({ navigate }) {
   const stages = useMemo(() => visitRepository.getStages(), [])
@@ -59,20 +59,20 @@ export function VisitsPage({ navigate }) {
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <header className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#f5f5f5]">Consultas</h1>
-          <p className="mt-1 text-sm text-[#b8b8b8]">Fila de atendimento derivada dos agendamentos da API.</p>
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-2xl font-bold tracking-tight text-[var(--text-primary)]">Consultas</h1>
+          <p className="mt-1 truncate text-sm text-[var(--text-muted)]">Fila de atendimento derivada dos agendamentos da API.</p>
         </div>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex shrink-0 flex-wrap gap-3">
           <button
-            className="h-10 rounded-sm border border-[#404040] bg-[#262626] px-4 text-sm font-semibold text-[#e5e5e5] transition hover:bg-[#303030]"
+            className="min-h-10 shrink-0 rounded-sm border border-[var(--border-default)] bg-[var(--surface-elevated)] px-4 py-2 text-sm font-semibold text-[var(--text-primary)] transition hover:brightness-110"
             onClick={() => navigate('/agenda')}
             type="button"
           >
             Abrir agenda
           </button>
           <button
-            className="h-10 rounded-sm bg-[#3b82f6] px-4 text-sm font-semibold text-white transition hover:bg-[#2563eb]"
+            className="min-h-10 shrink-0 rounded-sm bg-[#3b82f6] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#2563eb]"
             onClick={() => navigate('/prontuario')}
             type="button"
           >
@@ -102,11 +102,11 @@ export function VisitsPage({ navigate }) {
 
       {!loading && !error ? <section className={`${cardClass} p-5`}>
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex flex-wrap gap-2 rounded-sm border border-[#404040] bg-[#171717] p-1">
+          <div className="flex flex-wrap gap-2 rounded-sm border border-[var(--border-default)] bg-[var(--surface-elevated)] p-1">
             {tabs.map((tab) => (
               <button
-                className={`h-9 rounded-sm px-3 text-sm font-semibold transition ${
-                  activeTab === tab.value ? 'bg-[#3b82f6] text-white' : 'text-[#b8b8b8] hover:bg-[#303030] hover:text-[#e5e5e5]'
+                className={`min-h-9 shrink-0 rounded-sm px-3 py-1.5 text-sm font-semibold transition ${
+                  activeTab === tab.value ? 'bg-[#3b82f6] text-white' : 'text-[var(--text-muted)] hover:brightness-110'
                 }`}
                 key={tab.value}
                 onClick={() => setActiveTab(tab.value)}
@@ -116,28 +116,32 @@ export function VisitsPage({ navigate }) {
               </button>
             ))}
           </div>
-          <p className="text-sm text-[#a3a3a3]">{visibleQueue.length} registros no filtro atual</p>
+          <p className="text-sm text-[var(--text-muted)]">{visibleQueue.length} registros no filtro atual</p>
         </div>
 
         <div className="mt-5 grid gap-3">
           {visibleQueue.map((item) => (
             <article
-              className="grid gap-4 rounded-xl border border-[#404040] bg-[#171717] p-4 lg:grid-cols-[1fr_180px_160px_auto]"
+              className="grid gap-4 rounded-xl border border-[var(--border-default)] bg-[var(--surface-elevated)] p-4 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto] lg:items-center"
               key={item.id}
             >
-              <div>
+              <div className="min-w-0">
                 <button
-                  className="text-left text-lg font-bold text-[#f5f5f5] transition hover:text-[#3b82f6]"
+                  className="block w-full truncate text-left text-lg font-bold text-[var(--text-primary)] transition hover:text-[#3b82f6]"
                   onClick={() => navigate(`/pacientes/${item.patientId}`)}
                   type="button"
                 >
                   {item.patient}
                 </button>
-                <p className="mt-1 text-sm text-[#a3a3a3]">{item.reason}</p>
+                <p className="mt-1 truncate text-sm text-[var(--text-muted)]">{item.reason}</p>
               </div>
-              <Info label="Status" value={item.status} />
-              <Info label="Espera" value={item.wait} />
-              <div className="flex items-start lg:justify-end">
+              <div className="shrink-0">
+                <Info label="Status" value={item.status} />
+              </div>
+              <div className="shrink-0">
+                <Info label="Espera" value={item.wait} />
+              </div>
+              <div className="flex shrink-0 flex-wrap items-start gap-2 lg:justify-end">
                 <PriorityPill priority={item.priority} />
               </div>
             </article>
@@ -169,9 +173,9 @@ export function VisitsPage({ navigate }) {
 
 function Info({ label, value }) {
   return (
-    <div>
-      <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#737373]">{label}</p>
-      <p className="mt-2 text-sm font-semibold text-[#e5e5e5]">{value}</p>
+    <div className="min-w-0">
+      <p className="truncate text-xs font-bold uppercase tracking-[0.16em] text-[#737373]">{label}</p>
+      <p className="mt-2 truncate text-sm font-semibold text-[var(--text-primary)]">{value}</p>
     </div>
   )
 }

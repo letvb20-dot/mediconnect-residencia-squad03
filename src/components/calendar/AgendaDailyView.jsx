@@ -64,16 +64,16 @@ export function AgendaDailyView({
 
           return (
             <article
-              className={`agenda-slot ${isBooked ? getDailyToneClass(primaryAppointment) : isPast ? 'agenda-slot-blocked' : 'agenda-slot-free'} grid gap-3 rounded-xl border px-4 py-3 shadow-[0_8px_18px_rgba(0,0,0,0.16)] md:grid-cols-[84px_1fr_auto] ${
+              className={`agenda-slot ${isBooked ? getDailyToneClass(primaryAppointment) : isPast ? 'agenda-slot-blocked' : 'agenda-slot-free'} grid gap-3 rounded-xl border px-4 py-3 shadow-[0_8px_18px_rgba(0,0,0,0.16)] md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center ${
                 isBooked
-                  ? 'border-[#404040] bg-[#303030] text-[#e5e5e5]'
+                  ? 'border-[var(--border-default)] bg-[var(--surface-elevated)] text-[var(--text-primary)]'
                   : isPast
-                    ? 'border-[#404040] bg-[#1f1f1f] text-[#737373]'
-                    : 'border-[#404040] bg-[#303030] text-[#e5e5e5]'
+                    ? 'border-[var(--border-default)] bg-[#1f1f1f] text-[var(--text-muted)]'
+                    : 'border-[var(--border-default)] bg-[var(--surface-elevated)] text-[var(--text-primary)]'
               }`}
               key={time}
             >
-              <div>
+              <div className="shrink-0">
                 <p className="text-xl font-bold leading-none">{time}</p>
                 <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] opacity-80">
                   {visualStatus || (isBooked ? 'Agendado' : isPast ? 'Encerrado' : 'Disponível')}
@@ -81,15 +81,15 @@ export function AgendaDailyView({
               </div>
 
               {primaryAppointment ? (
-                <div>
+                <div className="min-w-0">
                   <button
-                    className="text-left text-sm font-bold transition hover:opacity-85"
+                    className="block w-full truncate text-left text-sm font-bold transition hover:opacity-85"
                     onClick={() => !primaryAppointment.isException && onAppointmentClick?.(primaryAppointment)}
                     type="button"
                   >
                     {primaryAppointment.patient}
                   </button>
-                  <p className="mt-1 text-sm opacity-90">
+                  <p className="mt-1 truncate text-sm opacity-90">
                     {primaryAppointment.type} com {primaryAppointment.professional}
                   </p>
                   <div className="mt-2 flex flex-wrap gap-2 text-xs font-medium opacity-80">
@@ -112,14 +112,14 @@ export function AgendaDailyView({
                 </div>
               )}
 
-              <div className="flex flex-wrap items-start justify-start gap-2 md:justify-end">
+              <div className="flex shrink-0 flex-wrap items-start justify-start gap-2 md:justify-end">
                 <span className="agenda-slot-status rounded-full border border-current/30 bg-black/25 px-3 py-1 text-xs font-bold shadow-sm">
                   {visualStatus || (hasHiddenAppointment ? 'Ocupado' : isPast ? 'Encerrado' : 'Livre')}
                 </span>
                 {canCreateSlot ? (
                   <button
                     aria-label={`Criar agendamento às ${time}`}
-                    className="agenda-slot-add grid size-8 place-items-center rounded-full border border-current/30 bg-black/30 text-base font-bold leading-none shadow-sm transition hover:bg-black/45"
+                    className="agenda-slot-add grid min-h-8 min-w-8 shrink-0 place-items-center rounded-full border border-current/30 bg-black/30 p-1.5 text-base font-bold leading-none shadow-sm transition hover:bg-black/45"
                     onClick={() => onSlotCreate?.(time)}
                     title={`Novo agendamento às ${time}`}
                     type="button"

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import loginClinicImage from '../assets/figma/login-clinic.png'
 import { hasCapability } from '../config/permissions.js'
 import { homeRepository } from '../repositories/homeRepository.js'
+import { translateErrorMessage } from '../repositories/repositoryUtils.js'
 import { UsersPage } from './UsersPage.jsx'
 
 export function HomePage({ navigate, profile, role, user }) {
@@ -19,7 +20,7 @@ export function HomePage({ navigate, profile, role, user }) {
         if (active) setOverview(data)
       })
       .catch((loadError) => {
-        if (active) setError(loadError.message || 'Erro ao carregar painel.')
+        if (active) setError(translateErrorMessage(loadError.message, 'Erro ao carregar painel.'))
       })
       .finally(() => {
         if (active) setLoading(false)

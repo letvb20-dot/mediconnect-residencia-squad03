@@ -49,11 +49,10 @@ export const reportMapper = {
 }
 
 function normalizeStatus(status) {
-  // Enum API: draft | completed
-  // UI usa 'finalized' como alias de 'completed' (retrocompat).
+  // Enum API: draft | delivered
   const normalized = String(status || '').toLowerCase()
 
-  if (['finalized', 'finalizado', 'finished', 'completed', 'complete', 'done', 'sent', 'enviado'].includes(normalized)) {
+  if (['finalized', 'finalizado', 'finished', 'completed', 'complete', 'done', 'sent', 'enviado', 'delivered'].includes(normalized)) {
     return 'finalized'
   }
 
@@ -61,10 +60,10 @@ function normalizeStatus(status) {
 }
 
 function normalizeApiStatus(status) {
-  // Enum documentado: draft | completed
+  // Enum banco: draft | delivered
   const normalized = removeAccents(status).toLowerCase()
-  if (['finalized', 'finalizado', 'finished', 'completed', 'complete', 'done', 'sent', 'enviado'].includes(normalized)) {
-    return 'completed'
+  if (['finalized', 'finalizado', 'finished', 'completed', 'complete', 'done', 'sent', 'enviado', 'delivered'].includes(normalized)) {
+    return 'delivered'
   }
   return 'draft'
 }

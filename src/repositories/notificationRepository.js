@@ -2,6 +2,8 @@ import { profileRepository } from './profileRepository.js'
 
 const STORAGE_KEY = 'mediconnect.notifications.v1'
 export const NOTIFICATIONS_CHANGED_EVENT = 'mediconnect:notifications-changed'
+export const NOTIFICATION_ACTION_EVENT = 'mediconnect:notification-action'
+export const PENDING_NOTIFICATION_ACTION_KEY = 'mediconnect.pendingNotificationAction'
 
 export const notificationRepository = {
   async getForCurrentUser() {
@@ -11,7 +13,7 @@ export const notificationRepository = {
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
   },
 
-  async notifyCurrentUser({ detail, domain, patientId, relatedUserIds = [], title }) {
+  async notifyCurrentUser({ action = null, detail, domain, patientId, relatedUserIds = [], route = '', title }) {
     const profile = await profileRepository.getCurrentUserProfile().catch(() => null)
     if (!isProfileInvolved(profile, relatedUserIds)) return null
 
@@ -21,6 +23,8 @@ export const notificationRepository = {
       detail: repairMojibake(detail),
       domain,
       patientId: patientId || '',
+      route,
+      action,
       relatedUserIds: normalizeIds(relatedUserIds),
       createdAt: new Date().toISOString(),
       read: false,

@@ -8,6 +8,7 @@ import { DarkField, appCardClass as cardClass, appInputClass as inputClass, appL
 import { reportTemplates } from '../data/reportTemplates.js'
 import { patientRepository } from '../repositories/patientRepository.js'
 import { notificationRepository } from '../repositories/notificationRepository.js'
+import { translateErrorMessage } from '../repositories/repositoryUtils.js'
 import { professionalRepository } from '../repositories/professionalRepository.js'
 import { profileRepository } from '../repositories/profileRepository.js'
 import { reportRepository } from '../repositories/reportRepository.js'
@@ -192,7 +193,7 @@ export function ReportsPage({ role }) {
       setPage(1)
     } catch (loadError) {
       console.error(loadError)
-      setError(loadError.message || 'Erro ao carregar relatórios.')
+      setError(translateErrorMessage(loadError.message, 'Erro ao carregar relatórios.'))
       setReports([])
       setPage(1)
     } finally {
@@ -228,7 +229,7 @@ export function ReportsPage({ role }) {
       } catch (loadError) {
         if (!active) return
         console.error(loadError)
-        setError(loadError.message || 'Erro ao carregar dados auxiliares.')
+        setError(translateErrorMessage(loadError.message, 'Erro ao carregar dados auxiliares.'))
       } finally {
         if (active) setScopeLoading(false)
       }
@@ -340,7 +341,7 @@ export function ReportsPage({ role }) {
       setEditorOpen(false)
       await loadReports()
     } catch (saveError) {
-      alert(saveError.message || 'Erro ao salvar relatório.')
+      alert(translateErrorMessage(saveError.message, 'Erro ao salvar relatório.'))
     } finally {
       setSaving(false)
     }
@@ -351,13 +352,11 @@ export function ReportsPage({ role }) {
 
     try {
       await reportRepository.update(report.id, {
-        ...report,
         status: 'finalized',
-        updatedBy: viewerProfile?.id || currentProfessional?.userId || currentProfessional?.id || undefined,
       })
       await loadReports()
     } catch (releaseError) {
-      alert(releaseError.message || 'Erro ao liberar relatório.')
+      alert(translateErrorMessage(releaseError.message, 'Erro ao liberar relatório.'))
     }
   }
 
@@ -375,7 +374,7 @@ export function ReportsPage({ role }) {
       await reportRepository.remove(report.id)
       await loadReports()
     } catch (deleteError) {
-      alert(deleteError.message || 'Erro ao excluir relatório.')
+      alert(translateErrorMessage(deleteError.message, 'Erro ao excluir relatório.'))
     }
   }
 
@@ -390,7 +389,7 @@ export function ReportsPage({ role }) {
       setProtocolReport(null)
       await loadReports()
     } catch (protocolError) {
-      alert(protocolError.message || 'Erro ao registrar protocolo de entrega.')
+      alert(translateErrorMessage(protocolError.message, 'Erro ao registrar protocolo de entrega.'))
     }
   }
 
@@ -783,6 +782,13 @@ function ReportEditorModalV3({
     onChange((current) => ({ ...current, [field]: [...(current[field] || []), ...names] }))
   }
 
+  function removeFile(field, index) {
+    onChange((current) => ({
+      ...current,
+      [field]: (current[field] || []).filter((_, fileIndex) => fileIndex !== index),
+    }))
+  }
+
   function applyTemplate(template) {
     setTemplatesOpen(false)
     onChange((current) => ({
@@ -950,13 +956,31 @@ function ReportEditorModalV3({
               </DarkField>
 
               <DarkField label="Importar PDF">
-                <input accept="application/pdf" className={inputClass} multiple onChange={(event) => appendFiles('importedPdfs', event.target.files)} type="file" />
-                {editor.importedPdfs?.length ? <p className="mt-1 text-xs text-[#a3a3a3]">{editor.importedPdfs.join(', ')}</p> : null}
+                <input
+                  accept="application/pdf"
+                  className={inputClass}
+                  multiple
+                  onChange={(event) => {
+                    appendFiles('importedPdfs', event.target.files)
+                    event.target.value = ''
+                  }}
+                  type="file"
+                />
+                <PendingFileList files={editor.importedPdfs} onRemove={(index) => removeFile('importedPdfs', index)} />
               </DarkField>
 
               <DarkField label="Imagens">
-                <input accept="image/*" className={inputClass} multiple onChange={(event) => appendFiles('imageFiles', event.target.files)} type="file" />
-                {editor.imageFiles?.length ? <p className="mt-1 text-xs text-[#a3a3a3]">{editor.imageFiles.join(', ')}</p> : null}
+                <input
+                  accept="image/*"
+                  className={inputClass}
+                  multiple
+                  onChange={(event) => {
+                    appendFiles('imageFiles', event.target.files)
+                    event.target.value = ''
+                  }}
+                  type="file"
+                />
+                <PendingFileList files={editor.imageFiles} onRemove={(index) => removeFile('imageFiles', index)} />
               </DarkField>
 
               <label className="flex min-h-11 items-center gap-3 rounded-sm border border-[#404040] bg-[#171717] px-3 text-sm font-semibold text-[#e5e5e5]">
@@ -1182,6 +1206,28 @@ function FilterField({ children, label }) {
       <span className={labelClass}>{label}</span>
       {children}
     </label>
+  )
+}
+
+function PendingFileList({ files = [], onRemove }) {
+  if (!files?.length) return null
+
+  return (
+    <ul className="mt-2 grid gap-2 text-xs text-[#a3a3a3]">
+      {files.map((fileName, index) => (
+        <li className="flex items-center justify-between gap-3 rounded border border-[#404040] bg-[#262626] px-3 py-2" key={`${fileName}-${index}`}>
+          <span className="min-w-0 truncate">{fileName}</span>
+          <button
+            aria-label={`Remover ${fileName}`}
+            className="grid size-5 shrink-0 place-items-center rounded-sm text-[#e5e5e5] transition hover:bg-[#404040]"
+            onClick={() => onRemove?.(index)}
+            type="button"
+          >
+            x
+          </button>
+        </li>
+      ))}
+    </ul>
   )
 }
 

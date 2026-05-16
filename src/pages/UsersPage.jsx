@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { StethoscopeIcon } from '../components/Brand.jsx'
 import { ADMIN_CREATABLE_ROLES, GESTOR_CREATABLE_ROLES, hasCapability, normalizeRole, ROLE_LABELS } from '../config/permissions.js'
+import { translateErrorMessage } from '../repositories/repositoryUtils.js'
 import { userRepository } from '../repositories/userRepository.js'
 import { sanitizeFieldValue } from '../utils/inputSanitizers.js'
 
@@ -95,7 +96,7 @@ export function UsersPage({ embedded = false, embeddedHeaderOnly = false, hideHe
       const data = await userRepository.getAll()
       setUsers(data)
     } catch (err) {
-      setError(err.message)
+      setError(translateErrorMessage(err.message, 'Erro ao carregar usuários.'))
     } finally {
       setLoading(false)
     }
@@ -182,7 +183,7 @@ export function UsersPage({ embedded = false, embeddedHeaderOnly = false, hideHe
       setForm(initialUserForm)
       if (!editingUserId) loadUsers()
     } catch (err) {
-      window.alert(`Erro ao salvar usuário: ${err.message}`)
+      window.alert(`Erro ao salvar usuário: ${translateErrorMessage(err.message, 'Erro ao salvar usuário.')}`)
     } finally {
       setSaving(false)
     }
@@ -204,7 +205,7 @@ export function UsersPage({ embedded = false, embeddedHeaderOnly = false, hideHe
       await userRepository.remove(user.id)
       setUsers((current) => current.filter((u) => u.id !== user.id))
     } catch (err) {
-      window.alert(`Erro ao deletar usuário: ${err.message}`)
+      window.alert(`Erro ao deletar usuário: ${translateErrorMessage(err.message, 'Erro ao deletar usuário.')}`)
     } finally {
       setDeletingId(null)
     }

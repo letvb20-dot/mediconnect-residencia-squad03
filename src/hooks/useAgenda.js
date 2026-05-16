@@ -7,6 +7,7 @@ import { notificationRepository } from '../repositories/notificationRepository.j
 import { patientRepository } from '../repositories/patientRepository.js'
 import { professionalRepository } from '../repositories/professionalRepository.js'
 import { profileRepository } from '../repositories/profileRepository.js'
+import { userRepository } from '../repositories/userRepository.js'
 import { formatLocalDateInput, parseLocalDate, sortAppointmentsByTime } from '../utils/agendaDate.js'
 
 const initialForm = {
@@ -24,6 +25,7 @@ const initialForm = {
 export function useAgenda() {
   const [patients, setPatients] = useState([])
   const [professionals, setProfessionals] = useState([])
+  const [users, setUsers] = useState([])
   const [currentProfessional, setCurrentProfessional] = useState(null)
   const [viewerProfile, setViewerProfile] = useState(null)
   const [localAppointments, setLocalAppointments] = useState([])
@@ -56,10 +58,11 @@ export function useAgenda() {
       try {
         setError('')
 
-        const [patientsData, professionalsData, currentProfile] = await Promise.all([
+        const [patientsData, professionalsData, currentProfile, usersData] = await Promise.all([
           patientRepository.getAll(),
           professionalRepository.getAll(),
           profileRepository.getCurrentUserProfile(),
+          userRepository.getAll().catch(() => []),
         ])
 
         if (!active) return
@@ -73,6 +76,7 @@ export function useAgenda() {
 
         setViewerProfile(currentProfile)
         setPatients(patientsData || [])
+        setUsers(usersData || [])
         setCurrentProfessional(resolvedProfessional)
         setProfessionals(professionalsData || [])
         setForm((current) => ({
@@ -93,10 +97,17 @@ export function useAgenda() {
 
         if (!active) return
 
+        const appointmentsWithCreatorNames = resolveAppointmentCreatorNames(
+          appointmentsData || [],
+          usersData || [],
+          currentProfile,
+          professionalsData || [],
+        )
+
         setLocalAppointments(
           currentScope === 'doctor' && resolvedProfessional
-            ? filterAppointmentsByProfessional(appointmentsData || [], resolvedProfessional.id)
-            : sortAppointmentsByTime(appointmentsData || []),
+            ? filterAppointmentsByProfessional(appointmentsWithCreatorNames, resolvedProfessional.id)
+            : sortAppointmentsByTime(appointmentsWithCreatorNames),
         )
       } catch (loadError) {
         if (!active) return
@@ -320,6 +331,14 @@ export function useAgenda() {
     setModalOpen(true)
   }
 
+  function openAppointmentById(appointmentId) {
+    const appointment = localAppointments.find((item) => String(item.id) === String(appointmentId))
+    if (!appointment) return false
+
+    openAppointmentModal(appointment)
+    return true
+  }
+
   function closeAppointmentModal() {
     setModalOpen(false)
     setEditingAppointment(null)
@@ -353,7 +372,7 @@ export function useAgenda() {
     try {
       const created = await appointmentRepository.create(payload)
       setLocalAppointments((current) => sortAppointmentsByTime([...current, enrichAppointment(created, payload, patients, professionals)]))
-      notifyAppointmentAction('Consulta marcada', `Consulta de ${getPatientName(payload.patientId, patients)} marcada para ${formatAppointmentDate(payload.date)} as ${payload.time}.`, payload)
+      notifyAppointmentAction('Consulta marcada', `Consulta de ${getPatientName(payload.patientId, patients)} marcada para ${formatAppointmentDate(payload.date)} as ${payload.time}.`, payload, created)
       closeAppointmentModal()
     } catch (createError) {
       alert(createError.message || 'Erro ao criar agendamento.')
@@ -366,7 +385,7 @@ export function useAgenda() {
     const payload = buildPayload()
     if (!payload) return
 
-    if (isAppointmentInPast(payload.date, payload.time)) {
+    if (isAppointmentInPast(payload.date, payload.time) && !isStatusOnlyPastUpdate(payload, editingAppointment)) {
       alert('Não é possível agendar consultas em horários anteriores ao horário atual.')
       return
     }
@@ -387,7 +406,7 @@ export function useAgenda() {
           ),
         ),
       )
-      notifyAppointmentAction('Agendamento atualizado', `Consulta de ${getPatientName(payload.patientId, patients)} atualizada para ${formatAppointmentDate(payload.date)} as ${payload.time}.`, payload)
+      notifyAppointmentAction('Agendamento atualizado', getAppointmentUpdateNotificationDetail(payload, editingAppointment, patients), payload, updated)
       closeAppointmentModal()
     } catch (updateError) {
       alert(updateError.message || 'Erro ao atualizar agendamento.')
@@ -412,7 +431,7 @@ export function useAgenda() {
           ),
         ),
       )
-      notifyAppointmentAction('Consulta cancelada', `Consulta de ${getPatientName(payload.patientId, patients)} foi cancelada.`, payload)
+      notifyAppointmentAction('Consulta cancelada', `Consulta de ${getPatientName(payload.patientId, patients)} foi cancelada. Status atualizado para Cancelado.`, payload, cancelled)
       closeAppointmentModal()
     } catch (cancelError) {
       alert(cancelError.message || 'Erro ao cancelar agendamento.')
@@ -473,6 +492,7 @@ export function useAgenda() {
     professionals,
     currentProfessional,
     viewerProfile,
+    users,
     agendaScope,
     loading,
     error,
@@ -495,6 +515,7 @@ export function useAgenda() {
     updateForm,
     openCreateModal,
     openAppointmentModal,
+    openAppointmentById,
     closeAppointmentModal,
     handleSubmitAppointment,
     handleCancelAppointment,
@@ -506,12 +527,21 @@ export function useAgenda() {
   }
 }
 
-function notifyAppointmentAction(title, detail, payload) {
+function notifyAppointmentAction(title, detail, payload, appointment = null) {
+  const appointmentId = appointment?.id || payload.id || ''
+
   notificationRepository.notifyCurrentUser({
+    action: appointmentId
+      ? {
+          type: 'agenda:openAppointment',
+          appointmentId,
+        }
+      : null,
     domain: 'agenda',
     title,
     detail,
     patientId: payload.patientId,
+    route: '/agenda',
     relatedUserIds: [payload.professionalId, payload.createdBy],
   }).catch(() => null)
 }
@@ -522,6 +552,53 @@ function filterAppointmentsByProfessional(appointments, professionalId) {
   return sortAppointmentsByTime(
     appointments.filter((appointment) => normalizeValue(appointment.professionalId) === normalizedProfessionalId),
   )
+}
+
+function resolveAppointmentCreatorNames(appointments, users, viewerProfile, professionals) {
+  return appointments.map((appointment) => ({
+    ...appointment,
+    createdByName: appointment.createdByName || resolveCreatorName(appointment.createdBy, users, viewerProfile, professionals),
+  }))
+}
+
+function resolveCreatorName(createdBy, users, viewerProfile, professionals) {
+  const creatorId = normalizeValue(createdBy)
+  if (!creatorId) return ''
+
+  const viewerIds = [
+    viewerProfile?.id,
+    viewerProfile?.userId,
+    viewerProfile?.authUserId,
+    viewerProfile?.doctorId,
+    viewerProfile?.email,
+  ].map(normalizeValue)
+
+  if (viewerIds.includes(creatorId)) {
+    return viewerProfile?.name || viewerProfile?.full_name || viewerProfile?.email || ''
+  }
+
+  const user = users.find((item) =>
+    [
+      item.id,
+      item.user_id,
+      item.auth_user_id,
+      item.profile_id,
+      item.email,
+    ].map(normalizeValue).includes(creatorId),
+  )
+
+  if (user) return user.full_name || user.name || user.nome || user.email || ''
+
+  const professional = professionals.find((item) =>
+    [
+      item.id,
+      item.userId,
+      item.authUserId,
+      item.email,
+    ].map(normalizeValue).includes(creatorId),
+  )
+
+  return professional?.name || ''
 }
 
 function hasPatientAppointmentOnDate(appointments, patientId, date, ignoredAppointmentId = null) {
@@ -548,6 +625,24 @@ function isAppointmentInPast(date, time) {
   if (!year || !month || !day || Number.isNaN(hours) || Number.isNaN(minutes)) return false
 
   return new Date(year, month - 1, day, hours, minutes).getTime() < Date.now()
+}
+
+function isStatusOnlyPastUpdate(payload, appointment) {
+  if (!appointment) return false
+
+  const unchangedAppointment = [
+    normalizeValue(payload.patientId) === normalizeValue(appointment.patientId),
+    normalizeValue(payload.professionalId) === normalizeValue(appointment.professionalId),
+    normalizeValue(payload.date) === normalizeValue(appointment.date),
+    normalizeTime(payload.time) === normalizeTime(appointment.time),
+    normalizeValue(payload.type) === normalizeValue(appointment.type),
+    normalizeValue(payload.mode) === normalizeValue(appointment.mode),
+    Number(payload.durationMinutes || 30) === Number(appointment.durationMinutes || 30),
+    Boolean(payload.highPriority) === Boolean(appointment.highPriority || appointment.priority === 'Alta'),
+    normalizeValue(payload.notes) === normalizeValue(formatPriorityNotes(appointment.notes, Boolean(appointment.highPriority || appointment.priority === 'Alta'))),
+  ].every(Boolean)
+
+  return unchangedAppointment && normalizeStatus(payload.status) !== normalizeStatus(appointment.status)
 }
 
 function enrichAppointment(appointment, payload, patients, professionals) {
@@ -657,6 +752,12 @@ function formatAppointmentDate(value) {
   return year && month && day ? `${day}/${month}/${year}` : value
 }
 
+function getAppointmentUpdateNotificationDetail(payload, appointment, patients) {
+  const baseDetail = `Consulta de ${getPatientName(payload.patientId, patients)} atualizada para ${formatAppointmentDate(payload.date)} as ${payload.time}.`
+  if (normalizeStatus(payload.status) === normalizeStatus(appointment?.status)) return baseDetail
+  return `${baseDetail} Status atualizado para ${payload.status}.`
+}
+
 function formatPriorityNotes(notes, highPriority) {
   const cleanNotes = String(notes || '').replace(/^\[Prioridade alta\]\s*/i, '').trim()
   if (!highPriority) return cleanNotes
@@ -665,4 +766,12 @@ function formatPriorityNotes(notes, highPriority) {
 
 function normalizeValue(value) {
   return String(value || '').trim().toLowerCase()
+}
+
+function normalizeStatus(status) {
+  return String(status || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
 }

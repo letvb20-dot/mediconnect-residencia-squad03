@@ -133,12 +133,30 @@ export const availabilityRepository = {
   },
 }
 
+const WEEKDAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+
+function weekdayToApi(value) {
+  const num = Number(value)
+  if (Number.isInteger(num) && num >= 0 && num <= 6) return WEEKDAY_NAMES[num]
+  const name = String(value || '').toLowerCase()
+  if (WEEKDAY_NAMES.includes(name)) return name
+  return value
+}
+
+function weekdayToUi(value) {
+  const idx = WEEKDAY_NAMES.indexOf(String(value || '').toLowerCase())
+  if (idx >= 0) return idx
+  const num = Number(value)
+  if (Number.isInteger(num) && num >= 0 && num <= 6) return num
+  return value
+}
+
 function buildAvailabilityQuery(filters) {
   const query = new URLSearchParams()
   query.set('select', filters.select || '*')
   if (filters.doctorId) query.set('doctor_id', `eq.${filters.doctorId}`)
   if (filters.weekday !== undefined && filters.weekday !== null) {
-    query.set('weekday', `eq.${Number(filters.weekday)}`)
+    query.set('weekday', `eq.${weekdayToApi(filters.weekday)}`)
   }
   if (filters.active !== undefined && filters.active !== null) {
     query.set('active', `eq.${Boolean(filters.active)}`)
@@ -157,7 +175,7 @@ function toAvailabilityPayload(data) {
 
   return cleanPayload({
     doctor_id: data.doctorId,
-    weekday: Number(data.weekday),
+    weekday: weekdayToApi(data.weekday),
     start_time: startTime,
     end_time: endTime,
     slot_minutes: data.slotMinutes !== undefined ? Number(data.slotMinutes) : 30,
@@ -195,7 +213,7 @@ function mapAvailability(item) {
   return {
     id: item.id,
     doctorId: item.doctor_id,
-    weekday: item.weekday,
+    weekday: weekdayToUi(item.weekday),
     startTime: item.start_time,
     endTime: item.end_time,
     slotMinutes: item.slot_minutes,

@@ -93,7 +93,7 @@ export const reportRepository = {
 }
 
 async function getDoctorNameMap() {
-  const response = await fetch(`${apiConfig.restUrl}/doctors?select=id,user_id,auth_user_id,full_name,name,nome,email`, {
+  const response = await fetch(`${apiConfig.restUrl}/doctors?select=id,user_id,full_name,email`, {
     headers: getAuthenticatedHeaders(),
   })
 
@@ -103,10 +103,10 @@ async function getDoctorNameMap() {
   const entries = []
 
   for (const doctor of Array.isArray(doctors) ? doctors : []) {
-    const name = doctor.full_name || doctor.name || doctor.nome || doctor.email
+    const name = doctor.full_name || doctor.email
     if (!name) continue
 
-    for (const id of [doctor.id, doctor.user_id, doctor.auth_user_id]) {
+    for (const id of [doctor.id, doctor.user_id]) {
       if (id) entries.push([String(id), name])
     }
   }
@@ -139,9 +139,8 @@ function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
 }
 
-// Converte status da UI para o enum documentado (draft | completed)
 function toApiReportStatus(status) {
   const normalized = String(status || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
-  if (['finalized', 'finalizado', 'completed', 'complete', 'done', 'sent', 'enviado'].includes(normalized)) return 'completed'
+  if (['finalized', 'finalizado', 'completed', 'complete', 'done', 'sent', 'enviado', 'delivered'].includes(normalized)) return 'delivered'
   return 'draft'
 }

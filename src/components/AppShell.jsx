@@ -2,7 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { ROLE_LABELS, ROLE_NAV_ITEMS } from '../config/permissions.js'
 import { authRepository } from '../repositories/authRepository.js'
-import { NOTIFICATIONS_CHANGED_EVENT, notificationRepository } from '../repositories/notificationRepository.js'
+import {
+  NOTIFICATION_ACTION_EVENT,
+  NOTIFICATIONS_CHANGED_EVENT,
+  PENDING_NOTIFICATION_ACTION_KEY,
+  notificationRepository,
+} from '../repositories/notificationRepository.js'
 import { profileRepository } from '../repositories/profileRepository.js'
 import { BrandLogo } from './Brand.jsx'
 
@@ -142,6 +147,22 @@ export function AppShell({ children, currentPath, navigate, role, routeTitle }) 
     navigate(path)
   }
 
+  function handleNotificationClick(notification) {
+    const route = notification.route || getNotificationRoute(notification)
+    const action = notification.action || null
+
+    setNotificationsOpen(false)
+
+    if (action) {
+      sessionStorage.setItem(PENDING_NOTIFICATION_ACTION_KEY, JSON.stringify(action))
+      window.dispatchEvent(new CustomEvent(NOTIFICATION_ACTION_EVENT, { detail: action }))
+    }
+
+    if (route) {
+      navigate(route)
+    }
+  }
+
   async function handleLogout() {
     setProfileMenuOpen(false)
     await authRepository.logout()
@@ -274,11 +295,12 @@ export function AppShell({ children, currentPath, navigate, role, routeTitle }) 
                     <div className="flex items-center justify-between px-2 py-2">
                       <p className="text-sm font-semibold text-[#e5e5e5]">Notificações</p>
                     </div>
-                    <div className="space-y-1">
+                    <div className="max-h-[18rem] space-y-1 overflow-y-auto pr-1">
                       {notifications.length ? notifications.map((notification) => (
                         <button
                           className="w-full rounded-sm border border-transparent px-2 py-2 text-left transition hover:border-[#404040] hover:bg-[#303030]"
                           key={notification.id}
+                          onClick={() => handleNotificationClick(notification)}
                           role="menuitem"
                           type="button"
                         >
@@ -417,6 +439,25 @@ function isActive(pathname, item) {
   }
 
   return pathname === item.href || pathname.startsWith(`${item.href}/`)
+}
+
+function getNotificationRoute(notification) {
+  if (notification.patientId && notification.domain === 'patients') {
+    return `/pacientes/${notification.patientId}`
+  }
+
+  const domainRoutes = {
+    agenda: '/agenda',
+    communication: '/comunicacao',
+    comunicacao: '/comunicacao',
+    'medical-records': '/prontuario',
+    medical_records: '/prontuario',
+    prontuario: '/prontuario',
+    reports: '/laudos',
+    relatorios: '/laudos',
+  }
+
+  return domainRoutes[notification.domain] || ''
 }
 
 function AppIcon({ className = 'size-5', name }) {

@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import { authRepository } from '../repositories/authRepository.js'
 import { patientRepository } from '../repositories/patientRepository.js'
+import { translateErrorMessage } from '../repositories/repositoryUtils.js'
 import { maskBrazilianPhone, maskCpf } from '../utils/inputSanitizers.js'
 
 import { StethoscopeIcon } from '../components/Brand.jsx'
@@ -45,7 +46,7 @@ export function LoginPage({ navigate }) {
       await authRepository.login(form)
       navigate('/inicio')
     } catch (err) {
-      setError(err.message || 'Erro de autenticação')
+      setError(translateErrorMessage(err.message, 'Erro de autenticação.'))
     } finally {
       setLoading(false)
     }
@@ -264,7 +265,7 @@ export function RegisterPage({ navigate }) {
       window.alert('Cadastro realizado. Você já pode acessar com email e senha.')
       navigate('/login')
     } catch (err) {
-      setError(err.message || 'Erro ao realizar cadastro.')
+      setError(translateErrorMessage(err.message, 'Erro ao realizar cadastro.'))
     } finally {
       setLoading(false)
     }
@@ -387,7 +388,7 @@ export function ForgotPasswordPage({ navigate }) {
       await authRepository.requestPasswordReset(email)
       setSent(true)
     } catch (err) {
-      setError(err.message || 'Erro ao comunicar com o servidor.')
+      setError(translateErrorMessage(err.message, 'Erro ao comunicar com o servidor.'))
     } finally {
       setLoading(false)
     }

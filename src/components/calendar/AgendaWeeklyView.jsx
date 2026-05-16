@@ -79,7 +79,7 @@ export function AgendaWeeklyView({ baseDate, appointments, canCreateAppointment 
                     <button
                       key={appointment.id}
                       onClick={() => onAppointmentClick && onAppointmentClick(appointment)}
-                      className={`agenda-event ${getStatusToneClass(appointment.status)} flex w-full min-w-0 flex-col items-start overflow-hidden rounded-md border p-2 text-left shadow-sm transition hover:brightness-110 ${getStatusColors(appointment.status)}`}
+                      className={`agenda-event ${getStatusToneClass(appointment)} flex w-full min-w-0 flex-col items-start overflow-hidden rounded-md border p-2 text-left shadow-sm transition hover:brightness-110 ${getStatusColors(appointment)}`}
                       type="button"
                     >
                       <div className="mb-1 flex w-full min-w-0 items-center gap-1.5 overflow-hidden">
@@ -119,8 +119,10 @@ export function AgendaWeeklyView({ baseDate, appointments, canCreateAppointment 
   )
 }
 
-function getStatusToneClass(status) {
-  switch (status) {
+function getStatusToneClass(appointment) {
+  if (isHighPriority(appointment)) return 'agenda-event-priority'
+
+  switch (appointment?.status) {
     case 'Confirmado':
     case 'Confirmada':
       return 'agenda-event-confirmed'
@@ -142,20 +144,22 @@ function getStatusToneClass(status) {
   }
 }
 
-function getStatusColors(status) {
-  switch (status) {
+function getStatusColors(appointment) {
+  if (isHighPriority(appointment)) return 'border-[#7e22ce] bg-[#3b0764] text-[#e9d5ff]'
+
+  switch (appointment?.status) {
     case 'Confirmado':
     case 'Confirmada':
-      return 'border-[#14532d] bg-[#052e1a] text-[#10b981]'
+      return 'border-[#1d4ed8] bg-[#172554] text-[#93c5fd]'
     case 'Em triagem':
-      return 'border-[#78350f] bg-[#2d1e05] text-[#f59e0b]'
+      return 'border-[#7e22ce] bg-[#3b0764] text-[#e9d5ff]'
     case 'Realizado':
     case 'Concluida':
     case 'Concluída':
-      return 'border-[#1e3a8a] bg-[#172554] text-[#60a5fa]'
+      return 'border-[#166534] bg-[#052e1a] text-[#86efac]'
     case 'Agendado':
     case 'Aguardando':
-      return 'border-[#404040] bg-[#303030] text-[#e5e5e5]'
+      return 'border-[#a16207] bg-[#422006] text-[#fde68a]'
     case 'Cancelado':
     case 'Cancelada':
       return 'border-[#7f1d1d] bg-[#450a0a] text-[#f87171] opacity-75'
@@ -164,4 +168,8 @@ function getStatusColors(status) {
     default:
       return 'border-[#404040] bg-[#303030] text-[#e5e5e5]'
   }
+}
+
+function isHighPriority(appointment) {
+  return Boolean(appointment?.highPriority || appointment?.priority === 'Alta')
 }

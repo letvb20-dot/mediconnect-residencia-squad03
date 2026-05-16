@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { RichTextEditor } from '../components/RichTextEditor.jsx'
 import { medicalRecordRepository } from '../repositories/medicalRecordRepository.js'
+import { translateErrorMessage } from '../repositories/repositoryUtils.js'
 import { notificationRepository } from '../repositories/notificationRepository.js'
 import { patientRepository } from '../repositories/patientRepository.js'
 import { profileRepository } from '../repositories/profileRepository.js'
@@ -78,7 +79,7 @@ export function MedicalRecordsPage({ mode = 'list', navigate, recordId }) {
       })
       .catch((loadError) => {
         if (!active) return
-        setError(loadError.message || 'Erro ao carregar prontuários.')
+        setError(translateErrorMessage(loadError.message, 'Erro ao carregar prontuários.'))
       })
       .finally(() => {
         if (active) setLoading(false)
@@ -138,7 +139,7 @@ export function MedicalRecordsPage({ mode = 'list', navigate, recordId }) {
 
       navigate(`/prontuario/${saved.id || draft.id}`)
     } catch (saveError) {
-      window.alert(`Erro ao salvar prontuário: ${saveError.message}`)
+      window.alert(`Erro ao salvar prontuário: ${translateErrorMessage(saveError.message, 'Erro ao salvar prontuário.')}`)
     } finally {
       setSaving(false)
     }

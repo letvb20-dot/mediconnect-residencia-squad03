@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { normalizeRole } from '../config/permissions.js'
 import { authRepository } from '../repositories/authRepository.js'
 import { profileRepository } from '../repositories/profileRepository.js'
+import { translateErrorMessage } from '../repositories/repositoryUtils.js'
 
 const cardClass = 'rounded-2xl border border-[#404040] bg-[#262626] shadow-sm'
 const inputClass =
@@ -52,7 +53,7 @@ export function ProfilePage({ navigate }) {
         avatarUrl: result.avatarUrl || URL.createObjectURL(file),
       }))
     } catch (err) {
-      setAvatarError(err.message || 'Erro ao enviar avatar.')
+      setAvatarError(translateErrorMessage(err.message, 'Erro ao enviar avatar.'))
     } finally {
       setUploadingAvatar(false)
       event.target.value = ''

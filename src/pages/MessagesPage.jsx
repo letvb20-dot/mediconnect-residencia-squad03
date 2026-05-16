@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { normalizeRole } from '../config/permissions.js'
 import { StethoscopeIcon } from '../components/Brand.jsx'
 import { communicationRepository } from '../repositories/communicationRepository.js'
+import { translateErrorMessage } from '../repositories/repositoryUtils.js'
 import { notificationRepository } from '../repositories/notificationRepository.js'
 import { patientRepository } from '../repositories/patientRepository.js'
 import { sanitizePlainText } from '../utils/inputSanitizers.js'
@@ -99,7 +100,7 @@ export function MessagesPage({ role }) {
       })
       .catch((loadError) => {
         if (!active) return
-        setError(loadError.message || 'Erro ao carregar comunicação.')
+        setError(translateErrorMessage(loadError.message, 'Erro ao carregar comunicação.'))
         setPatients([])
         setMessages([])
         setTemplates([])
@@ -204,7 +205,7 @@ export function MessagesPage({ role }) {
         })
         smsSent = true
       } catch (e) {
-        alert('Falha ao disparar SMS: ' + e.message)
+        alert('Falha ao disparar SMS: ' + translateErrorMessage(e.message, 'Falha ao disparar SMS.'))
       }
     }
 

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { hasCapability } from '../config/permissions.js'
 import { patientRepository } from '../repositories/patientRepository.js'
+import { translateErrorMessage } from '../repositories/repositoryUtils.js'
 import { isValidPersonName } from '../utils/brFormatters.js'
 import { sanitizeFieldValue } from '../utils/inputSanitizers.js'
 const ITEMS_PER_PAGE = 25
@@ -75,7 +76,7 @@ export function PatientsPage({ navigate, role }) {
   useEffect(() => {
     buildPatientRows()
       .then((data) => setRows(data))
-      .catch((err) => setError(err.message))
+      .catch((err) => setError(translateErrorMessage(err.message, 'Erro ao carregar pacientes.')))
       .finally(() => setLoading(false))
   }, [])
 
@@ -214,7 +215,7 @@ export function PatientsPage({ navigate, role }) {
       )
     }
   } catch (err) {
-    window.alert(`Erro ao salvar paciente: ${err.message}`)
+    window.alert(`Erro ao salvar paciente: ${translateErrorMessage(err.message, 'Erro ao salvar paciente.')}`)
     return
   } finally {
     setSaving(false)
@@ -251,7 +252,7 @@ async function uploadPatientAttachments(patientId, files = []) {
       setRows((currentRows) => currentRows.filter((item) => item.id !== patient.id))
       setOpenMenuId(null)
     } catch (err) {
-      window.alert(`Erro ao excluir paciente: ${err.message}`)
+      window.alert(`Erro ao excluir paciente: ${translateErrorMessage(err.message, 'Erro ao excluir paciente.')}`)
     }
   }
 
@@ -630,6 +631,17 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
     event.target.value = ''
   }
 
+  function removeAvatarFile() {
+    setAvatarFile(null)
+    setAvatarPreview(formData.avatarUrl || '')
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  function removeAttachmentFile(index) {
+    setAttachmentFiles((current) => current.filter((_, fileIndex) => fileIndex !== index))
+    if (attachmentInputRef.current) attachmentInputRef.current.value = ''
+  }
+
   function handleSubmit(event) {
     event.preventDefault()
 
@@ -728,6 +740,19 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
                 ref={fileInputRef}
                 type="file"
               />
+              {avatarFile ? (
+                <div className="flex items-center gap-2 rounded-md border border-[#404040] bg-[#262626] px-3 py-2 text-xs text-[#a3a3a3]">
+                  <span className="max-w-56 truncate">{avatarFile.name}</span>
+                  <button
+                    aria-label={`Remover ${avatarFile.name}`}
+                    className="grid size-5 place-items-center rounded-sm text-[#e5e5e5] transition hover:bg-[#404040]"
+                    onClick={removeAvatarFile}
+                    type="button"
+                  >
+                    x
+                  </button>
+                </div>
+              ) : null}
             </div>
 
             <div className="grid grid-cols-1 gap-x-6 gap-y-6 md:grid-cols-12">
@@ -856,6 +881,7 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
                     existingAttachments={formData.attachments}
                     files={attachmentFiles}
                     onFileChange={handleAttachmentChange}
+                    onRemoveFile={removeAttachmentFile}
                   />
                 ) : null}
               </div>
@@ -1052,7 +1078,7 @@ export function PatientDetailPage({ navigate, patient, role }) {
       }))
       setEditing(false)
     } catch (err) {
-      window.alert(`Erro ao salvar paciente: ${err.message}`)
+      window.alert(`Erro ao salvar paciente: ${translateErrorMessage(err.message, 'Erro ao salvar paciente.')}`)
     } finally {
       setSaving(false)
     }
@@ -1069,7 +1095,7 @@ export function PatientDetailPage({ navigate, patient, role }) {
       await patientRepository.remove(localPatient.id)
       navigate('/pacientes')
     } catch (err) {
-      window.alert(`Erro ao excluir paciente: ${err.message}`)
+      window.alert(`Erro ao excluir paciente: ${translateErrorMessage(err.message, 'Erro ao excluir paciente.')}`)
     }
   }
 
@@ -1664,7 +1690,7 @@ function DarkField({ children, className = '', label }) {
   )
 }
 
-function UploadDropzone({ attachmentInputRef, existingAttachments = [], files = [], onFileChange }) {
+function UploadDropzone({ attachmentInputRef, existingAttachments = [], files = [], onFileChange, onRemoveFile }) {
   return (
     <div
       className="mt-4 cursor-pointer rounded-lg border-2 border-dashed border-[#404040] bg-[#1a1a1a] p-8 text-center transition hover:bg-[#333333]"
@@ -1689,9 +1715,20 @@ function UploadDropzone({ attachmentInputRef, existingAttachments = [], files = 
               )}
             </li>
           ))}
-          {files.map((file) => (
-            <li className="rounded border border-[#404040] bg-[#262626] px-3 py-2" key={`${file.name}-${file.size}`}>
-              {file.name}
+          {files.map((file, index) => (
+            <li className="flex items-center justify-between gap-3 rounded border border-[#404040] bg-[#262626] px-3 py-2" key={`${file.name}-${file.size}-${index}`}>
+              <span className="min-w-0 truncate">{file.name}</span>
+              <button
+                aria-label={`Remover ${file.name}`}
+                className="grid size-5 shrink-0 place-items-center rounded-sm text-[#e5e5e5] transition hover:bg-[#404040]"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onRemoveFile?.(index)
+                }}
+                type="button"
+              >
+                x
+              </button>
             </li>
           ))}
         </ul>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { visitRepository } from '../repositories/visitRepository.js'
+import { translateErrorMessage } from '../repositories/repositoryUtils.js'
 
 const tabs = [
   { label: 'Fila ativa', value: 'ativa' },
@@ -26,7 +27,7 @@ export function VisitsPage({ navigate }) {
         if (active) setCareQueue(data || [])
       })
       .catch((loadError) => {
-        if (active) setError(loadError.message || 'Erro ao carregar consultas.')
+        if (active) setError(translateErrorMessage(loadError.message, 'Erro ao carregar consultas.'))
       })
       .finally(() => {
         if (active) setLoading(false)

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { analyticsRepository } from '../repositories/analyticsRepository.js'
+import { translateErrorMessage } from '../repositories/repositoryUtils.js'
 
 const periods = [
   ['1m', '1 Mes'],
@@ -43,7 +44,7 @@ export function AnalyticsPage() {
       })
       .catch((loadError) => {
         if (active) {
-          setError(loadError.message || 'Erro ao carregar analytics.')
+          setError(translateErrorMessage(loadError.message, 'Erro ao carregar analytics.'))
           setDashboard(null)
         }
       })

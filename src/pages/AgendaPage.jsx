@@ -17,16 +17,18 @@ import { AgendaMonthlyView } from '../components/calendar/AgendaMonthlyView.jsx'
 import { AgendaWeeklyView } from '../components/calendar/AgendaWeeklyView.jsx'
 import { StethoscopeIcon } from '../components/Brand.jsx'
 import { useAgenda } from '../hooks/useAgenda.js'
+import { NOTIFICATION_ACTION_EVENT, PENDING_NOTIFICATION_ACTION_KEY } from '../repositories/notificationRepository.js'
 import { AGENDA_EXCEPTIONS_CHANGED_EVENT, availabilityRepository } from '../repositories/availabilityRepository.js'
+import { translateErrorMessage } from '../repositories/repositoryUtils.js'
 import { formatLocalDateInput, parseLocalDate } from '../utils/agendaDate.js'
 
 const statusFilters = [
-  { label: 'Todos', value: 'Todos' },
-  { label: 'Agendados', value: 'Agendado' },
-  { label: 'Confirmados', value: 'Confirmado' },
-  { label: 'Realizados', value: 'Realizado' },
-  { label: 'Cancelados', value: 'Cancelado' },
-  { label: 'Prioridade', value: 'Prioridade' },
+  { label: 'Todos', value: 'Todos', tone: 'all' },
+  { label: 'Agendados', value: 'Agendado', tone: 'waiting' },
+  { label: 'Confirmados', value: 'Confirmado', tone: 'confirmed' },
+  { label: 'Realizados', value: 'Realizado', tone: 'finished' },
+  { label: 'Cancelados', value: 'Cancelado', tone: 'cancelled' },
+  { label: 'Prioridade', value: 'Prioridade', tone: 'priority' },
 ]
 
 const viewFilters = [
@@ -54,6 +56,7 @@ export function AgendaPage({ navigate }) {
   const {
     patients,
     professionals,
+    users,
     currentProfessional,
     viewerProfile,
     agendaScope,
@@ -77,6 +80,7 @@ export function AgendaPage({ navigate }) {
     updateForm,
     openCreateModal,
     openAppointmentModal,
+    openAppointmentById,
     closeAppointmentModal,
     handleSubmitAppointment,
     handleCancelAppointment,
@@ -98,6 +102,27 @@ export function AgendaPage({ navigate }) {
     shortcutHandledRef.current = true
     openCreateModal({ patientId })
   }, [loading, openCreateModal])
+
+  useEffect(() => {
+    if (loading) return undefined
+
+    function handleAction(action) {
+      if (action?.type !== 'agenda:openAppointment' || !action.appointmentId) return
+      if (openAppointmentById(action.appointmentId)) {
+        sessionStorage.removeItem(PENDING_NOTIFICATION_ACTION_KEY)
+      }
+    }
+
+    function handleNotificationAction(event) {
+      handleAction(event.detail)
+    }
+
+    const pendingAction = readPendingNotificationAction()
+    handleAction(pendingAction)
+
+    window.addEventListener(NOTIFICATION_ACTION_EVENT, handleNotificationAction)
+    return () => window.removeEventListener(NOTIFICATION_ACTION_EVENT, handleNotificationAction)
+  }, [loading, openAppointmentById])
 
   if (loading) {
     return (
@@ -127,6 +152,9 @@ export function AgendaPage({ navigate }) {
   ])
   const selectedPatient = patients.find((patient) => String(patient.id) === String(form.patientId))
   const selectedProfessional = professionals.find((professional) => String(professional.id) === String(form.professionalId))
+  const appointmentCreatorName = editingAppointment
+    ? resolveAppointmentCreatorName(editingAppointment, viewerProfile, professionals, users)
+    : ''
   const timeOptions = getTimeOptions(form.time, availableSlots)
 
   function openCreate(options = {}) {
@@ -261,11 +289,7 @@ export function AgendaPage({ navigate }) {
                 <div className="flex min-w-0 flex-nowrap gap-2 overflow-x-auto pb-1">
                   {statusFilters.map((filter) => (
                     <button
-                      className={`h-8 shrink-0 rounded-sm border px-3 text-sm font-semibold transition ${
-                        status === filter.value
-                          ? 'border-[#3b82f6] bg-[#3b82f6]/10 text-[#3b82f6]'
-                          : 'border-[#404040] bg-[#303030] text-[#a3a3a3] hover:text-[#e5e5e5]'
-                      }`}
+                      className={`agenda-status-filter agenda-status-filter-${filter.tone} ${status === filter.value ? 'is-active' : ''} h-8 shrink-0 rounded-sm border px-3 text-sm font-semibold transition`}
                       key={filter.value}
                       onClick={() => setStatus(filter.value)}
                       type="button"
@@ -555,7 +579,7 @@ export function AgendaPage({ navigate }) {
                 Agendamento de {selectedPatient ? getPatientLabel(selectedPatient) : 'paciente não informado'} às {form.time}.
               </p>
               <p className="mt-1">Status atual: {form.status}</p>
-              <p className="mt-1">Criado por: {editingAppointment.createdByName || editingAppointment.createdBy || 'Usuário não informado'}</p>
+              <p className="mt-1">Criado por: {appointmentCreatorName}</p>
               {form.notes ? <p className="mt-1">Observações: {form.notes}</p> : null}
             </div>
           ) : null}
@@ -652,7 +676,7 @@ function AvailabilitySidebar({ currentProfessional, isDoctorScope, professionals
       })
       setExceptionRows(exceptions)
     } catch (err) {
-      setAvailabilityError(err.message || 'Falha ao carregar exceções de agenda.')
+      setAvailabilityError(translateErrorMessage(err.message, 'Falha ao carregar exceções de agenda.'))
     }
   }, [
     exceptionFilters.date,
@@ -679,7 +703,7 @@ function AvailabilitySidebar({ currentProfessional, isDoctorScope, professionals
         rows: availability,
       })
     } catch (err) {
-      setAvailabilityError(err.message || 'Falha ao verificar disponibilidade.')
+      setAvailabilityError(translateErrorMessage(err.message, 'Falha ao verificar disponibilidade.'))
     } finally {
       setLoadingAvailability(false)
     }
@@ -717,7 +741,7 @@ function AvailabilitySidebar({ currentProfessional, isDoctorScope, professionals
       )
       window.alert('Disponibilidade cadastrada.')
     } catch (err) {
-      window.alert(err.message || 'Erro ao criar disponibilidade.')
+      window.alert(translateErrorMessage(err.message, 'Erro ao criar disponibilidade.'))
     }
   }
 
@@ -737,7 +761,7 @@ function AvailabilitySidebar({ currentProfessional, isDoctorScope, professionals
       window.dispatchEvent(new CustomEvent(AGENDA_EXCEPTIONS_CHANGED_EVENT))
       window.alert('Exceção cadastrada.')
     } catch (err) {
-      window.alert(err.message || 'Erro ao criar exceção de agenda.')
+      window.alert(translateErrorMessage(err.message, 'Erro ao criar exceção de agenda.'))
     }
   }
 
@@ -782,6 +806,9 @@ function AvailabilitySidebar({ currentProfessional, isDoctorScope, professionals
 
   function updateExceptionFilter(field, value) {
     setExceptionFilters((current) => ({ ...current, [field]: value }))
+    if (['doctorId', 'date'].includes(field)) {
+      setExceptionForm((current) => ({ ...current, [field]: value }))
+    }
   }
 
   function updateExceptionForm(field, value) {
@@ -896,18 +923,7 @@ function AvailabilitySidebar({ currentProfessional, isDoctorScope, professionals
         </div>
 
         <form className="grid gap-2 border-t border-[#404040] pt-3" onSubmit={createException}>
-          <SidebarField label="Médico">
-            <select className={sidebarInputClass} disabled={isDoctorScope} onChange={(event) => updateExceptionForm('doctorId', event.target.value)} value={exceptionForm.doctorId}>
-              <option value="">Selecione</option>
-              {doctorOptions.map((professional) => (
-                <option key={professional.id} value={professional.id}>{professional.name}</option>
-              ))}
-            </select>
-          </SidebarField>
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
-            <SidebarField label="Data">
-              <input className={`${sidebarInputClass} [color-scheme:dark]`} onChange={(event) => updateExceptionForm('date', event.target.value)} type="date" value={exceptionForm.date} />
-            </SidebarField>
             <SidebarField label="Tipo">
               <select className={sidebarInputClass} onChange={(event) => updateExceptionForm('kind', event.target.value)} value={exceptionForm.kind}>
                 <option value="bloqueio">Bloqueio</option>
@@ -971,7 +987,7 @@ function AvailabilityCheckModal({ onClose, result }) {
         <div className="overflow-y-auto p-5">
           {rows.length ? (
             <div className="grid gap-3">
-              <p className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm font-semibold text-emerald-200">
+              <p className="availability-found-message rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm font-semibold text-emerald-200">
                 Disponibilidade encontrada para os filtros selecionados.
               </p>
               {rows.map((row) => (
@@ -1111,8 +1127,68 @@ function SearchResults({ emptyText, getDescription, getLabel, items, onSelect, s
   )
 }
 
+function readPendingNotificationAction() {
+  try {
+    return JSON.parse(sessionStorage.getItem(PENDING_NOTIFICATION_ACTION_KEY) || 'null')
+  } catch {
+    sessionStorage.removeItem(PENDING_NOTIFICATION_ACTION_KEY)
+    return null
+  }
+}
+
+function resolveAppointmentCreatorName(appointment, viewerProfile, professionals = [], users = []) {
+  const explicitName = String(appointment?.createdByName || '').trim()
+  if (explicitName && !isUuid(explicitName)) return explicitName
+
+  const creatorId = normalizeIdentifier(appointment?.createdBy)
+  const viewerIds = [
+    viewerProfile?.id,
+    viewerProfile?.userId,
+    viewerProfile?.authUserId,
+    viewerProfile?.doctorId,
+    viewerProfile?.email,
+  ].map(normalizeIdentifier)
+
+  if (creatorId && viewerIds.includes(creatorId)) {
+    return viewerProfile?.name || viewerProfile?.full_name || viewerProfile?.email || 'Usuário logado'
+  }
+
+  const user = users.find((item) =>
+    [
+      item.id,
+      item.user_id,
+      item.auth_user_id,
+      item.profile_id,
+      item.email,
+    ].map(normalizeIdentifier).includes(creatorId),
+  )
+
+  if (user) return user.full_name || user.name || user.nome || user.email || 'Usuário'
+
+  const professional = professionals.find((item) =>
+    [
+      item.id,
+      item.userId,
+      item.authUserId,
+      item.email,
+    ].map(normalizeIdentifier).includes(creatorId),
+  )
+
+  if (professional?.name) return professional.name
+
+  return 'Usuário não informado'
+}
+
 function getPatientLabel(patient) {
   return patient?.name || patient?.full_name || patient?.nome || ''
+}
+
+function normalizeIdentifier(value) {
+  return String(value || '').trim().toLowerCase()
+}
+
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || '').trim())
 }
 
 function filterBySearch(items, search, getValues) {

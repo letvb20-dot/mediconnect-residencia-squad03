@@ -60,22 +60,23 @@ export function AgendaDailyView({
           const isBooked = primaryBlocksSlot || hasHiddenAppointment
           const isPast = isPastSlot(baseDate, time)
           const canCreateSlot = canCreateAppointment && !isBooked && !isPast
+          const visualStatus = getAppointmentVisualStatus(primaryAppointment)
 
           return (
             <article
-              className={`agenda-slot ${isBooked ? getDailyToneClass(primaryAppointment?.status) : isPast ? 'agenda-slot-blocked' : 'agenda-slot-free'} grid gap-3 rounded-xl border px-4 py-3 shadow-[0_8px_18px_rgba(0,0,0,0.16)] md:grid-cols-[84px_1fr_auto] ${
+              className={`agenda-slot ${isBooked ? getDailyToneClass(primaryAppointment) : isPast ? 'agenda-slot-blocked' : 'agenda-slot-free'} grid gap-3 rounded-xl border px-4 py-3 shadow-[0_8px_18px_rgba(0,0,0,0.16)] md:grid-cols-[84px_1fr_auto] ${
                 isBooked
-                  ? 'border-red-700/50 bg-red-950/35 text-red-50'
+                  ? 'border-[#404040] bg-[#303030] text-[#e5e5e5]'
                   : isPast
                     ? 'border-[#404040] bg-[#1f1f1f] text-[#737373]'
-                    : 'border-emerald-700/50 bg-emerald-950/35 text-emerald-50'
+                    : 'border-[#404040] bg-[#303030] text-[#e5e5e5]'
               }`}
               key={time}
             >
               <div>
                 <p className="text-xl font-bold leading-none">{time}</p>
                 <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] opacity-80">
-                  {primaryAppointment?.status || (isBooked ? 'Agendado' : isPast ? 'Encerrado' : 'Disponível')}
+                  {visualStatus || (isBooked ? 'Agendado' : isPast ? 'Encerrado' : 'Disponível')}
                 </p>
               </div>
 
@@ -113,7 +114,7 @@ export function AgendaDailyView({
 
               <div className="flex flex-wrap items-start justify-start gap-2 md:justify-end">
                 <span className="agenda-slot-status rounded-full border border-current/30 bg-black/25 px-3 py-1 text-xs font-bold shadow-sm">
-                  {primaryAppointment ? primaryAppointment.status : hasHiddenAppointment ? 'Ocupado' : isPast ? 'Encerrado' : 'Livre'}
+                  {visualStatus || (hasHiddenAppointment ? 'Ocupado' : isPast ? 'Encerrado' : 'Livre')}
                 </span>
                 {canCreateSlot ? (
                   <button
@@ -135,8 +136,10 @@ export function AgendaDailyView({
   )
 }
 
-function getDailyToneClass(status) {
-  switch (status) {
+function getDailyToneClass(appointment) {
+  if (isHighPriority(appointment)) return 'agenda-slot-priority'
+
+  switch (appointment?.status) {
     case 'Confirmado':
     case 'Confirmada':
       return 'agenda-slot-confirmed'
@@ -154,6 +157,15 @@ function getDailyToneClass(status) {
     default:
       return 'agenda-slot-waiting'
   }
+}
+
+function getAppointmentVisualStatus(appointment) {
+  if (!appointment) return ''
+  return isHighPriority(appointment) ? 'Prioridade' : appointment.status
+}
+
+function isHighPriority(appointment) {
+  return Boolean(appointment?.highPriority || appointment?.priority === 'Alta')
 }
 
 function generateSlots(start, end, intervalMinutes) {

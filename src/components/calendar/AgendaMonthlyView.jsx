@@ -68,9 +68,9 @@ export function AgendaMonthlyView({ baseDate, appointments, onDayClick }) {
                 {dayAppointments.slice(0, 3).map((appointment) => (
                   <div
                     key={appointment.id}
-                    className={`agenda-month-event ${getStatusToneClass(appointment.status)} flex items-center gap-1.5 truncate rounded bg-[#303030] px-1.5 py-1 text-[10px] font-semibold text-[#a3a3a3]`}
+                    className={`agenda-month-event ${getStatusToneClass(appointment)} flex items-center gap-1.5 truncate rounded bg-[#303030] px-1.5 py-1 text-[10px] font-semibold text-[#a3a3a3]`}
                   >
-                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${getDotColor(appointment.status)}`} />
+                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${getDotColor(appointment)}`} />
                     <span className="truncate">
                       {appointment.time} - {appointment.patient}
                     </span>
@@ -90,8 +90,10 @@ export function AgendaMonthlyView({ baseDate, appointments, onDayClick }) {
   )
 }
 
-function getStatusToneClass(status) {
-  switch (status) {
+function getStatusToneClass(appointment) {
+  if (isHighPriority(appointment)) return 'agenda-event-priority'
+
+  switch (appointment?.status) {
     case 'Confirmado':
     case 'Confirmada':
       return 'agenda-event-confirmed'
@@ -111,24 +113,30 @@ function getStatusToneClass(status) {
   }
 }
 
-function getDotColor(status) {
-  switch (status) {
+function getDotColor(appointment) {
+  if (isHighPriority(appointment)) return 'bg-[#c084fc]'
+
+  switch (appointment?.status) {
     case 'Confirmado':
     case 'Confirmada':
-      return 'bg-[#10b981]'
-    case 'Em triagem':
-      return 'bg-[#f59e0b]'
-    case 'Realizado':
       return 'bg-[#60a5fa]'
+    case 'Em triagem':
+      return 'bg-[#c084fc]'
+    case 'Realizado':
+      return 'bg-[#86efac]'
     case 'Cancelado':
     case 'Cancelada':
       return 'bg-[#f87171]'
     case 'Agendado':
     case 'Aguardando':
-      return 'bg-[#a3a3a3]'
+      return 'bg-[#fbbf24]'
     case 'Bloqueado':
       return 'bg-[#737373]'
     default:
       return 'bg-[#3b82f6]'
   }
+}
+
+function isHighPriority(appointment) {
+  return Boolean(appointment?.highPriority || appointment?.priority === 'Alta')
 }

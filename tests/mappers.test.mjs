@@ -57,17 +57,17 @@ test('reportMapper remove campos vazios e normaliza status', () => {
 
   assert.equal(payload.order_number, 'REL-2026-001')
   assert.equal(payload.patient_id, 'patient-1')
-  assert.equal(payload.status, 'completed')
+  assert.equal(payload.status, 'delivered')
   assert.equal(payload.requested_by, 'Dra. Leticia')
   assert.equal(payload.content_html, '<p>Conclusao clinica</p>')
   assert.equal('exam' in payload, false)
 })
 
-test('reportMapper normaliza status finalizado em portugues para completed', () => {
+test('reportMapper normaliza status finalizado em portugues para delivered', () => {
   const payload = reportMapper.toApi({
     patientId: 'patient-1',
     status: 'Finalizado',
   })
 
-  assert.equal(payload.status, 'completed')
+  assert.equal(payload.status, 'delivered')
 })

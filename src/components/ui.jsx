@@ -1,10 +1,10 @@
 const buttonVariants = {
   primary:
-    'border-sky-700 bg-sky-700 text-white hover:bg-sky-800 focus-visible:outline-sky-700',
+    'border-[#3b82f6] bg-[#3b82f6] text-white hover:bg-blue-600 focus-visible:outline-[#3b82f6]',
   secondary:
-    'border-slate-300 bg-white text-slate-700 hover:bg-slate-50 focus-visible:outline-slate-500',
+    'border-gray-200 bg-white text-gray-700 hover:bg-[#f4f7fb] focus-visible:outline-gray-500',
   ghost:
-    'border-transparent bg-transparent text-slate-600 hover:bg-slate-100 focus-visible:outline-slate-500',
+    'border-transparent bg-transparent text-gray-600 hover:bg-[#f4f7fb] focus-visible:outline-gray-500',
   danger:
     'border-rose-600 bg-rose-600 text-white hover:bg-rose-700 focus-visible:outline-rose-600',
 }
@@ -36,7 +36,7 @@ export function Button({
 
 export function Card({ children, className = '' }) {
   return (
-    <section className={`rounded-lg border border-slate-200 bg-white shadow-sm ${className}`}>
+    <section className={`rounded-lg border border-gray-200 bg-white shadow-sm ${className}`}>
       {children}
     </section>
   )

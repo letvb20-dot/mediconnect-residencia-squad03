@@ -10,6 +10,7 @@ import { patientRepository } from './repositories/patientRepository.js'
 const AgendaPage = lazyPage(() => import('./pages/AgendaPage.jsx'), 'AgendaPage')
 const AnalyticsPage = lazyPage(() => import('./pages/AnalyticsPage.jsx'), 'AnalyticsPage')
 const HomePage = lazyPage(() => import('./pages/HomePage.jsx'), 'HomePage')
+const LandingPage = lazyPage(() => import('./pages/LandingPage.jsx'), 'LandingPage')
 const MessagesPage = lazyPage(() => import('./pages/MessagesPage.jsx'), 'MessagesPage')
 const PatientDetailPage = lazyPage(() => import('./pages/PatientsPage.jsx'), 'PatientDetailPage')
 const PatientsPage = lazyPage(() => import('./pages/PatientsPage.jsx'), 'PatientsPage')
@@ -63,8 +64,8 @@ function App() {
   useEffect(() => attachTextLimitGuards(), [])
 
   const route = useMemo(
-    () => resolveRoute(location.pathname, navigate, role, profile, user),
-    [location.pathname, navigate, profile, role, user],
+    () => resolveRoute(location.pathname, navigate, role, profile, user, isAuthenticated),
+    [isAuthenticated, location.pathname, navigate, profile, role, user],
   )
 
   // Tela de carregamento enquanto busca o role do usuário
@@ -232,8 +233,16 @@ function RouteErrorFallback() {
   )
 }
 
-function resolveRoute(pathname, navigate, role, profile, user) {
-  if (pathname === '/' || pathname === '/login') {
+function resolveRoute(pathname, navigate, role, profile, user, isAuthenticated) {
+  if (pathname === '/') {
+    return {
+      element: <LandingPage navigate={navigate} isAuthenticated={isAuthenticated} />,
+      title: 'MediConnect',
+      withShell: false,
+    }
+  }
+
+  if (pathname === '/login') {
     return {
       element: <LoginPage navigate={navigate} />,
       title: 'Login',

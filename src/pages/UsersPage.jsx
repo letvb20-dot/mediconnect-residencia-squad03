@@ -215,7 +215,7 @@ export function UsersPage({ embedded = false, embeddedHeaderOnly = false, hideHe
     return (
       <div className="mx-auto max-w-3xl rounded-2xl border border-[#404040] bg-[#262626] p-8 text-center text-[#e5e5e5]">
         <h1 className="text-xl font-bold">Acesso não permitido</h1>
-        <p className="mt-2 text-sm text-[#a3a3a3]">Somente Administrador e Gestão/Coordenação podem gerenciar usuários.</p>
+        <p className="mt-2 text-sm text-[#a3a3a3]">Somente Administrador e Gestão podem gerenciar usuários.</p>
       </div>
     )
   }

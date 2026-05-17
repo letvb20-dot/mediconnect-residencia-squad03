@@ -9,7 +9,7 @@ export function NotFoundPage({ navigate }) {
         title="Tela não encontrada"
       />
       <Card className="p-6">
-        <p className="max-w-2xl text-sm leading-6 text-slate-600">
+        <p className="max-w-2xl text-sm leading-6 text-gray-500">
           Volte para o dashboard ou escolha uma area na navegacao lateral. Esta tela tambem ajuda a validar links
           quebrados durante a evolucao do app.
         </p>

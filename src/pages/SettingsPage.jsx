@@ -5,11 +5,9 @@ import { getStoredTheme, setStoredTheme } from '../utils/theme.js'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select.jsx'
 import { Switch } from '../components/ui/switch.jsx'
 
-import { useAccessibility } from '../contexts/AccessibilityContext.jsx'
+import { useAccessibility } from '../contexts/accessibilityContext.js'
 
-const SETTINGS_UI_KEY = 'mediconnect.settings.ui'
 const cardClass = 'rounded-2xl border border-[#404040] bg-[#262626] shadow-sm'
-const rowClass = 'flex items-center justify-between gap-6 border-b border-[#404040] py-4 last:border-0'
 const inputClass =
   'h-10 rounded-sm border border-[#404040] bg-[#171717] px-3 text-sm text-[#e5e5e5] outline-none transition focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20'
 
@@ -176,7 +174,7 @@ function NotificationsSection() {
         if (!res.ok) throw new Error('Falha ao buscar')
         const data = await res.json()
         setPrefs(data)
-      } catch (err) {
+      } catch {
         // Fallback temporário para manter a UI visualizável em caso de erro local (sem backend rodando)
         setPrefs({
           notificacoes_agenda: true,
@@ -219,7 +217,7 @@ function NotificationsSection() {
           type: 'success'
         }
       }))
-    } catch (err) {
+    } catch {
       // 2. Reversão em caso de falha (Rollback) e Toast de Erro
       setPrefs(previous)
       window.dispatchEvent(new CustomEvent('app:show_toast', {

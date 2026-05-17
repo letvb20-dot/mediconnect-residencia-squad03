@@ -35,6 +35,10 @@ export const communicationRepository = {
     return true
   },
 
+  async registerMessage(data) {
+    return createMessageLog(data)
+  },
+
   getCampaigns({ patients = [] } = {}) {
     const patientsWithPhone = patients.filter((patient) => patient.phone)
     const patientsWithoutNextVisit = patients.filter((patient) => !patient.nextVisit)

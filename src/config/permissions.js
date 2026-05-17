@@ -208,7 +208,7 @@ function normalizeRoleKey(role) {
 // Rótulos amigáveis para cada role
 export const ROLE_LABELS = {
   admin: 'Administrador',
-  gestor: 'Gestão / Coordenação',
+  gestor: 'Gestão',
   medico: 'Médico',
   secretaria: 'Secretária',
   paciente: 'Paciente',

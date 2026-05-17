@@ -1,66 +1,62 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react'
-import { profileRepository } from '../repositories/profileRepository.js'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-const SocketContext = createContext(null)
+import { profileRepository } from '../repositories/profileRepository.js'
+import { SocketContext } from './socketContext.js'
 
 export function SocketProvider({ children }) {
   const [socket, setSocket] = useState(null)
   const [isConnected, setIsConnected] = useState(false)
-  const [listeners, setListeners] = useState(new Map())
+  const listenersRef = useRef(new Map())
 
   useEffect(() => {
     let active = true
+    let removeSimulatedPushListener = () => {}
+    const listenerRegistry = listenersRef.current
 
-    // Simulate establishing a WebSocket connection
-    const connectToSocket = async () => {
+    async function connectToSocket() {
       try {
-        const profile = await profileRepository.getCurrentUserProfile().catch(() => null)
-        
+        await profileRepository.getCurrentUserProfile().catch(() => null)
+
         if (!active) return
 
-        // In a real environment, you would use:
-        // import { io } from 'socket.io-client'
-        // const socketInstance = io('https://api.mediconnect.com', { auth: { token: '...' } })
-        
-        // MOCK IMPLEMENTATION
         const mockSocket = {
           id: `socket_${Date.now()}`,
           on: (event, callback) => {
-            setListeners(prev => {
-              const newListeners = new Map(prev)
-              const eventCallbacks = newListeners.get(event) || []
-              newListeners.set(event, [...eventCallbacks, callback])
-              return newListeners
-            })
+            const eventCallbacks = listenerRegistry.get(event) || []
+            listenerRegistry.set(event, [...eventCallbacks, callback])
           },
           off: (event, callback) => {
-            setListeners(prev => {
-              const newListeners = new Map(prev)
-              const eventCallbacks = newListeners.get(event) || []
-              newListeners.set(event, eventCallbacks.filter(cb => cb !== callback))
-              return newListeners
-            })
+            const eventCallbacks = listenerRegistry.get(event) || []
+            const nextCallbacks = eventCallbacks.filter(
+              (registeredCallback) => registeredCallback !== callback,
+            )
+
+            if (nextCallbacks.length) {
+              listenerRegistry.set(event, nextCallbacks)
+            } else {
+              listenerRegistry.delete(event)
+            }
           },
           emit: (event, data) => {
             console.log(`[Socket Mock] Emitting ${event}`, data)
-          }
+          },
         }
 
         setSocket(mockSocket)
         setIsConnected(true)
 
-        // Mock event receiver to simulate real-time pushes for demo purposes
-        window.addEventListener('simulated_socket_push', (e) => {
-          const { event, payload } = e.detail
-          setListeners(currentListeners => {
-            const callbacks = currentListeners.get(event) || []
-            callbacks.forEach(cb => cb(payload))
-            return currentListeners
-          })
-        })
+        function handleSimulatedSocketPush(event) {
+          const { event: socketEvent, payload } = event.detail
+          const callbacks = listenerRegistry.get(socketEvent) || []
+          callbacks.forEach((callback) => callback(payload))
+        }
 
-      } catch (err) {
-        console.error('Failed to connect to socket', err)
+        window.addEventListener('simulated_socket_push', handleSimulatedSocketPush)
+        removeSimulatedPushListener = () => {
+          window.removeEventListener('simulated_socket_push', handleSimulatedSocketPush)
+        }
+      } catch (error) {
+        console.error('Failed to connect to socket', error)
       }
     }
 
@@ -68,36 +64,27 @@ export function SocketProvider({ children }) {
 
     return () => {
       active = false
-      if (socket) {
-        // socket.disconnect() // Real implementation
-        setIsConnected(false)
-      }
+      removeSimulatedPushListener()
+      listenerRegistry.clear()
+      setIsConnected(false)
     }
-  }, []) // Empty dependency array as we connect once per app mount
+  }, [])
 
-  // Utility hook to register events safely
-  const useSocketEvent = useCallback((event, callback) => {
-    useEffect(() => {
-      if (!socket) return
+  const subscribe = useCallback((event, callback) => {
+    if (!socket) return () => {}
 
-      socket.on(event, callback)
-      return () => {
-        socket.off(event, callback)
-      }
-    }, [socket, event, callback])
+    socket.on(event, callback)
+    return () => socket.off(event, callback)
   }, [socket])
 
+  const value = useMemo(
+    () => ({ socket, isConnected, subscribe }),
+    [isConnected, socket, subscribe],
+  )
+
   return (
-    <SocketContext.Provider value={{ socket, isConnected, useSocketEvent }}>
+    <SocketContext.Provider value={value}>
       {children}
     </SocketContext.Provider>
   )
-}
-
-export function useSocket() {
-  const context = useContext(SocketContext)
-  if (!context) {
-    throw new Error('useSocket deve ser usado dentro de um SocketProvider')
-  }
-  return context
 }

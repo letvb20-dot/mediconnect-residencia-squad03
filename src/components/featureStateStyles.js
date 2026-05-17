@@ -6,9 +6,9 @@ export const featureStateStyles = {
     label: '',
   },
   partial: {
-    badge: 'feature-badge-partial border-sky-500/40 bg-sky-500/15 text-sky-300',
-    panel: 'feature-panel-partial border-sky-500/35 bg-sky-500/8',
-    title: 'feature-title-partial text-sky-300',
+    badge: 'feature-badge-partial border-[#3b82f6]/40 bg-[#3b82f6]/15 text-[#93c5fd]',
+    panel: 'feature-panel-partial border-[#3b82f6]/35 bg-[#3b82f6]/8',
+    title: 'feature-title-partial text-[#93c5fd]',
     label: 'Parcial',
   },
   wip: {

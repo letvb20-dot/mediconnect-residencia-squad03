@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 
-import { normalizeRole } from '../config/permissions.js'
 import { StethoscopeIcon } from '../components/Brand.jsx'
+import { normalizeRole } from '../config/permissions.js'
 import { communicationRepository } from '../repositories/communicationRepository.js'
-import { translateErrorMessage } from '../repositories/repositoryUtils.js'
 import { notificationRepository } from '../repositories/notificationRepository.js'
 import { patientRepository } from '../repositories/patientRepository.js'
+import { translateErrorMessage } from '../repositories/repositoryUtils.js'
 import { sanitizePlainText } from '../utils/inputSanitizers.js'
+import { isCommunicationEligiblePatient } from '../utils/communicationEligibility.js'
 
 const channels = {
   whatsapp: { label: 'WhatsApp', className: 'bg-emerald-500/20 text-emerald-400', icon: 'message' },
@@ -21,13 +22,89 @@ const statusConfig = {
   pendente: { label: 'Pendente', className: 'text-amber-400', icon: 'clock' },
 }
 
+const defaultTemplates = [
+  {
+    id: 'default-marketing-medico',
+    builtin: true,
+    name: 'Marketing medico',
+    channel: 'email',
+    category: 'Marketing',
+    content: 'Ola, {paciente}. A equipe MediConnect preparou conteudos de saude preventiva para apoiar sua rotina de cuidado. Conte conosco para acompanhar sua saude de perto.',
+  },
+  {
+    id: 'default-vacinacao',
+    builtin: true,
+    name: 'Campanha de vacinacao',
+    channel: 'whatsapp',
+    category: 'Campanha',
+    content: 'Ola, {paciente}. Estamos com uma campanha de vacinacao ativa na clinica. Responda esta mensagem para receber orientacoes e verificar disponibilidade.',
+  },
+  {
+    id: 'default-lembrete-consulta',
+    builtin: true,
+    name: 'Lembrete de consulta proxima',
+    channel: 'whatsapp',
+    category: 'Lembrete',
+    content: 'Ola, {paciente}. Passando para lembrar que voce tem uma consulta agendada em breve. Caso precise reagendar, fale com nossa equipe.',
+  },
+  {
+    id: 'default-confirmacao-agendamento',
+    builtin: true,
+    name: 'Confirmacao de agendamento',
+    channel: 'sms',
+    category: 'Confirmacao',
+    content: 'Sua consulta na MediConnect foi agendada. Responda SIM para confirmar sua presenca ou entre em contato para reagendar.',
+  },
+  {
+    id: 'default-agradecimento',
+    builtin: true,
+    name: 'Agradecimento pos-consulta',
+    channel: 'whatsapp',
+    category: 'Relacionamento',
+    content: 'Ola, {paciente}. Agradecemos sua visita. Se tiver duvidas sobre orientacoes ou retorno, nossa equipe esta a disposicao.',
+  },
+  {
+    id: 'default-retorno-pendente',
+    builtin: true,
+    name: 'Retorno pendente',
+    channel: 'whatsapp',
+    category: 'Retorno',
+    content: 'Ola, {paciente}. Identificamos que voce ainda nao possui retorno agendado. Podemos ajudar a encontrar o melhor horario?',
+  },
+  {
+    id: 'default-atualizacao-cadastral',
+    builtin: true,
+    name: 'Atualizacao cadastral',
+    channel: 'email',
+    category: 'Cadastro',
+    content: 'Ola, {paciente}. Para manter seu atendimento seguro, pedimos que confirme seus dados cadastrais com nossa equipe antes da proxima consulta.',
+  },
+  {
+    id: 'default-preparo-exame',
+    builtin: true,
+    name: 'Preparo para exame',
+    channel: 'sms',
+    category: 'Exames',
+    content: 'Lembrete MediConnect: verifique as orientacoes de preparo para seu exame. Em caso de duvidas, fale com a clinica.',
+  },
+]
+
+const recurrenceOptions = [
+  ['none', 'Nao repetir'],
+  ['weekly', 'Semanalmente'],
+  ['biweekly', 'A cada 15 dias'],
+  ['monthly', 'Mensalmente'],
+  ['quarterly', 'A cada 3 meses'],
+]
+
+const campaignStorageKey = 'mediconnect.communication.campaigns'
 
 const emptyMessage = {
   patientId: '',
   patient: '',
   phone: '',
   channel: 'whatsapp',
-  template: 'Lembrete 48h',
+  template: 'Mensagem avulsa',
   content: '',
 }
 
@@ -36,6 +113,15 @@ const emptyTemplate = {
   channel: 'whatsapp',
   category: 'Lembrete',
   content: '',
+}
+
+const emptyCampaign = {
+  name: '',
+  channel: 'whatsapp',
+  template: 'Mensagem avulsa',
+  content: '',
+  patientIds: [],
+  recurrence: 'none',
 }
 
 const cardClass = 'rounded-2xl border border-[#404040] bg-[#262626] shadow-sm'
@@ -55,33 +141,41 @@ export function MessagesPage({ role }) {
   const [messages, setMessages] = useState([])
   const [templates, setTemplates] = useState([])
   const [patients, setPatients] = useState([])
+  const [campaignHistory, setCampaignHistory] = useState(loadStoredCampaigns)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState('historico')
   const [channelFilter, setChannelFilter] = useState('todos')
   const [search, setSearch] = useState('')
   const [composerOpen, setComposerOpen] = useState(false)
+  const [campaignOpen, setCampaignOpen] = useState(false)
   const [templateEditorOpen, setTemplateEditorOpen] = useState(false)
   const [editingTemplateId, setEditingTemplateId] = useState(null)
   const [composer, setComposer] = useState(emptyMessage)
+  const [campaignDraft, setCampaignDraft] = useState(emptyCampaign)
   const [templateDraft, setTemplateDraft] = useState(emptyTemplate)
-  const availableTemplates = useMemo(
-    () => templates.filter((template) => allowedChannelKeys.includes(template.channel)),
-    [allowedChannelKeys, templates],
-  )
+
   const patientOptions = useMemo(
     () =>
       patients.map((patient) => ({
         id: String(patient.detailId || patient.id || ''),
         name: patient.name || patient.full_name || patient.nome || 'Paciente',
         phone: patient.phone || patient.phone_mobile || patient.telefone || '',
+        email: patient.email || '',
         document: patient.cpf || patient.document || '',
+        nextVisit: patient.nextVisit || patient.next_visit || '',
+        communicationEligible: isCommunicationEligiblePatient(patient),
       })),
     [patients],
   )
-  const campaigns = useMemo(
-    () => communicationRepository.getCampaigns({ patients: patientOptions }),
+  const eligiblePatients = useMemo(
+    () => patientOptions.filter((patient) => patient.communicationEligible),
     [patientOptions],
+  )
+  const optedOutCount = patientOptions.length - eligiblePatients.length
+  const availableTemplates = useMemo(
+    () => mergeTemplates(defaultTemplates, templates).filter((template) => allowedChannelKeys.includes(template.channel)),
+    [allowedChannelKeys, templates],
   )
 
   useEffect(() => {
@@ -100,7 +194,7 @@ export function MessagesPage({ role }) {
       })
       .catch((loadError) => {
         if (!active) return
-        setError(translateErrorMessage(loadError.message, 'Erro ao carregar comunicação.'))
+        setError(translateErrorMessage(loadError.message, 'Erro ao carregar comunicacao.'))
         setPatients([])
         setMessages([])
         setTemplates([])
@@ -114,15 +208,20 @@ export function MessagesPage({ role }) {
     }
   }, [])
 
+  useEffect(() => {
+    saveStoredCampaigns(campaignHistory)
+  }, [campaignHistory])
+
   const filteredMessages = useMemo(
     () =>
       messages.filter((message) => {
+        const channel = channels[message.channel]
         const isAllowedChannel = allowedChannelKeys.includes(message.channel)
         const matchesChannel = channelFilter === 'todos' || message.channel === channelFilter
         const query = search.trim().toLowerCase()
         const matchesSearch =
           !query ||
-          [message.patient, message.template, channels[message.channel].label]
+          [message.patient, message.template, channel?.label]
             .join(' ')
             .toLowerCase()
             .includes(query)
@@ -159,7 +258,7 @@ export function MessagesPage({ role }) {
   function openTemplateEditor(template = null) {
     if (template && !allowedChannelKeys.includes(template.channel)) return
 
-    setEditingTemplateId(template?.id || null)
+    setEditingTemplateId(template?.builtin ? null : template?.id || null)
     setTemplateDraft(
       template
         ? {
@@ -176,55 +275,54 @@ export function MessagesPage({ role }) {
     setTemplateEditorOpen(true)
   }
 
+  function openCampaignModal(campaign = null) {
+    const eligibleIds = new Set(eligiblePatients.map((patient) => patient.id))
+    setCampaignDraft(
+      campaign
+        ? {
+            name: campaign.name || '',
+            channel: campaign.channel || 'whatsapp',
+            template: campaign.template || 'Mensagem avulsa',
+            content: campaign.content || '',
+            patientIds: (campaign.patientIds || []).filter((patientId) => eligibleIds.has(String(patientId))),
+            recurrence: campaign.recurrence || 'none',
+          }
+        : {
+            ...emptyCampaign,
+            channel: allowedChannelKeys[0] || 'whatsapp',
+          },
+    )
+    setCampaignOpen(true)
+  }
+
   async function submitMessage(event) {
     event.preventDefault()
 
-    if (!composer.patient.trim()) {
-      return
-    }
+    if (!composer.patientId || !composer.patient.trim()) return
 
     if (!allowedChannelKeys.includes(composer.channel)) {
-      alert('Canal indisponivel para o seu perfil.')
+      window.alert('Canal indisponivel para o seu perfil.')
       return
     }
 
-    let smsSent = false
-
-    if (composer.channel === 'sms') {
-      if (!composer.phone.trim()) {
-        alert('Informe o telefone para enviar SMS.')
-        return
-      }
-
-      try {
-        await communicationRepository.sendSms({
-          patientId: composer.patientId,
-          patientName: composer.patient.trim(),
-          phone: composer.phone.trim(),
-          content: composer.content,
-        })
-        smsSent = true
-      } catch (e) {
-        alert('Falha ao disparar SMS: ' + translateErrorMessage(e.message, 'Falha ao disparar SMS.'))
-      }
+    const patient = eligiblePatients.find((item) => String(item.id) === String(composer.patientId))
+    if (!patient) {
+      window.alert('Paciente indisponivel para comunicacao por opt-out LGPD.')
+      return
     }
 
-    setMessages((current) => [
-      {
-        id: `local-${Date.now()}`,
-        patient: composer.patient.trim(),
-        channel: composer.channel,
-        template: composer.template.trim() || 'Mensagem avulsa',
-        sentAt: 'Agora',
-        status: composer.channel === 'sms' ? (smsSent ? 'entregue' : 'falha') : 'pendente',
-        response: '',
-      },
-      ...current,
-    ])
+    const result = await sendCommunicationToPatient({
+      channel: composer.channel,
+      content: composer.content,
+      patient,
+      template: composer.template.trim() || 'Mensagem avulsa',
+    })
+
+    setMessages((current) => [createLocalMessage(result), ...current])
     notificationRepository.notifyCurrentUser({
       domain: 'communication',
-      title: 'Comunicação registrada',
-      detail: `${channels[composer.channel].label} para ${composer.patient.trim()} foi ${composer.channel === 'sms' && smsSent ? 'enviado' : 'registrado'}.`,
+      title: 'Comunicacao registrada',
+      detail: `${channels[composer.channel].label} para ${composer.patient.trim()} foi ${result.status === 'entregue' ? 'enviado' : 'registrado'}.`,
       patientId: composer.patientId,
     }).catch(() => null)
     setComposer(emptyMessage)
@@ -235,12 +333,10 @@ export function MessagesPage({ role }) {
   function submitTemplate(event) {
     event.preventDefault()
 
-    if (!templateDraft.name.trim() || !templateDraft.content.trim()) {
-      return
-    }
+    if (!templateDraft.name.trim() || !templateDraft.content.trim()) return
 
     const nextTemplate = {
-      id: editingTemplateId || `template-${Date.now()}`,
+      id: editingTemplateId || `template-${new Date().getTime()}`,
       name: templateDraft.name.trim(),
       channel: templateDraft.channel,
       content: templateDraft.content.trim(),
@@ -257,23 +353,124 @@ export function MessagesPage({ role }) {
     setTemplateEditorOpen(false)
   }
 
+  async function submitCampaign(event) {
+    event.preventDefault()
+
+    const selectedPatients = eligiblePatients.filter((patient) => campaignDraft.patientIds.includes(patient.id))
+    if (!campaignDraft.name.trim() || !campaignDraft.content.trim() || !selectedPatients.length) return
+
+    const results = await Promise.all(
+      selectedPatients.map((patient) =>
+        sendCommunicationToPatient({
+          channel: campaignDraft.channel,
+          content: campaignDraft.content,
+          patient,
+          template: campaignDraft.template.trim() || campaignDraft.name.trim(),
+        }),
+      ),
+    )
+    const now = new Date()
+    const campaignRecord = {
+      id: `campaign-${now.getTime()}`,
+      channel: campaignDraft.channel,
+      content: campaignDraft.content.trim(),
+      delivered: results.filter((result) => result.status === 'entregue').length,
+      failed: results.filter((result) => result.status === 'falha').length,
+      name: campaignDraft.name.trim(),
+      patientIds: selectedPatients.map((patient) => patient.id),
+      patients: selectedPatients.map((patient) => patient.name),
+      nextRunAt: getNextRunAt(campaignDraft.recurrence, now),
+      recurrence: campaignDraft.recurrence,
+      recurrenceLabel: getRecurrenceLabel(campaignDraft.recurrence),
+      sentAt: formatDateTime(now),
+      template: campaignDraft.template.trim() || campaignDraft.name.trim(),
+      total: selectedPatients.length,
+    }
+
+    setMessages((current) => [...results.map(createLocalMessage), ...current])
+    setCampaignHistory((current) => [campaignRecord, ...current])
+    notificationRepository.notifyCurrentUser({
+      domain: 'communication',
+      title: 'Campanha disparada',
+      detail: `${campaignRecord.name} enviada para ${campaignRecord.total} pacientes elegiveis.`,
+    }).catch(() => null)
+    setCampaignDraft(emptyCampaign)
+    setCampaignOpen(false)
+    setActiveTab('campanha')
+  }
+
+  async function sendCommunicationToPatient({ channel, content, patient, template }) {
+    if (channel === 'sms') {
+      if (!patient.phone) {
+        await communicationRepository.registerMessage({
+          channel,
+          content,
+          patientId: patient.id,
+          patientName: patient.name,
+          status: 'falha',
+          template,
+        }).catch(() => null)
+        return { channel, patient, response: 'Telefone ausente', status: 'falha', template }
+      }
+
+      try {
+        await communicationRepository.sendSms({
+          content,
+          patientId: patient.id,
+          patientName: patient.name,
+          phone: patient.phone,
+        })
+        return { channel, patient, response: '', status: 'entregue', template }
+      } catch (sendError) {
+        await communicationRepository.registerMessage({
+          channel,
+          content,
+          patientId: patient.id,
+          patientName: patient.name,
+          status: 'falha',
+          template,
+        }).catch(() => null)
+        return {
+          channel,
+          patient,
+          response: translateErrorMessage(sendError.message, 'Falha ao enviar SMS.'),
+          status: 'falha',
+          template,
+        }
+      }
+    }
+
+    await communicationRepository.registerMessage({
+      channel,
+      content,
+      patientId: patient.id,
+      patientName: patient.name,
+      status: 'pendente',
+      template,
+    }).catch(() => null)
+
+    return { channel, patient, response: '', status: 'pendente', template }
+  }
+
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#f5f5f5]">Comunicação</h1>
-          <p className="mt-1 text-sm text-[#b8b8b8]">{isSecretary ? 'WhatsApp e SMS para contato operacional com pacientes' : 'WhatsApp, E-mail e SMS com pacientes carregados da API'}</p>
+          <h1 className="text-2xl font-bold tracking-tight text-[#f5f5f5]">Comunicacao</h1>
+          <p className="mt-1 text-sm text-[#b8b8b8]">
+            {isSecretary ? 'WhatsApp e SMS para contato operacional com pacientes' : 'WhatsApp, E-mail e SMS com pacientes carregados da API'}
+          </p>
         </div>
 
         <div className="flex flex-wrap gap-3">
           {!isSecretary ? (
             <button
               className="inline-flex h-12 items-center gap-2 rounded-sm border border-[#404040] bg-[#262626] px-4 text-sm font-semibold text-[#e5e5e5] transition hover:bg-[#303030]"
-              onClick={() => setActiveTab('campanha')}
+              onClick={() => openCampaignModal()}
               type="button"
             >
               <CommIcon className="size-4" name="send" />
-              Envio em Massa
+              Nova campanha
             </button>
           ) : null}
           <button
@@ -282,13 +479,13 @@ export function MessagesPage({ role }) {
             type="button"
           >
             <CommIcon className="size-4" name="plus" />
-            Nova Mensagem
+            Nova mensagem
           </button>
         </div>
       </div>
 
       {loading ? (
-        <p className={`${cardClass} p-8 text-center text-sm text-[#a3a3a3]`}>Carregando comunicação...</p>
+        <p className={`${cardClass} p-8 text-center text-sm text-[#a3a3a3]`}>Carregando comunicacao...</p>
       ) : null}
 
       {error ? (
@@ -298,7 +495,7 @@ export function MessagesPage({ role }) {
       ) : null}
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <StatCard label="Total Enviadas" value={stats.total} />
+        <StatCard label="Total enviadas" value={stats.total} />
         <StatCard label="Entregues" value={stats.delivered} valueClassName="text-emerald-400" />
         <StatCard label="Lidas" value={stats.read} valueClassName="text-[#3b82f6]" />
         <StatCard label="Falhas" value={stats.failed} valueClassName="text-red-400" />
@@ -306,8 +503,8 @@ export function MessagesPage({ role }) {
 
       <div className="flex gap-4 border-b border-[#404040]">
         {[
-          ['historico', 'Histórico'],
-          ...(!isSecretary ? [['templates', 'Templates'], ['campanha', 'Campanhas']] : []),
+          ['historico', 'Historico'],
+          ...(!isSecretary ? [['templates', 'Templates'], ['campanha', 'Campanhas'], ['gerenciamento', 'Gerenciamento']] : []),
         ].map(([key, label]) => (
           <button
             className={`border-b-2 px-2 pb-3 text-sm font-semibold transition ${
@@ -325,150 +522,44 @@ export function MessagesPage({ role }) {
       </div>
 
       {activeTab === 'historico' ? (
-        <section className={`${cardClass} p-5 md:p-6`} aria-label="Histórico de comunicação">
-          <div className="mb-6 flex flex-col gap-3 md:flex-row">
-            <label className="relative flex-1">
-              <span className="sr-only">Buscar comunicação</span>
-              <CommIcon
-                className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-[#a3a3a3]"
-                name="search"
-              />
-              <input
-                className={`${inputClass} h-12 pl-12`}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Buscar paciente..."
-                type="search"
-                value={search}
-              />
-            </label>
-
-            <div className="flex flex-wrap gap-2">
-              {[
-                ['todos', 'Todos'],
-                ...allowedChannelKeys.map((key) => [key, channels[key].label]),
-              ].map(([key, label]) => (
-                <button
-                  className={`h-12 rounded-sm border px-4 text-xs font-semibold transition ${
-                    channelFilter === key
-                      ? 'border-[#3b82f6] bg-[#3b82f6] text-white'
-                      : 'border-[#404040] bg-[#171717] text-[#b8b8b8] hover:text-[#e5e5e5]'
-                  }`}
-                  key={key}
-                  onClick={() => setChannelFilter(key)}
-                  type="button"
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="overflow-x-auto rounded-sm border border-[#404040]">
-            <table className="w-full min-w-[920px] text-left text-sm">
-              <thead className="bg-[#171717] text-xs font-semibold uppercase tracking-[0.02em] text-[#b8b8b8]">
-                <tr>
-                  <th className="px-5 py-4">Paciente</th>
-                  <th className="px-5 py-4">Canal</th>
-                  <th className="px-5 py-4">Template</th>
-                  <th className="px-5 py-4">Enviado em</th>
-                  <th className="px-5 py-4">Status</th>
-                  <th className="px-5 py-4">Resposta</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#404040] bg-[#262626]">
-                {filteredMessages.map((message) => (
-                  <MessageRow key={message.id} message={message} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {filteredMessages.length === 0 ? (
-            <div className="rounded-b-sm border-x border-b border-[#404040] bg-[#171717] px-4 py-8 text-center text-sm text-[#a3a3a3]">
-              Nenhuma comunicação encontrada com os filtros atuais.
-            </div>
-          ) : null}
-        </section>
+        <HistoryTab
+          allowedChannelKeys={allowedChannelKeys}
+          channelFilter={channelFilter}
+          messages={filteredMessages}
+          search={search}
+          setChannelFilter={setChannelFilter}
+          setSearch={setSearch}
+        />
       ) : null}
 
       {activeTab === 'templates' ? (
-        <section className="space-y-4 rounded-2xl p-4" aria-label="Templates de comunicação">
-          <div className="flex justify-end">
-            <button
-              className="inline-flex h-10 items-center gap-2 rounded-sm bg-[#3b82f6] px-4 text-sm font-semibold text-white transition hover:bg-[#2563eb]"
-              onClick={() => openTemplateEditor()}
-              type="button"
-            >
-              <CommIcon className="size-4" name="plus" />
-              Novo Template
-            </button>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {availableTemplates.length ? availableTemplates.map((template) => (
-              <TemplateCard key={template.id} onEdit={openTemplateEditor} onUse={openTemplate} template={template} />
-            )) : (
-              <p className={`${cardClass} p-6 text-sm text-[#a3a3a3] md:col-span-2 xl:col-span-3`}>
-                Nenhum template encontrado na API. Use mensagem avulsa ou cadastre um novo template.
-              </p>
-            )}
-          </div>
-        </section>
+        <TemplatesTab
+          onEdit={openTemplateEditor}
+          onUse={openTemplate}
+          templates={availableTemplates}
+        />
       ) : null}
 
       {activeTab === 'campanha' ? (
-        <section className={`${cardClass} p-6`} aria-label="Campanhas inteligentes">
-          <div className="py-8 text-center">
-            <div className="mx-auto mb-4 grid size-16 place-items-center rounded-full bg-[#303030]">
-              <CommIcon className="size-8 text-[#51a2ff]" name="send" />
-            </div>
-            <h2 className="text-lg font-bold text-[#f5f5f5]">Campanhas Inteligentes</h2>
-            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#a3a3a3]">
-              Crie campanhas segmentadas por perfil comportamental. A IA sugere os melhores horários e canais para
-              cada paciente.
-            </p>
+        <CampaignsTab
+          campaignHistory={campaignHistory}
+          eligibleCount={eligiblePatients.length}
+          onCreate={() => openCampaignModal()}
+          onResend={openCampaignModal}
+          optedOutCount={optedOutCount}
+        />
+      ) : null}
 
-            <div className="mx-auto mt-6 grid max-w-2xl gap-4 md:grid-cols-3">
-              {campaigns.map((campaign) => (
-                <div className="rounded-xl border border-[#404040] bg-[#171717] p-4 text-left" key={campaign.title}>
-                  <h3 className="text-sm font-bold text-[#f5f5f5]">{campaign.title}</h3>
-                  <p className="mt-1 text-xs leading-5 text-[#a3a3a3]">{campaign.desc}</p>
-                  <p className="mt-2 text-[10px] font-semibold text-[#51a2ff]">{campaign.count}</p>
-                  <button
-                    className="mt-3 h-8 w-full rounded-sm bg-[#3b82f6] text-xs font-semibold text-white transition hover:bg-[#2563eb]"
-                    onClick={() => {
-                      setComposer({
-                        patientId: '',
-                        patient: '',
-                        phone: '',
-                        channel: 'whatsapp',
-                        template: campaign.title,
-                        content: campaign.desc,
-                      })
-                      setComposerOpen(true)
-                    }}
-                    type="button"
-                  >
-                    Disparar
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-[#404040] bg-[#171717] p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <span className="rounded bg-indigo-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-indigo-400">
-                LGPD
-              </span>
-              <span className="text-sm font-bold text-[#f5f5f5]">Conformidade</span>
-            </div>
-            <p className="text-xs leading-6 text-[#a3a3a3]">
-              Todas as comunicações respeitam as preferências de Opt-in/Opt-out dos pacientes. Os pacientes podem
-              cancelar o recebimento de mensagens a qualquer momento, conforme exigido pela LGPD.
-            </p>
-          </div>
-        </section>
+      {activeTab === 'gerenciamento' ? (
+        <ManagementTab
+          campaignHistory={campaignHistory}
+          customTemplates={templates.filter((template) => allowedChannelKeys.includes(template.channel))}
+          eligibleCount={eligiblePatients.length}
+          onEditTemplate={openTemplateEditor}
+          onResendCampaign={openCampaignModal}
+          optedOutCount={optedOutCount}
+          totalPatients={patientOptions.length}
+        />
       ) : null}
 
       {composerOpen ? (
@@ -481,7 +572,22 @@ export function MessagesPage({ role }) {
             setComposer(emptyMessage)
           }}
           onSubmit={submitMessage}
-          patients={patientOptions}
+          patients={eligiblePatients}
+          templates={availableTemplates}
+        />
+      ) : null}
+
+      {campaignOpen ? (
+        <CampaignComposer
+          allowedChannelKeys={allowedChannelKeys}
+          draft={campaignDraft}
+          onChange={setCampaignDraft}
+          onClose={() => {
+            setCampaignOpen(false)
+            setCampaignDraft(emptyCampaign)
+          }}
+          onSubmit={submitCampaign}
+          patients={eligiblePatients}
           templates={availableTemplates}
         />
       ) : null}
@@ -497,9 +603,237 @@ export function MessagesPage({ role }) {
             setEditingTemplateId(null)
           }}
           onSubmit={submitTemplate}
-          title={editingTemplateId ? 'Editar Template' : 'Novo Template'}
+          title={editingTemplateId ? 'Editar template' : 'Novo template'}
         />
       ) : null}
+    </div>
+  )
+}
+
+function HistoryTab({ allowedChannelKeys, channelFilter, messages, search, setChannelFilter, setSearch }) {
+  return (
+    <section className={`${cardClass} p-5 md:p-6`} aria-label="Historico de comunicacao">
+      <div className="mb-6 flex flex-col gap-3 md:flex-row">
+        <label className="relative flex-1">
+          <span className="sr-only">Buscar comunicacao</span>
+          <CommIcon
+            className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-[#a3a3a3]"
+            name="search"
+          />
+          <input
+            className={`${inputClass} h-12 pl-12`}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Buscar paciente..."
+            type="search"
+            value={search}
+          />
+        </label>
+
+        <div className="flex flex-wrap gap-2">
+          {[
+            ['todos', 'Todos'],
+            ...allowedChannelKeys.map((key) => [key, channels[key].label]),
+          ].map(([key, label]) => (
+            <button
+              className={`h-12 rounded-sm border px-4 text-xs font-semibold transition ${
+                channelFilter === key
+                  ? 'border-[#3b82f6] bg-[#3b82f6] text-white'
+                  : 'border-[#404040] bg-[#171717] text-[#b8b8b8] hover:text-[#e5e5e5]'
+              }`}
+              key={key}
+              onClick={() => setChannelFilter(key)}
+              type="button"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="overflow-x-auto rounded-sm border border-[#404040]">
+        <table className="w-full min-w-[920px] text-left text-sm">
+          <thead className="bg-[#171717] text-xs font-semibold uppercase tracking-[0.02em] text-[#b8b8b8]">
+            <tr>
+              <th className="px-5 py-4">Paciente</th>
+              <th className="px-5 py-4">Canal</th>
+              <th className="px-5 py-4">Template</th>
+              <th className="px-5 py-4">Enviado em</th>
+              <th className="px-5 py-4">Status</th>
+              <th className="px-5 py-4">Resposta</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#404040] bg-[#262626]">
+            {messages.map((message) => (
+              <MessageRow key={message.id} message={message} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {messages.length === 0 ? (
+        <div className="rounded-b-sm border-x border-b border-[#404040] bg-[#171717] px-4 py-8 text-center text-sm text-[#a3a3a3]">
+          Nenhuma comunicacao encontrada com os filtros atuais.
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
+function TemplatesTab({ onEdit, onUse, templates }) {
+  return (
+    <section className="space-y-4 rounded-2xl p-4" aria-label="Templates de comunicacao">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <p className="text-sm leading-6 text-[#a3a3a3]">
+          Modelos prontos para contatos recorrentes da clinica. Personalize qualquer template antes de usar.
+        </p>
+        <button
+          className="inline-flex h-10 items-center gap-2 rounded-sm bg-[#3b82f6] px-4 text-sm font-semibold text-white transition hover:bg-[#2563eb]"
+          onClick={() => onEdit()}
+          type="button"
+        >
+          <CommIcon className="size-4" name="plus" />
+          Novo template
+        </button>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {templates.map((template) => (
+          <TemplateCard key={template.id} onEdit={onEdit} onUse={onUse} template={template} />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function CampaignsTab({ campaignHistory, eligibleCount, onCreate, onResend, optedOutCount }) {
+  return (
+    <section className={`${cardClass} space-y-6 p-6`} aria-label="Campanhas">
+      <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
+        <div>
+          <h2 className="text-lg font-bold text-[#f5f5f5]">Campanhas</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-[#a3a3a3]">
+            Uma campanha e uma comunicacao enviada para um grupo de pacientes elegiveis, usando o canal, mensagem e
+            recorrencia definidos pela equipe.
+          </p>
+          <button
+            className="mt-5 inline-flex h-11 items-center gap-2 rounded-sm bg-[#3b82f6] px-4 text-sm font-semibold text-white transition hover:bg-[#2563eb]"
+            onClick={onCreate}
+            type="button"
+          >
+            <CommIcon className="size-4" name="plus" />
+            Criar campanha
+          </button>
+        </div>
+
+        <div className="rounded-xl border border-[#404040] bg-[#171717] p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <span className="rounded bg-indigo-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-indigo-400">
+              LGPD
+            </span>
+            <span className="text-sm font-bold text-[#f5f5f5]">Elegibilidade</span>
+          </div>
+          <p className="text-xs leading-6 text-[#a3a3a3]">
+            Pacientes com opt-out marcado no perfil nao aparecem para selecao em mensagens ou campanhas.
+          </p>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <MiniCount label="Elegiveis" value={eligibleCount} />
+            <MiniCount label="Opt-out" value={optedOutCount} />
+          </div>
+        </div>
+      </div>
+
+      <CampaignHistory campaigns={campaignHistory} onResend={onResend} />
+    </section>
+  )
+}
+
+function ManagementTab({ campaignHistory, customTemplates, eligibleCount, onEditTemplate, onResendCampaign, optedOutCount, totalPatients }) {
+  return (
+    <section className="grid gap-6 lg:grid-cols-3" aria-label="Gerenciamento de comunicacao">
+      <article className={`${cardClass} p-5`}>
+        <h2 className="text-sm font-bold text-[#f5f5f5]">Pacientes</h2>
+        <div className="mt-4 grid gap-3">
+          <MiniCount label="Total na API" value={totalPatients} />
+          <MiniCount label="Elegiveis" value={eligibleCount} />
+          <MiniCount label="Com opt-out" value={optedOutCount} />
+        </div>
+      </article>
+
+      <article className={`${cardClass} p-5 lg:col-span-2`}>
+        <div className="flex items-center justify-between gap-4">
+          <h2 className="text-sm font-bold text-[#f5f5f5]">Templates personalizados</h2>
+          <button className="h-9 rounded-sm bg-[#3b82f6] px-3 text-xs font-semibold text-white" onClick={() => onEditTemplate()} type="button">
+            Novo template
+          </button>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {customTemplates.length ? customTemplates.map((template) => (
+            <button
+              className="rounded-lg border border-[#404040] bg-[#171717] p-3 text-left transition hover:border-[#3b82f6]"
+              key={template.id}
+              onClick={() => onEditTemplate(template)}
+              type="button"
+            >
+              <span className="block text-sm font-semibold text-[#f5f5f5]">{template.name}</span>
+              <span className="mt-1 block text-xs text-[#a3a3a3]">{template.category} - {channels[template.channel]?.label}</span>
+            </button>
+          )) : (
+            <p className="rounded-lg border border-dashed border-[#404040] p-4 text-sm text-[#a3a3a3] md:col-span-2">
+              Nenhum template personalizado salvo ainda.
+            </p>
+          )}
+        </div>
+      </article>
+
+      <article className={`${cardClass} p-5 lg:col-span-3`}>
+        <h2 className="text-sm font-bold text-[#f5f5f5]">Campanhas salvas</h2>
+        <CampaignHistory campaigns={campaignHistory} compact onResend={onResendCampaign} />
+      </article>
+    </section>
+  )
+}
+
+function CampaignHistory({ campaigns, compact = false, onResend }) {
+  if (!campaigns.length) {
+    return (
+      <div className="rounded-xl border border-dashed border-[#404040] bg-[#171717] p-6 text-center text-sm text-[#a3a3a3]">
+        Nenhuma campanha disparada ainda.
+      </div>
+    )
+  }
+
+  return (
+    <div className={`grid gap-3 ${compact ? 'mt-4 md:grid-cols-2 xl:grid-cols-3' : ''}`}>
+      {campaigns.map((campaign) => (
+        <article className="rounded-xl border border-[#404040] bg-[#171717] p-4" key={campaign.id}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-bold text-[#f5f5f5]">{campaign.name}</h3>
+              <p className="mt-1 text-xs text-[#a3a3a3]">
+                {channels[campaign.channel]?.label} - {campaign.sentAt}
+              </p>
+            </div>
+            <span className="rounded bg-[#303030] px-2 py-1 text-[10px] font-semibold text-[#a3a3a3]">
+              {campaign.recurrenceLabel}
+            </span>
+          </div>
+          <p className="mt-3 line-clamp-2 text-xs leading-5 text-[#a3a3a3]">{campaign.content}</p>
+          <p className="mt-3 text-xs font-semibold text-[#51a2ff]">
+            {campaign.total} pacientes - {campaign.failed} falhas
+          </p>
+          {campaign.nextRunAt ? (
+            <p className="mt-1 text-xs text-[#a3a3a3]">Proxima execucao: {formatDateTime(campaign.nextRunAt)}</p>
+          ) : null}
+          <p className="mt-1 truncate text-xs text-[#737373]">{campaign.patients.join(', ')}</p>
+          <button
+            className="mt-4 h-9 rounded-sm border border-[#404040] px-3 text-xs font-semibold text-[#e5e5e5] transition hover:border-[#3b82f6] hover:text-[#3b82f6]"
+            onClick={() => onResend(campaign)}
+            type="button"
+          >
+            Disparar novamente
+          </button>
+        </article>
+      ))}
     </div>
   )
 }
@@ -513,9 +847,18 @@ function StatCard({ label, value, valueClassName = 'text-[#f5f5f5]' }) {
   )
 }
 
+function MiniCount({ label, value }) {
+  return (
+    <div className="rounded-lg bg-[#202020] px-3 py-2">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#737373]">{label}</p>
+      <p className="mt-1 text-lg font-bold text-[#f5f5f5]">{value}</p>
+    </div>
+  )
+}
+
 function MessageRow({ message }) {
-  const channel = channels[message.channel]
-  const status = statusConfig[message.status]
+  const channel = channels[message.channel] || channels.sms
+  const status = statusConfig[message.status] || statusConfig.pendente
 
   return (
     <tr className="transition hover:bg-[#303030]">
@@ -540,7 +883,7 @@ function MessageRow({ message }) {
 }
 
 function TemplateCard({ onEdit, onUse, template }) {
-  const channel = channels[template.channel]
+  const channel = channels[template.channel] || channels.whatsapp
 
   return (
     <article className={`${cardClass} p-5`}>
@@ -561,7 +904,7 @@ function TemplateCard({ onEdit, onUse, template }) {
           onClick={() => onEdit(template)}
           type="button"
         >
-          Editar
+          {template.builtin ? 'Personalizar' : 'Editar'}
         </button>
         <button
           className="h-9 flex-1 rounded-sm bg-[#3b82f6]/10 text-xs font-semibold text-[#3b82f6] transition hover:bg-[#3b82f6]/20"
@@ -577,32 +920,21 @@ function TemplateCard({ onEdit, onUse, template }) {
 
 function MessageComposer({ allowedChannelKeys, draft, onChange, onClose, onSubmit, patients, templates }) {
   const [patientSearch, setPatientSearch] = useState(draft.patient || '')
-  const filteredPatients = useMemo(() => {
-    const query = normalizeSearch(patientSearch)
-    if (!query) return patients
-
-    return patients.filter((patient) =>
-      [patient.name, patient.phone, patient.document]
-        .join(' ')
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase()
-        .includes(query),
-    )
-  }, [patientSearch, patients])
+  const datalistId = 'message-patient-options'
 
   function update(field, value) {
     onChange((current) => ({ ...current, [field]: value }))
   }
 
-  function selectPatient(patient) {
+  function selectPatientByName(value) {
+    setPatientSearch(value)
+    const patient = patients.find((item) => normalizeSearch(item.name) === normalizeSearch(value))
     onChange((current) => ({
       ...current,
       patientId: patient?.id || '',
       patient: patient?.name || '',
-      phone: patient?.phone || patient?.phone_mobile || '',
+      phone: patient?.phone || '',
     }))
-    setPatientSearch(patient?.name || '')
   }
 
   function applyTemplate(templateName) {
@@ -622,47 +954,25 @@ function MessageComposer({ allowedChannelKeys, draft, onChange, onClose, onSubmi
   }
 
   return (
-    <ModalFrame branded onClose={onClose} title="Nova Mensagem">
+    <ModalFrame branded onClose={onClose} title="Nova mensagem">
       <form className="space-y-5" onSubmit={onSubmit}>
         <DarkField label="Paciente">
-          <div className="space-y-2">
-            <input
-              className={inputClass}
-              onChange={(event) => {
-                setPatientSearch(event.target.value)
-                onChange((current) => ({ ...current, patientId: '', patient: '', phone: '' }))
-              }}
-              placeholder="Digite nome, CPF ou telefone"
-              type="search"
-              value={patientSearch}
-            />
-            {!draft.patientId ? (
-            <div className="max-h-44 overflow-y-auto rounded-md border border-[#404040] bg-[#1f1f1f]">
-              {filteredPatients.length ? (
-                filteredPatients.slice(0, 8).map((patient) => {
-                  const isSelected = String(patient.id) === String(draft.patientId)
-                  return (
-                    <button
-                      className={`block w-full px-3 py-2 text-left text-sm transition ${
-                        isSelected ? 'bg-[#3b82f6]/20 text-[#e5e5e5]' : 'text-[#a3a3a3] hover:bg-[#303030] hover:text-[#e5e5e5]'
-                      }`}
-                      key={patient.id}
-                      onClick={() => selectPatient(patient)}
-                      type="button"
-                    >
-                      <span className="block font-semibold">{patient.name}</span>
-                      <span className="mt-0.5 block text-xs text-[#737373]">
-                        {[patient.document, patient.phone].filter(Boolean).join(' | ') || 'Sem documento informado'}
-                      </span>
-                    </button>
-                  )
-                })
-              ) : (
-                <p className="px-3 py-2 text-xs text-[#737373]">Nenhum paciente encontrado.</p>
-              )}
-            </div>
-            ) : null}
-          </div>
+          <input
+            className={inputClass}
+            list={datalistId}
+            onChange={(event) => selectPatientByName(event.target.value)}
+            placeholder="Busque por nome do paciente elegivel"
+            type="search"
+            value={patientSearch}
+          />
+          <datalist id={datalistId}>
+            {patients.map((patient) => (
+              <option key={patient.id} label={[patient.document, patient.phone].filter(Boolean).join(' | ')} value={patient.name} />
+            ))}
+          </datalist>
+          {patientSearch && !draft.patientId ? (
+            <p className="text-xs text-amber-400">Selecione um paciente elegivel sugerido pela busca.</p>
+          ) : null}
         </DarkField>
 
         <div className="grid gap-4 md:grid-cols-2">
@@ -673,18 +983,17 @@ function MessageComposer({ allowedChannelKeys, draft, onChange, onClose, onSubmi
               ))}
             </select>
           </DarkField>
+          {draft.channel === 'sms' ? (
+            <DarkField label="Telefone">
+              <input
+                className={inputClass}
+                placeholder={draft.patientId ? 'Telefone nao cadastrado' : 'Selecione um paciente'}
+                readOnly
+                value={draft.phone}
+              />
+            </DarkField>
+          ) : null}
         </div>
-
-        {draft.channel === 'sms' ? (
-          <DarkField label="Telefone">
-            <input
-              className={inputClass}
-              placeholder={draft.patientId ? 'Telefone não cadastrado' : 'Selecione um paciente'}
-              readOnly
-              value={draft.phone}
-            />
-          </DarkField>
-        ) : null}
 
         <DarkField label="Template">
           <select className={inputClass} onChange={(event) => applyTemplate(event.target.value)} value={draft.template}>
@@ -712,10 +1021,150 @@ function MessageComposer({ allowedChannelKeys, draft, onChange, onClose, onSubmi
           </button>
           <button
             className="h-10 rounded-sm bg-[#3b82f6] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={!draft.patient.trim()}
+            disabled={!draft.patientId || !draft.content.trim()}
             type="submit"
           >
             Enviar
+          </button>
+        </div>
+      </form>
+    </ModalFrame>
+  )
+}
+
+function CampaignComposer({ allowedChannelKeys, draft, onChange, onClose, onSubmit, patients, templates }) {
+  const [patientSearch, setPatientSearch] = useState('')
+  const selectedCount = draft.patientIds.length
+  const filteredPatients = useMemo(() => {
+    const query = normalizeSearch(patientSearch)
+    if (!query) return patients
+    return patients.filter((patient) =>
+      [patient.name, patient.phone, patient.document, patient.email].join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(query),
+    )
+  }, [patientSearch, patients])
+
+  function update(field, value) {
+    onChange((current) => ({ ...current, [field]: value }))
+  }
+
+  function togglePatient(patientId) {
+    onChange((current) => ({
+      ...current,
+      patientIds: current.patientIds.includes(patientId)
+        ? current.patientIds.filter((id) => id !== patientId)
+        : [...current.patientIds, patientId],
+    }))
+  }
+
+  function applyTemplate(templateName) {
+    const template = templates.find((item) => item.name === templateName)
+    if (!template) {
+      update('template', templateName)
+      return
+    }
+
+    onChange((current) => ({
+      ...current,
+      channel: template.channel,
+      template: template.name,
+      content: template.content,
+    }))
+  }
+
+  return (
+    <ModalFrame branded onClose={onClose} title="Campanha">
+      <form className="space-y-5" onSubmit={onSubmit}>
+        <div className="grid gap-4 md:grid-cols-2">
+          <DarkField label="Nome da campanha">
+            <input className={inputClass} onChange={(event) => update('name', event.target.value)} value={draft.name} />
+          </DarkField>
+          <DarkField label="Recorrencia automatica">
+            <select className={inputClass} onChange={(event) => update('recurrence', event.target.value)} value={draft.recurrence}>
+              {recurrenceOptions.map(([key, label]) => (
+                <option key={key} value={key}>{label}</option>
+              ))}
+            </select>
+          </DarkField>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <DarkField label="Canal">
+            <select className={inputClass} onChange={(event) => update('channel', event.target.value)} value={draft.channel}>
+              {allowedChannelKeys.map((key) => (
+                <option key={key} value={key}>{channels[key].label}</option>
+              ))}
+            </select>
+          </DarkField>
+          <DarkField label="Template">
+            <select className={inputClass} onChange={(event) => applyTemplate(event.target.value)} value={draft.template}>
+              <option value="Mensagem avulsa">Mensagem avulsa</option>
+              {templates.map((template) => (
+                <option key={template.id} value={template.name}>{template.name}</option>
+              ))}
+            </select>
+          </DarkField>
+        </div>
+
+        <DarkField label={`Pacientes elegiveis selecionados (${selectedCount})`}>
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <input
+                className={inputClass}
+                onChange={(event) => setPatientSearch(event.target.value)}
+                placeholder="Buscar por nome, CPF, telefone ou e-mail"
+                type="search"
+                value={patientSearch}
+              />
+              <button
+                className="h-10 shrink-0 rounded-sm border border-[#404040] px-3 text-xs font-semibold text-[#e5e5e5]"
+                onClick={() => update('patientIds', patients.map((patient) => patient.id))}
+                type="button"
+              >
+                Todos
+              </button>
+            </div>
+            <div className="max-h-56 overflow-y-auto rounded-md border border-[#404040] bg-[#1f1f1f]">
+              {filteredPatients.length ? filteredPatients.map((patient) => (
+                <label className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm text-[#e5e5e5] hover:bg-[#303030]" key={patient.id}>
+                  <input
+                    checked={draft.patientIds.includes(patient.id)}
+                    className="size-4 accent-[#3b82f6]"
+                    onChange={() => togglePatient(patient.id)}
+                    type="checkbox"
+                  />
+                  <span className="min-w-0">
+                    <span className="block truncate font-semibold">{patient.name}</span>
+                    <span className="block truncate text-xs text-[#737373]">
+                      {[patient.document, patient.phone, patient.email].filter(Boolean).join(' | ') || 'Sem contato informado'}
+                    </span>
+                  </span>
+                </label>
+              )) : (
+                <p className="px-3 py-4 text-center text-xs text-[#737373]">Nenhum paciente elegivel encontrado.</p>
+              )}
+            </div>
+          </div>
+        </DarkField>
+
+        <DarkField label="Mensagem">
+          <textarea
+            className={`${textareaClass} min-h-40`}
+            onChange={(event) => update('content', sanitizePlainText(event.target.value))}
+            placeholder="Escreva a mensagem da campanha"
+            value={draft.content}
+          />
+        </DarkField>
+
+        <div className="flex justify-end gap-3 border-t border-[#404040] pt-4">
+          <button className="h-10 rounded-sm border border-[#404040] px-4 text-sm font-semibold text-[#e5e5e5]" onClick={onClose} type="button">
+            Cancelar
+          </button>
+          <button
+            className="h-10 rounded-sm bg-[#3b82f6] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={!draft.name.trim() || !draft.content.trim() || !selectedCount}
+            type="submit"
+          >
+            Concluir e disparar
           </button>
         </div>
       </form>
@@ -746,8 +1195,8 @@ function TemplateEditor({ allowedChannelKeys, draft, onChange, onClose, onSubmit
         <DarkField label="Categoria">
           <input className={inputClass} onChange={(event) => update('category', event.target.value)} value={draft.category} />
         </DarkField>
-        <DarkField label="Conteúdo">
-          <textarea className={textareaClass} onChange={(event) => update('content', event.target.value)} value={draft.content} />
+        <DarkField label="Conteudo">
+          <textarea className={textareaClass} onChange={(event) => update('content', sanitizePlainText(event.target.value))} value={draft.content} />
         </DarkField>
         <div className="flex justify-end gap-3 border-t border-[#404040] pt-4">
           <button className="h-10 rounded-sm border border-[#404040] px-4 text-sm font-semibold text-[#e5e5e5]" onClick={onClose} type="button">
@@ -758,7 +1207,7 @@ function TemplateEditor({ allowedChannelKeys, draft, onChange, onClose, onSubmit
             disabled={!draft.name.trim() || !draft.content.trim()}
             type="submit"
           >
-            Salvar Template
+            Salvar template
           </button>
         </div>
       </form>
@@ -796,6 +1245,77 @@ function DarkField({ children, label }) {
       {children}
     </label>
   )
+}
+
+function createLocalMessage({ channel, patient, response, status, template }) {
+  return {
+    id: `local-${new Date().getTime()}-${patient.id}-${channel}`,
+    channel,
+    patient: patient.name,
+    response,
+    sentAt: 'Agora',
+    status,
+    template,
+  }
+}
+
+function mergeTemplates(baseTemplates, apiTemplates) {
+  const seen = new Set()
+  return [...apiTemplates, ...baseTemplates].filter((template) => {
+    const key = `${template.channel}-${normalizeSearch(template.name)}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+function getRecurrenceLabel(value) {
+  return recurrenceOptions.find(([key]) => key === value)?.[1] || 'Nao repetir'
+}
+
+function getNextRunAt(recurrence, from) {
+  if (recurrence === 'none') return ''
+
+  const nextDate = new Date(from)
+  if (recurrence === 'weekly') nextDate.setDate(nextDate.getDate() + 7)
+  if (recurrence === 'biweekly') nextDate.setDate(nextDate.getDate() + 15)
+  if (recurrence === 'monthly') nextDate.setMonth(nextDate.getMonth() + 1)
+  if (recurrence === 'quarterly') nextDate.setMonth(nextDate.getMonth() + 3)
+
+  return nextDate.toISOString()
+}
+
+function formatDateTime(value) {
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Agora'
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(date)
+}
+
+function loadStoredCampaigns() {
+  if (typeof window === 'undefined') return []
+
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(campaignStorageKey) || '[]')
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function saveStoredCampaigns(campaigns) {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(campaignStorageKey, JSON.stringify(campaigns.slice(0, 40)))
+  } catch {
+    // localStorage can be unavailable in restricted browser contexts.
+  }
 }
 
 function normalizeSearch(value) {

@@ -143,7 +143,10 @@ export function AnalyticsPage() {
                   </p>
                 </div>
                 <div className="h-1.5 w-16 overflow-hidden rounded-full bg-[#303030]">
-                  <div className="h-full rounded-full bg-[#3b82f6]" style={{ width: `${(patient.visits / topPatientMaxVisits) * 100}%` }} />
+                  <div
+                    className="analytics-chart-progress h-full rounded-full bg-[#3b82f6]"
+                    style={{ animationDelay: `${index * 80}ms`, width: `${(patient.visits / topPatientMaxVisits) * 100}%` }}
+                  />
                 </div>
               </div>
             )) : (
@@ -248,9 +251,9 @@ function AreaMetricChart({ data }) {
   return (
     <svg className="h-[250px] w-full overflow-visible" role="img" viewBox="0 0 640 300">
       <ChartGrid labels={[24, 18, 12, 6, 0]} />
-      <polygon fill="#3b82f6" opacity="0.12" points={area} />
-      <polyline fill="none" points={metaPoints} stroke="#64748b" strokeDasharray="6 8" strokeWidth="2" />
-      <polyline fill="none" points={points} stroke="#3b82f6" strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" />
+      <polygon className="analytics-chart-area" fill="#3b82f6" opacity="0.12" points={area} />
+      <polyline className="analytics-chart-line-fade" fill="none" points={metaPoints} stroke="#64748b" strokeDasharray="6 8" strokeWidth="2" />
+      <polyline className="analytics-chart-line-draw" fill="none" pathLength="1" points={points} stroke="#3b82f6" strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" />
       {data.map((item, index) => (
         <text className="fill-[#94a3b8] text-[13px]" key={item.month} x={42 + index * 111.6} y="285" textAnchor="middle">
           {item.month}
@@ -272,8 +275,26 @@ function GroupedBarChart({ data }) {
         const doneHeight = (item.realizadas / maxValue) * 220
         return (
           <g key={item.month}>
-            <rect fill="#475569" height={totalHeight} rx="5" width="32" x={x} y={260 - totalHeight} />
-            <rect fill="#3b82f6" height={doneHeight} rx="5" width="32" x={x + 38} y={260 - doneHeight} />
+            <rect
+              className="analytics-chart-bar"
+              fill="#475569"
+              height={totalHeight}
+              rx="5"
+              style={{ animationDelay: `${index * 70}ms` }}
+              width="32"
+              x={x}
+              y={260 - totalHeight}
+            />
+            <rect
+              className="analytics-chart-bar"
+              fill="#3b82f6"
+              height={doneHeight}
+              rx="5"
+              style={{ animationDelay: `${index * 70 + 90}ms` }}
+              width="32"
+              x={x + 38}
+              y={260 - doneHeight}
+            />
             <text className="fill-[#94a3b8] text-[13px]" textAnchor="middle" x={x + 35} y="285">
               {item.month}
             </text>
@@ -298,10 +319,20 @@ function RevenueChart({ data }) {
       {[0, 1, 2, 3].map((line) => (
         <line key={line} stroke="#1e3a5f" strokeDasharray="3 5" x1="32" x2="320" y1={20 + line * 50} y2={20 + line * 50} />
       ))}
-      <polyline fill="none" points={points} stroke="#10b981" strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" />
+      <polyline className="analytics-chart-line-draw" fill="none" pathLength="1" points={points} stroke="#10b981" strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" />
       {points.split(' ').map((point, index) => {
         const [x, y] = point.split(',').map(Number)
-        return <circle cx={x} cy={y} fill="#10b981" key={point} r={4 + (index === data.length - 1 ? 1 : 0)} />
+        return (
+          <circle
+            className="analytics-chart-point"
+            cx={x}
+            cy={y}
+            fill="#10b981"
+            key={point}
+            r={4 + (index === data.length - 1 ? 1 : 0)}
+            style={{ animationDelay: `${320 + index * 70}ms` }}
+          />
+        )
       })}
       {data.map((item, index) => (
         <text className="fill-[#94a3b8] text-[11px]" key={item.month} textAnchor="middle" x={32 + index * 54} y="205">
@@ -332,8 +363,9 @@ function InsuranceBreakdown({ insuranceData }) {
       <div className="flex justify-center">
         <svg className="h-[160px] w-[160px]" viewBox="0 0 120 120">
           <circle cx="60" cy="60" fill="none" r={radius} stroke="#303030" strokeWidth="18" />
-          {segments.map((item) => (
+          {segments.map((item, index) => (
             <circle
+              className="analytics-chart-donut-segment"
               cx="60"
               cy="60"
               fill="none"
@@ -344,6 +376,7 @@ function InsuranceBreakdown({ insuranceData }) {
               strokeDashoffset={-item.offset}
               strokeLinecap="round"
               strokeWidth="18"
+              style={{ animationDelay: `${index * 90}ms` }}
               transform="rotate(-90 60 60)"
             />
           ))}

@@ -1,8 +1,8 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
+
+import { AccessibilityContext } from './accessibilityContext.js'
 
 const SETTINGS_UI_KEY = 'mediconnect.settings.ui'
-
-const AccessibilityContext = createContext()
 
 function getStoredUiSettings() {
   try {
@@ -35,8 +35,4 @@ export function AccessibilityProvider({ children }) {
       {children}
     </AccessibilityContext.Provider>
   )
-}
-
-export function useAccessibility() {
-  return useContext(AccessibilityContext)
 }

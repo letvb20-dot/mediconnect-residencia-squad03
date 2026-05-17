@@ -9,7 +9,7 @@ import {
   notificationRepository,
 } from '../repositories/notificationRepository.js'
 import { profileRepository } from '../repositories/profileRepository.js'
-import { useSocket } from '../providers/SocketProvider.jsx'
+import { useSocketEvent } from '../providers/socketContext.js'
 import { BrandLogo } from './Brand.jsx'
 
 // Todos os itens de navegação com seus ícones e metadados
@@ -51,8 +51,6 @@ export function AppShell({ children, currentPath, navigate, role, routeTitle }) 
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [viewerProfile, setViewerProfile] = useState({ name: 'Usuário', role: 'Usuário do Sistema' })
   const [notifications, setNotifications] = useState([])
-  const { useSocketEvent } = useSocket()
-
   useSocketEvent('nova_notificacao', (payload) => {
     // Increment notifications unread
     setNotifications((prev) => [payload, ...prev])

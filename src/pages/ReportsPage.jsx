@@ -29,8 +29,8 @@ const statusConfig = {
   },
   sent: {
     label: 'Enviado',
-    pill: 'bg-sky-500/20 text-sky-300',
-    stat: 'text-sky-300',
+    pill: 'bg-[#3b82f6]/20 text-[#93c5fd]',
+    stat: 'text-[#93c5fd]',
   },
 }
 

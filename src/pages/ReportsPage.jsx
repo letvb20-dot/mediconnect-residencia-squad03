@@ -13,6 +13,7 @@ import { professionalRepository } from '../repositories/professionalRepository.j
 import { profileRepository } from '../repositories/profileRepository.js'
 import { reportRepository } from '../repositories/reportRepository.js'
 import { sanitizePlainText } from '../utils/inputSanitizers.js'
+import { resolveCurrentPatient } from '../utils/patientIdentity.js'
 
 const ITEMS_PER_PAGE = 25
 
@@ -26,11 +27,6 @@ const statusConfig = {
     label: 'Finalizado',
     pill: 'bg-emerald-500/20 text-emerald-400',
     stat: 'text-emerald-400',
-  },
-  sent: {
-    label: 'Enviado',
-    pill: 'bg-[#3b82f6]/20 text-[#93c5fd]',
-    stat: 'text-[#93c5fd]',
   },
 }
 
@@ -71,7 +67,9 @@ export function ReportsPage({ role }) {
   const [scopeLoading, setScopeLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const isDoctorRole = normalizeRole(role) === 'medico'
+  const normalizedRole = normalizeRole(role)
+  const isDoctorRole = normalizedRole === 'medico'
+  const isPatientRole = normalizedRole === 'paciente'
 
   const [filterPatientId, setFilterPatientId] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
@@ -86,7 +84,8 @@ export function ReportsPage({ role }) {
   const [page, setPage] = useState(1)
   const [openReportMenuId, setOpenReportMenuId] = useState(null)
   const [reportMenuAnchor, setReportMenuAnchor] = useState(null)
-  const canDeleteReports = ['admin', 'gestor'].includes(normalizeRole(role))
+  const canDeleteReports = ['admin', 'gestor'].includes(normalizedRole)
+  const canManageReports = !isPatientRole
 
   const patientOptions = useMemo(
     () =>
@@ -171,6 +170,9 @@ export function ReportsPage({ role }) {
       const doctorPatientIds = isDoctorRole
         ? patientOptions.map((patient) => patient.id).filter(Boolean)
         : []
+      const currentPatientId = isPatientRole
+        ? patientOptions[0]?.id || viewerProfile?.patientId || ''
+        : ''
       const createdByValues = isDoctorRole
         ? uniqueValues([
             viewerProfile?.id,
@@ -180,11 +182,17 @@ export function ReportsPage({ role }) {
           ])
         : []
 
+      if (isPatientRole && !currentPatientId) {
+        setReports([])
+        setPage(1)
+        return
+      }
+
       const data = await reportRepository.getInitialReports({
-        patientId: filterPatientId || undefined,
-        patientIds: !filterPatientId && doctorPatientIds.length ? doctorPatientIds : undefined,
-        status: filterStatus || undefined,
-        createdBy: !isDoctorRole ? filterCreatedBy || undefined : undefined,
+        patientId: isPatientRole ? currentPatientId : filterPatientId || undefined,
+        patientIds: !isPatientRole && !filterPatientId && doctorPatientIds.length ? doctorPatientIds : undefined,
+        status: !isPatientRole ? filterStatus || undefined : undefined,
+        createdBy: !isDoctorRole && !isPatientRole ? filterCreatedBy || undefined : undefined,
         createdByValues: isDoctorRole && !doctorPatientIds.length ? createdByValues : undefined,
         order: filterOrder,
       })
@@ -199,7 +207,7 @@ export function ReportsPage({ role }) {
     } finally {
       setLoading(false)
     }
-  }, [currentProfessional, filterCreatedBy, filterOrder, filterPatientId, filterStatus, isDoctorRole, patientOptions, scopeLoading, viewerProfile])
+  }, [currentProfessional, filterCreatedBy, filterOrder, filterPatientId, filterStatus, isDoctorRole, isPatientRole, patientOptions, scopeLoading, viewerProfile])
 
   useEffect(() => {
     let active = true
@@ -219,12 +227,15 @@ export function ReportsPage({ role }) {
         const patientData = isDoctorRole && resolvedProfessional?.id
           ? await patientRepository.getDirectoryRows({ doctorId: resolvedProfessional.id })
           : await patientRepository.getAll()
+        const resolvedPatient = isPatientRole
+          ? resolveCurrentPatient(currentProfile, patientData || [])
+          : null
 
         if (!active) return
 
         setViewerProfile(currentProfile)
         setCurrentProfessional(resolvedProfessional)
-        setPatients(patientData || [])
+        setPatients(isPatientRole ? (resolvedPatient ? [resolvedPatient] : []) : patientData || [])
         setProfessionals(professionalData || [])
       } catch (loadError) {
         if (!active) return
@@ -240,7 +251,7 @@ export function ReportsPage({ role }) {
     return () => {
       active = false
     }
-  }, [isDoctorRole])
+  }, [isDoctorRole, isPatientRole])
 
   useEffect(() => {
     loadReports()
@@ -269,6 +280,7 @@ export function ReportsPage({ role }) {
       conclusion: report.conclusion,
       contentHtml: report.contentHtml,
       contentJson: report.contentJson,
+      originalReport: report,
       digitalSignature: report.contentJson?.digitalSignature || '',
       importedPdfs: report.contentJson?.importedPdfs || [],
       imageFiles: report.contentJson?.imageFiles || [],
@@ -294,6 +306,11 @@ export function ReportsPage({ role }) {
       viewerProfile?.email ||
       'Profissional MediConnect'
 
+    const contentJson = buildReportContentJson({
+      editor,
+      userName: currentProfessional?.name || viewerProfile?.name || viewerProfile?.email || 'Usuário',
+    })
+
     const payload = {
       orderNumber: editor.id ? editor.orderNumber : `REL-${Date.now()}`,
       patientId: editor.patientId || patientOptions[0]?.id || '',
@@ -304,12 +321,7 @@ export function ReportsPage({ role }) {
       diagnosis: editor.diagnosis || plainContent.slice(0, 240) || 'Relatório médico registrado em prontuário.',
       conclusion: editor.conclusion || plainContent.slice(0, 240) || 'Relatório médico salvo no sistema.',
       contentHtml: editor.contentHtml,
-      contentJson: {
-        ...(editor.contentJson && typeof editor.contentJson === 'object' ? editor.contentJson : {}),
-        digitalSignature: editor.digitalSignature,
-        importedPdfs: editor.importedPdfs || [],
-        imageFiles: editor.imageFiles || [],
-      },
+      contentJson,
       hideDate: Boolean(editor.hideDate),
       hideSignature: Boolean(editor.hideSignature),
       dueAt: editor.dueAt ? new Date(editor.dueAt).toISOString() : new Date().toISOString(),
@@ -352,6 +364,11 @@ export function ReportsPage({ role }) {
 
     try {
       await reportRepository.update(report.id, {
+        contentJson: appendReportVersion(report, {
+          label: 'Relatório liberado',
+          user: viewerProfile?.name || viewerProfile?.email || 'Usuário',
+          changes: [{ field: 'Status', from: getStatusLabel(report.status), to: 'Finalizado' }],
+        }),
         status: 'finalized',
       })
       await loadReports()
@@ -379,10 +396,17 @@ export function ReportsPage({ role }) {
   }
 
   async function saveDeliveryProtocol(report, protocol) {
-    const contentJson = {
-      ...(report.contentJson && typeof report.contentJson === 'object' ? report.contentJson : {}),
-      deliveryProtocol: protocol,
-    }
+    const contentJson = appendReportVersion({
+      ...report,
+      contentJson: {
+        ...(report.contentJson && typeof report.contentJson === 'object' ? report.contentJson : {}),
+        deliveryProtocol: protocol,
+      },
+    }, {
+      label: 'Protocolo de entrega registrado',
+      user: viewerProfile?.name || viewerProfile?.email || 'Usuário',
+      changes: [{ field: 'Protocolo de entrega', from: 'Não registrado', to: protocol.responsible || 'Registrado' }],
+    })
 
     try {
       await reportRepository.update(report.id, { ...report, contentJson })
@@ -414,17 +438,21 @@ export function ReportsPage({ role }) {
     <div className="mx-auto max-w-7xl space-y-6 text-[#e5e5e5]">
       <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#e5e5e5]">Relatórios</h1>
-          <p className="mt-1 text-sm text-[#a3a3a3]">Consulta, criação e edição de relatórios.</p>
+          <h1 className="text-[32px] font-bold leading-8 tracking-[-0.02em] text-[#e5e5e5]">Relatórios</h1>
+          <p className="mt-1 text-sm text-[#a3a3a3]">
+            {isPatientRole ? 'Consulta de relatórios vinculados ao seu cadastro.' : 'Consulta, criação e edição de relatórios.'}
+          </p>
         </div>
-        <button
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#3b82f6] px-4 text-sm font-medium text-white transition hover:bg-[#2563eb]"
-          onClick={openNew}
-          type="button"
-        >
-          <ReportIcon name="plus" />
-          Novo relatório
-        </button>
+        {canManageReports ? (
+          <button
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#3b82f6] px-4 text-sm font-medium text-white transition hover:bg-[#2563eb]"
+            onClick={openNew}
+            type="button"
+          >
+            <ReportIcon name="plus" />
+            Novo relatório
+          </button>
+        ) : null}
       </div>
 
       <section className="grid gap-4 md:grid-cols-3">
@@ -439,6 +467,7 @@ export function ReportsPage({ role }) {
       </section>
 
       <section className={`${cardClass} p-6`}>
+        {canManageReports ? (
         <div className="mb-6 grid gap-4 lg:grid-cols-4">
           <FilterField label="Paciente">
             <select
@@ -470,7 +499,6 @@ export function ReportsPage({ role }) {
               <option value="">Todos os status</option>
               <option value="draft">Rascunho</option>
               <option value="finalized">Finalizado</option>
-              <option value="sent">Enviado</option>
             </select>
           </FilterField>
 
@@ -509,6 +537,7 @@ export function ReportsPage({ role }) {
             </select>
           </FilterField>
         </div>
+        ) : null}
 
         {error ? (
           <div className="mb-6 rounded-xl border border-[#7f1d1d] bg-[#2a1111] px-4 py-3 text-sm text-[#fecaca]">
@@ -552,13 +581,14 @@ export function ReportsPage({ role }) {
                     onRelease={() => releaseReport(report)}
                     onVersions={() => setVersionsReport(report)}
                     onView={() => setViewerReport(report)}
+                    readOnly={isPatientRole}
                     report={report}
                   />
                 ))
               ) : (
                 <tr>
                   <td className="px-4 py-8 text-center text-sm text-[#a3a3a3]" colSpan={7}>
-                    Nenhum relatório encontrado com os filtros atuais.
+                    {isPatientRole ? 'Nenhum relatório encontrado em seu nome.' : 'Nenhum relatório encontrado com os filtros atuais.'}
                   </td>
                 </tr>
               )}
@@ -631,7 +661,7 @@ export function ReportsPage({ role }) {
   )
 }
 
-function ReportRow({ canDelete, isMenuOpen, menuAnchor, onCloseMenu, onDelete, onEdit, onMenuToggle, onPrint, onProtocol, onRelease, onVersions, onView, report }) {
+function ReportRow({ canDelete, isMenuOpen, menuAnchor, onCloseMenu, onDelete, onEdit, onMenuToggle, onPrint, onProtocol, onRelease, onVersions, onView, readOnly = false, report }) {
   const currentStatus = statusConfig[report.status] || statusConfig.draft
 
   function run(action) {
@@ -667,6 +697,8 @@ function ReportRow({ canDelete, isMenuOpen, menuAnchor, onCloseMenu, onDelete, o
       <td className="sticky right-0 bg-[#262626] px-4 py-3 text-right shadow-[-10px_0_12px_-12px_rgba(0,0,0,0.75)]">
         <div className="relative flex justify-end gap-2">
           <IconButton label="Visualizar" name="eye" onClick={onView} />
+          {readOnly ? <IconButton label="Imprimir" name="print" onClick={onPrint} /> : null}
+          {!readOnly ? (
           <button
             aria-label="Abrir ações do relatório"
             className={`grid size-8 place-items-center rounded-lg border transition ${
@@ -679,7 +711,8 @@ function ReportRow({ canDelete, isMenuOpen, menuAnchor, onCloseMenu, onDelete, o
           >
             <ReportIcon className="size-4" name="more" />
           </button>
-          {isMenuOpen && menuAnchor ? createPortal(
+          ) : null}
+          {!readOnly && isMenuOpen && menuAnchor ? createPortal(
             <div
               className="report-action-menu fixed w-56 overflow-hidden rounded-lg border border-[#404040] bg-[#1a1a1a] py-1 text-left shadow-2xl"
               style={{ left: menuAnchor.left, top: menuAnchor.top, zIndex: 99999 }}
@@ -834,7 +867,6 @@ function ReportEditorModalV3({
                 <select className={`${inputClass} md:w-52`} onChange={(event) => updateField('status', event.target.value)} value={editor.status}>
                   <option value="draft">Rascunho</option>
                   <option value="finalized">Finalizado</option>
-                  <option value="sent">Enviado</option>
                 </select>
               </DarkField>
 
@@ -956,30 +988,36 @@ function ReportEditorModalV3({
               </DarkField>
 
               <DarkField label="Importar PDF">
-                <input
-                  accept="application/pdf"
-                  className={inputClass}
-                  multiple
-                  onChange={(event) => {
-                    appendFiles('importedPdfs', event.target.files)
-                    event.target.value = ''
-                  }}
-                  type="file"
-                />
+                <label className="flex h-11 cursor-pointer items-center justify-center rounded-sm border border-[#404040] bg-[#171717] px-3 text-center text-sm font-semibold text-[#e5e5e5] transition hover:border-[#3b82f6] hover:text-[#3b82f6]">
+                  Escolher arquivo.
+                  <input
+                    accept="application/pdf"
+                    className="sr-only"
+                    multiple
+                    onChange={(event) => {
+                      appendFiles('importedPdfs', event.target.files)
+                      event.target.value = ''
+                    }}
+                    type="file"
+                  />
+                </label>
                 <PendingFileList files={editor.importedPdfs} onRemove={(index) => removeFile('importedPdfs', index)} />
               </DarkField>
 
               <DarkField label="Imagens">
-                <input
-                  accept="image/*"
-                  className={inputClass}
-                  multiple
-                  onChange={(event) => {
-                    appendFiles('imageFiles', event.target.files)
-                    event.target.value = ''
-                  }}
-                  type="file"
-                />
+                <label className="flex h-11 cursor-pointer items-center justify-center rounded-sm border border-[#404040] bg-[#171717] px-3 text-center text-sm font-semibold text-[#e5e5e5] transition hover:border-[#3b82f6] hover:text-[#3b82f6]">
+                  Escolher arquivo.
+                  <input
+                    accept="image/*"
+                    className="sr-only"
+                    multiple
+                    onChange={(event) => {
+                      appendFiles('imageFiles', event.target.files)
+                      event.target.value = ''
+                    }}
+                    type="file"
+                  />
+                </label>
                 <PendingFileList files={editor.imageFiles} onRemove={(index) => removeFile('imageFiles', index)} />
               </DarkField>
 
@@ -1043,14 +1081,15 @@ function ReportEditorModalV3({
 }
 
 function ReportVersionsModal({ onClose, report }) {
-  const versions = [
-    {
-      date: report.updatedAt || report.createdAt,
-      label: report.updatedAt ? 'Versão atualizada' : 'Versão inicial',
-      user: report.createdByName || 'Sistema',
-    },
-    ...(report.contentJson?.versions || []),
-  ].filter(Boolean)
+  const storedVersions = Array.isArray(report.contentJson?.versions) ? report.contentJson.versions : []
+  const versions = storedVersions.length
+    ? storedVersions
+    : [{
+        date: report.updatedAt || report.createdAt,
+        label: report.updatedAt ? 'Versão atualizada' : 'Versão inicial',
+        user: report.createdByName || 'Sistema',
+        changes: [{ field: 'Relatório', from: '-', to: report.exam || report.orderNumber || 'Criado' }],
+      }]
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
@@ -1069,6 +1108,18 @@ function ReportVersionsModal({ onClose, report }) {
             <div className="rounded-lg border border-[#404040] bg-[#1a1a1a] p-3" key={`${version.date}-${index}`}>
               <p className="text-sm font-semibold text-[#e5e5e5]">{version.label || `Versão ${versions.length - index}`}</p>
               <p className="mt-1 text-xs text-[#a3a3a3]">{formatDateTime(version.date)} - {version.user || 'Usuário não informado'}</p>
+              {Array.isArray(version.changes) && version.changes.length ? (
+                <ul className="mt-3 grid gap-2 text-xs text-[#a3a3a3]">
+                  {version.changes.map((change, changeIndex) => (
+                    <li className="rounded-md border border-[#303030] bg-[#202020] px-3 py-2" key={`${change.field}-${changeIndex}`}>
+                      <span className="font-semibold text-[#e5e5e5]">{change.field}</span>
+                      <span className="mt-1 block">
+                        {change.from} → {change.to}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
           ))}
         </div>
@@ -1333,6 +1384,96 @@ function toDateTimeLocal(value) {
 
 function uniqueValues(values) {
   return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))]
+}
+
+function buildReportContentJson({ editor, userName }) {
+  const baseContentJson = editor.contentJson && typeof editor.contentJson === 'object' ? editor.contentJson : {}
+  const nextContentJson = {
+    ...baseContentJson,
+    digitalSignature: editor.digitalSignature,
+    importedPdfs: editor.importedPdfs || [],
+    imageFiles: editor.imageFiles || [],
+  }
+
+  return appendReportVersion({
+    ...editor.originalReport,
+    contentJson: nextContentJson,
+  }, {
+    label: editor.id ? 'Relatório atualizado' : 'Relatório criado',
+    user: userName,
+    changes: editor.id
+      ? diffReportChanges(editor.originalReport, editor)
+      : [{ field: 'Relatório', from: '-', to: editor.exam || 'Criado' }],
+  })
+}
+
+function appendReportVersion(report, entry) {
+  const contentJson = report?.contentJson && typeof report.contentJson === 'object' ? report.contentJson : {}
+  const previousVersions = Array.isArray(contentJson.versions) ? contentJson.versions : []
+  const changes = Array.isArray(entry.changes) && entry.changes.length
+    ? entry.changes
+    : [{ field: 'Registro', from: '-', to: 'Atualizado sem alteração textual detectada' }]
+
+  return {
+    ...contentJson,
+    versions: [
+      ...previousVersions,
+      {
+        date: new Date().toISOString(),
+        label: entry.label || 'Alteração registrada',
+        user: entry.user || 'Usuário não informado',
+        changes,
+      },
+    ],
+  }
+}
+
+function diffReportChanges(previous = {}, next = {}) {
+  const previousContentJson = previous?.contentJson && typeof previous.contentJson === 'object' ? previous.contentJson : {}
+  const checks = [
+    ['Status', getStatusLabel(previous?.status), getStatusLabel(next.status)],
+    ['Paciente', previous?.patientId || '', next.patientId || ''],
+    ['Exame', previous?.exam, next.exam],
+    ['Médico responsável', previous?.requestedBy, next.requestedBy],
+    ['CID-10', previous?.cidCode, next.cidCode],
+    ['Diagnóstico', previous?.diagnosis, next.diagnosis],
+    ['Conclusão', previous?.conclusion, next.conclusion],
+    ['Conteúdo', stripHtml(previous?.contentHtml), stripHtml(next.contentHtml)],
+    ['Prazo', toComparableDate(previous?.dueAt), toComparableDate(next.dueAt)],
+    ['Assinatura digital', previousContentJson.digitalSignature, next.digitalSignature],
+    ['PDFs anexados', formatFileList(previousContentJson.importedPdfs), formatFileList(next.importedPdfs)],
+    ['Imagens anexadas', formatFileList(previousContentJson.imageFiles), formatFileList(next.imageFiles)],
+  ]
+
+  return checks
+    .filter(([, from, to]) => normalizeComparable(from) !== normalizeComparable(to))
+    .map(([field, from, to]) => ({
+      field,
+      from: formatChangeValue(from),
+      to: formatChangeValue(to),
+    }))
+}
+
+function getStatusLabel(status) {
+  return (statusConfig[status] || statusConfig.draft).label
+}
+
+function formatFileList(files) {
+  return Array.isArray(files) ? files.join(', ') : ''
+}
+
+function toComparableDate(value) {
+  return value ? toDateTimeLocal(value) || value : ''
+}
+
+function normalizeComparable(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim()
+}
+
+function formatChangeValue(value) {
+  const normalized = normalizeComparable(value)
+  if (!normalized) return '-'
+  return normalized.length > 160 ? `${normalized.slice(0, 157)}...` : normalized
 }
 
 function isReportEditorValid(editor) {

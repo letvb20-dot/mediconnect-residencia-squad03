@@ -4,7 +4,6 @@ import {
   ArrowRight,
   Brain,
   CalendarCheck,
-  Check,
   CheckCircle2,
   CircleHelp,
   Clock,
@@ -31,17 +30,16 @@ import {
 import heroClinicImage from '../assets/figma/login-clinic.png'
 
 const navLinks = [
-  { href: '#pilares', label: 'Solucoes' },
+  { href: '#pilares', label: 'Soluções' },
   { href: '#como-funciona', label: 'Como funciona' },
-  { href: '#beneficios', label: 'Beneficios' },
-  { href: '#planos', label: 'Planos' },
+  { href: '#beneficios', label: 'Benefícios' },
   { href: '#faq', label: 'FAQ' },
 ]
 
 const trustPoints = [
   'Conformidade LGPD',
-  'Suporte em portugues',
-  'Prontuario eletronico',
+  'Suporte em português',
+  'Prontuário eletrônico',
 ]
 
 const pillars = [
@@ -50,10 +48,10 @@ const pillars = [
     badgeClass: 'bg-[#eff6ff] text-[#3b82f6]',
     dotClass: 'bg-[#3b82f6]',
     iconClass: 'bg-[#dbeafe] text-[#3b82f6]',
-    title: 'Reducao de absenteismo',
+    title: 'Redução de absenteísmo',
     description:
-      'Comunicacao automatizada por WhatsApp, SMS e e-mail para confirmar consultas, lembrar pacientes e reocupar horarios livres.',
-    items: ['Confirmacao automatica', 'Lista de espera dinamica', 'Lembretes multicanal'],
+      'Comunicação automatizada por WhatsApp, SMS e e-mail para confirmar consultas, lembrar pacientes e reocupar horários livres.',
+    items: ['Confirmação automática', 'Lista de espera dinâmica', 'Lembretes multicanal'],
   },
   {
     Icon: FileText,
@@ -62,181 +60,143 @@ const pillars = [
     iconClass: 'bg-[#dbeafe] text-[#3b82f6]',
     title: 'Laudos estruturados',
     description:
-      'Editor rico, templates por especialidade e historico centralizado para registrar atendimentos com mais agilidade e consistencia.',
-    items: ['Templates clinicos', 'Editor rico', 'Historico do paciente'],
+      'Editor rico, templates por especialidade e histórico centralizado para registrar atendimentos com mais agilidade e consistência.',
+    items: ['Templates clínicos', 'Editor rico', 'Histórico do paciente'],
   },
   {
     Icon: Brain,
     badgeClass: 'bg-[#eff6ff] text-[#3b82f6]',
     dotClass: 'bg-[#3b82f6]',
     iconClass: 'bg-[#dbeafe] text-[#3b82f6]',
-    title: 'Inteligencia operacional',
+    title: 'Inteligência operacional',
     description:
-      'Dashboards para enxergar receita, agenda, convenio, salas e profissionais, ajudando a decidir com base em dados reais.',
-    items: ['KPIs em tempo real', 'Analise por convenio', 'Alertas operacionais'],
+      'Dashboards para enxergar receita, agenda, convênio, salas e profissionais, ajudando a decidir com base em dados reais.',
+    items: ['KPIs em tempo real', 'Análise por convênio', 'Alertas operacionais'],
   },
 ]
 
 const steps = [
   {
     Icon: Plug,
-    title: 'Cadastre sua clinica',
+    title: 'Cadastre sua clínica',
     description:
-      'Inclua profissionais, pacientes, convenios e perfis de acesso para cada pessoa da equipe.',
+      'Inclua profissionais, pacientes, convênios e perfis de acesso para cada pessoa da equipe.',
   },
   {
     Icon: Settings2,
-    title: 'Configure os modulos',
+    title: 'Configure os módulos',
     description:
-      'Ajuste templates de laudo, canais de comunicacao, agenda e dashboards ao fluxo real da operacao.',
+      'Ajuste templates de laudo, canais de comunicação, agenda e dashboards ao fluxo real da operação.',
   },
   {
     Icon: Rocket,
     title: 'Comece a atender',
     description:
-      'Use agenda integrada, registre consultas, gere laudos e envie confirmacoes automaticas desde o primeiro dia.',
+      'Use agenda integrada, registre consultas, gere laudos e envie confirmações automáticas desde o primeiro dia.',
   },
   {
     Icon: TrendingUp,
     title: 'Acompanhe os resultados',
     description:
-      'Monitore indicadores por especialidade, convenio e profissional para corrigir gargalos antes que virem perda.',
+      'Monitore indicadores por especialidade, convênio e profissional para corrigir gargalos antes que virem perda.',
   },
 ]
 
 const metrics = [
-  { value: '-45%', label: 'de reducao potencial de faltas' },
+  { value: '-45%', label: 'de redução potencial de faltas' },
   { value: '8h', label: 'semanais recuperadas pela equipe' },
-  { value: '3', label: 'canais de comunicacao integrados' },
-  { value: '5', label: 'perfis de acesso configuraveis' },
+  { value: '3', label: 'canais de comunicação integrados' },
+  { value: '5', label: 'perfis de acesso configuráveis' },
 ]
 
 const benefits = [
   {
     Icon: Clock,
-    title: 'Devolve tempo ao medico',
+    title: 'Devolve tempo ao médico',
     description:
-      'Templates e editor rico reduzem retrabalho administrativo sem tirar controle da decisao clinica.',
+      'Templates e editor rico reduzem retrabalho administrativo sem tirar controle da decisão clínica.',
   },
   {
     Icon: Wallet,
-    title: 'Receita mais previsivel',
+    title: 'Receita mais previsível',
     description:
-      'Indicadores por convenio, especialidade e profissional mostram onde a clinica ganha ou perde margem.',
+      'Indicadores por convênio, especialidade e profissional mostram onde a clínica ganha ou perde margem.',
   },
   {
     Icon: ShieldCheck,
     title: 'Rotina alinhada a LGPD',
     description:
-      'Acesso por perfil, registro centralizado e boas praticas de seguranca para dados sensiveis.',
+      'Acesso por perfil, registro centralizado e boas práticas de segurança para dados sensíveis.',
   },
   {
     Icon: Users,
-    title: 'Visoes por perfil',
+    title: 'Visões por perfil',
     description:
-      'Admin, gestor, medico, secretaria e paciente acessam apenas o que precisam para trabalhar melhor.',
+      'Admin, gestor, médico, secretária e paciente acessam apenas o que precisam para trabalhar melhor.',
   },
   {
     Icon: LockKeyhole,
     title: 'Dados protegidos na nuvem',
     description:
-      'Sistema web, sem servidor local na clinica, com acesso seguro para equipes distribuidas.',
+      'Sistema web, sem servidor local na clínica, com acesso seguro para equipes distribuídas.',
   },
   {
     Icon: Activity,
-    title: 'Operacao mais previsivel',
+    title: 'Operação mais previsível',
     description:
-      'Agenda, prontuario, comunicacao e relatorios ficam no mesmo fluxo, com menos ferramentas soltas.',
+      'Agenda, prontuário, comunicação e relatórios ficam no mesmo fluxo, com menos ferramentas soltas.',
   },
 ]
 
 const testimonials = [
   {
     name: 'Dra. Camila Ribeiro',
-    role: 'Cardiologista, Clinica CorVita',
+    role: 'Cardiologista, Clínica CorVita',
     initials: 'CR',
     text:
-      'Em poucos meses conseguimos organizar agenda, lembretes e laudos em um fluxo so. A equipe parou de apagar incendio o dia inteiro.',
+      'Em poucos meses conseguimos organizar agenda, lembretes e laudos em um fluxo só. A equipe parou de apagar incêndio o dia inteiro.',
   },
   {
     name: 'Dr. Henrique Salles',
     role: 'Ortopedista, Instituto Movimento',
     initials: 'HS',
     text:
-      'Os templates de laudo deram velocidade sem deixar o atendimento mecanico. Registro entre consultas e encontro tudo no historico do paciente.',
+      'Os templates de laudo deram velocidade sem deixar o atendimento mecânico. Registro entre consultas e encontro tudo no histórico do paciente.',
   },
   {
     name: 'Dra. Marina Tavares',
-    role: 'Dermatologista, Clinica Pele Viva',
+    role: 'Dermatologista, Clínica Pele Viva',
     initials: 'MT',
     text:
-      'Os dashboards deixaram claro onde a clinica estava perdendo margem. Hoje a conversa com convenios e equipe e muito mais objetiva.',
-  },
-]
-
-const plans = [
-  {
-    name: 'Essencial',
-    description: 'Para consultorios individuais e clinicas em inicio de jornada digital.',
-    features: [
-      'Agenda e gestao de consultas',
-      'Cadastro de pacientes',
-      'Editor de laudos com templates',
-      'Comunicacao por WhatsApp, SMS e e-mail',
-      'Suporte por chat',
-    ],
-  },
-  {
-    name: 'Profissional',
-    description: 'Para clinicas multi-especialidade que querem escalar com dados e automacao.',
-    featured: true,
-    features: [
-      'Tudo do Essencial',
-      'Analytics e dashboards operacionais',
-      'KPIs por convenio e especialidade',
-      'Gestao de usuarios com 5 perfis',
-      'Prontuario eletronico completo',
-      'Suporte prioritario',
-    ],
-  },
-  {
-    name: 'Enterprise',
-    description: 'Para redes, hospitais e operacoes com necessidades especificas.',
-    features: [
-      'Tudo do Profissional',
-      'Multiunidades com consolidacao',
-      'API REST documentada',
-      'Treinamento dedicado',
-      'SLA e onboarding assistido',
-    ],
+      'Os dashboards deixaram claro onde a clínica estava perdendo margem. Hoje a conversa com convênios e equipe é muito mais objetiva.',
   },
 ]
 
 const faqs = [
   {
-    question: 'O MediConnect substitui o trabalho clinico?',
+    question: 'O MediConnect substitui o trabalho clínico?',
     answer:
-      'Nao. O sistema apoia a gestao e automatiza tarefas administrativas. A decisao clinica continua sendo responsabilidade do profissional de saude.',
+      'Não. O sistema apoia a gestão e automatiza tarefas administrativas. A decisão clínica continua sendo responsabilidade do profissional de saúde.',
   },
   {
-    question: 'Meus dados ficam seguros e alinhados a LGPD?',
+    question: 'Meus dados ficam seguros e alinhados à LGPD?',
     answer:
-      'Sim. A proposta do sistema e centralizar acesso, perfis e registros de forma controlada, reduzindo informacao espalhada em ferramentas paralelas.',
+      'Sim. A proposta do sistema é centralizar acesso, perfis e registros de forma controlada, reduzindo informação espalhada em ferramentas paralelas.',
   },
   {
     question: 'O sistema substitui minha agenda atual?',
     answer:
-      'Sim. A plataforma possui modulo de agenda com visoes diaria, semanal e mensal, integrado aos cadastros, consultas e comunicacao.',
+      'Sim. A plataforma possui módulo de agenda com visões diária, semanal e mensal, integrado aos cadastros, consultas e comunicação.',
   },
   {
-    question: 'Preciso instalar servidor na clinica?',
+    question: 'Preciso instalar servidor na clínica?',
     answer:
-      'Nao. O MediConnect e uma aplicacao web acessada pelo navegador, pensada para operar em nuvem e funcionar em diferentes dispositivos.',
+      'Não. O MediConnect é uma aplicação web acessada pelo navegador, pensada para operar em nuvem e funcionar em diferentes dispositivos.',
   },
   {
-    question: 'Quanto tempo ate perceber reducao de faltas?',
+    question: 'Quanto tempo até perceber redução de faltas?',
     answer:
-      'Os lembretes e confirmacoes podem ajudar desde a configuracao inicial. O impacto depende do volume de consultas e da adesao dos pacientes aos canais configurados.',
+      'Os lembretes e confirmações podem ajudar desde a configuração inicial. O impacto depende do volume de consultas e da adesão dos pacientes aos canais configurados.',
   },
 ]
 
@@ -268,7 +228,6 @@ export function LandingPage({ isAuthenticated = false, navigate }) {
         <HowItWorks />
         <Benefits />
         <Testimonials />
-        <Plans goTo={goTo} />
         <FAQ />
         <FinalCTA goTo={goTo} />
       </main>
@@ -304,7 +263,7 @@ function LandingHeader({ accountLabel, accountPath, goTo, goToSection }) {
           <span className="font-semibold">MediConnect</span>
         </a>
 
-        <nav className="hidden items-center gap-7 md:flex" aria-label="Navegacao principal">
+        <nav className="hidden items-center gap-7 md:flex" aria-label="Navegação principal">
           {navLinks.map((link) => (
             <a
               className="text-sm font-medium text-gray-500 transition hover:text-[#3b82f6]"
@@ -339,7 +298,7 @@ function LandingHeader({ accountLabel, accountPath, goTo, goToSection }) {
 
       {open ? (
         <div className="border-t border-gray-200 bg-white px-5 py-4 shadow-sm md:hidden">
-          <nav className="flex flex-col gap-1" aria-label="Navegacao mobile">
+          <nav className="flex flex-col gap-1" aria-label="Navegação mobile">
             {navLinks.map((link) => (
               <a
                 className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-[#f4f7fb] hover:text-[#3b82f6]"
@@ -377,16 +336,16 @@ function Hero({ goTo }) {
         <div className="max-w-3xl">
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-sm text-white/80 backdrop-blur">
             <Sparkles className="size-4 text-[#3b82f6]" />
-            Inteligencia artificial para sua clinica
+            Inteligência artificial para sua clínica
           </div>
 
           <h1 className="max-w-4xl text-4xl font-semibold leading-tight sm:text-5xl lg:text-6xl">
-            A gestao da sua clinica, potencializada por IA.
+            A gestão da sua clínica, potencializada por IA.
           </h1>
 
           <p className="mt-6 max-w-2xl text-base leading-7 text-white/70 sm:text-lg">
-            Reduza absenteismo, automatize laudos e tome decisoes baseadas em dados. Uma
-            plataforma pensada para medicos e clinicas brasileiras que precisam crescer com
+            Reduza absenteísmo, automatize laudos e tome decisões baseadas em dados. Uma
+            plataforma pensada para médicos e clínicas brasileiras que precisam crescer com
             previsibilidade.
           </p>
 
@@ -423,9 +382,9 @@ function Pillars({ goToSection }) {
     <section className="scroll-mt-20 bg-white py-20 sm:py-24" id="pilares">
       <div className="mx-auto max-w-7xl px-5 sm:px-6">
         <SectionIntro
-          eyebrow="Tres pilares, um sistema"
-          title="Tudo o que sua clinica precisa para crescer com previsibilidade"
-          description="MediConnect concentra os modulos criticos da operacao clinica em uma plataforma unica, desenhada para rotinas de saude no Brasil."
+          eyebrow="Três pilares, um sistema"
+          title="Tudo o que sua clínica precisa para crescer com previsibilidade"
+          description="MediConnect concentra os módulos críticos da operação clínica em uma plataforma única, desenhada para rotinas de saúde no Brasil."
         />
 
         <div className="mt-12 grid gap-5 md:grid-cols-3">
@@ -475,8 +434,8 @@ function HowItWorks() {
             Do cadastro ao pleno funcionamento em poucos passos
           </h2>
           <p className="mt-4 max-w-2xl text-base leading-7 text-gray-500">
-            Configure a clinica, defina permissoes por perfil e comece a usar agenda,
-            prontuario, laudos e relatorios sem depender de infraestrutura local.
+            Configure a clínica, defina permissões por perfil e comece a usar agenda,
+            prontuário, laudos e relatórios sem depender de infraestrutura local.
           </p>
         </div>
 
@@ -510,10 +469,10 @@ function Benefits() {
           <div>
             <SectionKicker dark>Resultados operacionais</SectionKicker>
             <h2 className="mt-4 text-3xl font-semibold leading-tight sm:text-4xl">
-              Numeros que aparecem na rotina antes de aparecerem no DRE
+              Números que aparecem na rotina antes de aparecerem no DRE
             </h2>
             <p className="mt-4 text-sm leading-6 text-white/55">
-              Uma operacao com menos faltas, menos retrabalho e dados mais visiveis ganha folego
+              Uma operação com menos faltas, menos retrabalho e dados mais visíveis ganha fôlego
               para atender melhor e planejar crescimento.
             </p>
           </div>
@@ -529,9 +488,9 @@ function Benefits() {
 
         <div className="mt-16">
           <SectionIntro
-            eyebrow="Pensado para quem vive a clinica"
-            title="Beneficios praticos para uma operacao de saude"
-            description="Cada modulo cobre uma dor recorrente: tempo medico, previsibilidade financeira, seguranca, acesso por perfil e dados acionaveis."
+            eyebrow="Pensado para quem vive a clínica"
+            title="Benefícios práticos para uma operação de saúde"
+            description="Cada módulo cobre uma dor recorrente: tempo médico, previsibilidade financeira, segurança, acesso por perfil e dados acionáveis."
           />
 
           <div className="mt-12 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
@@ -557,15 +516,15 @@ function Testimonials() {
       <div className="mx-auto max-w-7xl px-5 sm:px-6">
         <SectionIntro
           eyebrow="Quem usa, recomenda"
-          title="Clinicas que ganharam clareza na rotina"
-          description="Relatos inspirados nos ganhos que a plataforma busca entregar: agenda previsivel, laudos organizados e decisao orientada por dados."
+          title="Clínicas que ganharam clareza na rotina"
+          description="Relatos inspirados nos ganhos que a plataforma busca entregar: agenda previsível, laudos organizados e decisão orientada por dados."
         />
 
         <div className="mt-6 flex items-center justify-center gap-1 text-[#3b82f6]">
           {Array.from({ length: 5 }, (_, index) => (
             <Star className="size-5 fill-current" key={index} />
           ))}
-          <span className="ml-2 text-sm font-medium text-gray-500">4.9 / 5 em avaliacoes de usuarios</span>
+          <span className="ml-2 text-sm font-medium text-gray-500">4.9 / 5 em avaliações de usuários</span>
         </div>
 
         <div className="mt-12 grid gap-5 md:grid-cols-3">
@@ -590,67 +549,6 @@ function Testimonials() {
   )
 }
 
-function Plans({ goTo }) {
-  return (
-    <section className="scroll-mt-20 bg-white py-20 sm:py-24" id="planos">
-      <div className="mx-auto max-w-7xl px-5 sm:px-6">
-        <SectionIntro
-          eyebrow="Planos sob medida"
-          title="Escolha o ritmo certo para digitalizar sua clinica"
-          description="Cada operacao tem tamanho, equipe e maturidade diferentes. O MediConnect organiza uma jornada de entrada clara para cada perfil."
-        />
-
-        <div className="mx-auto mt-12 grid max-w-6xl gap-5 md:grid-cols-3">
-          {plans.map((plan) => (
-            <article
-              className={`relative rounded-lg p-6 shadow-sm ${
-                plan.featured
-                  ? 'border border-[#3b82f6] bg-[#3b82f6] text-white'
-                  : 'border border-gray-200 bg-white text-gray-900'
-              }`}
-              key={plan.name}
-            >
-              {plan.featured ? (
-                <div className="mb-4 inline-flex items-center gap-1 rounded-full bg-[#dbeafe] px-3 py-1 text-xs font-semibold text-[#1e3a8a]">
-                  <Sparkles className="size-3.5" />
-                  Mais escolhido
-                </div>
-              ) : null}
-              <h3 className="text-xl font-semibold">{plan.name}</h3>
-              <p className={`mt-2 min-h-16 text-sm leading-6 ${plan.featured ? 'text-white/85' : 'text-gray-500'}`}>
-                {plan.description}
-              </p>
-              <div className="mt-5">
-                <p className="text-2xl font-semibold">Sob consulta</p>
-                <p className={`mt-1 text-sm ${plan.featured ? 'text-white/75' : 'text-gray-500'}`}>
-                  Proposta personalizada apos diagnostico
-                </p>
-              </div>
-              <LandingButton
-                className={`mt-6 w-full ${
-                  plan.featured ? 'border-white bg-white text-[#3b82f6] hover:bg-[#eff6ff]' : ''
-                }`}
-                onClick={() => goTo('/cadastro')}
-                variant={plan.featured ? 'secondary' : 'primary'}
-              >
-                Falar com especialista
-              </LandingButton>
-              <ul className="mt-6 space-y-3">
-                {plan.features.map((feature) => (
-                  <li className="flex items-start gap-2 text-sm" key={feature}>
-                    <Check className={`mt-0.5 size-4 shrink-0 ${plan.featured ? 'text-[#bfdbfe]' : 'text-[#3b82f6]'}`} />
-                    <span className={plan.featured ? 'text-white/90' : 'text-gray-700'}>{feature}</span>
-                  </li>
-                ))}
-              </ul>
-            </article>
-          ))}
-        </div>
-      </div>
-    </section>
-  )
-}
-
 function FAQ() {
   const [openIndex, setOpenIndex] = useState(0)
 
@@ -659,8 +557,8 @@ function FAQ() {
       <div className="mx-auto max-w-3xl px-5 sm:px-6">
         <SectionIntro
           eyebrow="Perguntas frequentes"
-          title="Duvidas que aparecem antes da implantacao"
-          description="Algumas respostas rapidas para entender o papel do MediConnect na rotina da clinica."
+          title="Dúvidas que aparecem antes da implantação"
+          description="Algumas respostas rápidas para entender o papel do MediConnect na rotina da clínica."
         />
 
         <div className="mt-10 space-y-3">
@@ -692,13 +590,13 @@ function FinalCTA({ goTo }) {
   return (
     <section className="bg-white py-20 sm:py-24">
       <div className="mx-auto max-w-5xl px-5 text-center sm:px-6">
-        <SectionKicker>Proximo passo</SectionKicker>
+        <SectionKicker>Próximo passo</SectionKicker>
         <h2 className="mt-4 text-3xl font-semibold leading-tight text-gray-900 sm:text-4xl">
-          Pronto para devolver tempo ao medico que existe na sua equipe?
+          Pronto para devolver tempo ao médico que existe na sua equipe?
         </h2>
         <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-gray-500">
-          Experimente um sistema que conecta agenda, prontuario, comunicacao e indicadores para
-          tornar a gestao clinica mais leve e previsivel.
+          Experimente um sistema que conecta agenda, prontuário, comunicação e indicadores para
+          tornar a gestão clínica mais leve e previsível.
         </p>
         <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
           <LandingButton className="min-h-12 px-5" onClick={() => goTo('/cadastro')}>
@@ -716,9 +614,8 @@ function FinalCTA({ goTo }) {
 
 function LandingFooter({ goToSection }) {
   const footerLinks = [
-    { href: '#pilares', label: 'Solucoes' },
+    { href: '#pilares', label: 'Soluções' },
     { href: '#como-funciona', label: 'Como funciona' },
-    { href: '#planos', label: 'Planos' },
     { href: '#faq', label: 'FAQ' },
   ]
 
@@ -734,8 +631,8 @@ function LandingFooter({ goToSection }) {
               <span className="font-semibold text-white">MediConnect</span>
             </div>
             <p className="mt-4 max-w-md text-sm leading-6 text-white/55">
-              Plataforma de gestao clinica com IA para medicos e clinicas brasileiras. Menos
-              burocracia, mais cuidado e decisao com dados.
+              Plataforma de gestão clínica com IA para médicos e clínicas brasileiras. Menos
+              burocracia, mais cuidado e decisão com dados.
             </p>
           </div>
 
@@ -769,15 +666,15 @@ function LandingFooter({ goToSection }) {
               </span>
               <span className="inline-flex items-center gap-2">
                 <Globe2 className="size-4" />
-                Operacao pensada para o Brasil
+                Operação pensada para o Brasil
               </span>
             </div>
           </div>
         </div>
 
         <div className="mt-10 flex flex-col gap-3 border-t border-white/10 pt-6 text-sm text-white/35 sm:flex-row sm:items-center sm:justify-between">
-          <span>© 2026 MediConnect Tecnologia em Saude.</span>
-          <span>Termos de uso · Politica de privacidade · LGPD</span>
+          <span>© 2026 MediConnect Tecnologia em Saúde.</span>
+          <span>Termos de uso · Política de privacidade · LGPD</span>
         </div>
       </div>
     </footer>

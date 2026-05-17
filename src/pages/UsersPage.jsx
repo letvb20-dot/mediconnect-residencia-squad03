@@ -62,6 +62,7 @@ export function UsersPage({ embedded = false, embeddedHeaderOnly = false, hideHe
   const isPasswordCreation = form.auth_method === 'password'
   const isDoctorForm = normalizeRole(form.role) === 'medico'
   const filterableRoles = normalizedRole === 'admin' ? ADMIN_CREATABLE_ROLES : GESTOR_CREATABLE_ROLES
+  const pageSize = embedded ? 5 : USERS_PER_PAGE
   const filteredUsers = users.filter((user) => {
     const query = normalizeSearch(search)
     const matchesSearch =
@@ -76,9 +77,9 @@ export function UsersPage({ embedded = false, embeddedHeaderOnly = false, hideHe
     const matchesRole = roleFilter === 'Todos' || normalizeRole(getUserRole(user)) === roleFilter
     return matchesSearch && matchesRole
   })
-  const totalUserPages = Math.max(1, Math.ceil(filteredUsers.length / USERS_PER_PAGE))
+  const totalUserPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize))
   const currentUserPage = Math.min(userPage, totalUserPages)
-  const visibleUsers = filteredUsers.slice((currentUserPage - 1) * USERS_PER_PAGE, currentUserPage * USERS_PER_PAGE)
+  const visibleUsers = filteredUsers.slice((currentUserPage - 1) * pageSize, currentUserPage * pageSize)
 
   useEffect(() => {
     if (embeddedHeaderOnly) return
@@ -358,7 +359,7 @@ export function UsersPage({ embedded = false, embeddedHeaderOnly = false, hideHe
               </tbody>
             </table>
           </div>
-          {filteredUsers.length > USERS_PER_PAGE ? (
+          {filteredUsers.length > pageSize ? (
             <div className="flex items-center justify-between gap-3 border-t border-[#404040] px-6 py-4 text-xs text-[#a3a3a3]">
               <span>Página {currentUserPage} de {totalUserPages}</span>
               <div className="flex gap-2">
@@ -652,6 +653,7 @@ function UserDetailModal({ onClose, onDelete, onEdit, user }) {
   if (userRole === 'medico') {
     details.push(['CRM', user.crm || 'Não informado'])
     details.push(['CRM UF', user.crm_uf || user.crmUf || 'Não informado'])
+    details.push(['Especialidade', user.specialty || user.specialidade || 'Não informado'])
   }
 
   return (

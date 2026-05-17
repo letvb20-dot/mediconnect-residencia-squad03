@@ -73,7 +73,8 @@ const ROLE_ROUTES = {
     '/perfil',
   ],
   paciente: [
-    '/inicio', '/home', '/dashboard',
+    '/agenda',
+    '/laudos',
     '/configuracoes', '/config',
     '/perfil',
   ],
@@ -123,7 +124,7 @@ export const ROLE_CAPABILITIES = {
     accessSettings: true,
     ownAppointmentsOnly: false,
     canEditPatients: false,
-    canViewReports: false,
+    canViewReports: true,
     canViewMedicalRecords: false,
   },
 }
@@ -164,7 +165,8 @@ export const ROLE_NAV_ITEMS = {
     { path: '/configuracoes', label: 'Configurações' },
   ],
   paciente: [
-    { path: '/inicio', label: 'Painel' },
+    { path: '/agenda', label: 'Agenda' },
+    { path: '/laudos', label: 'Relatórios' },
     { path: '/configuracoes', label: 'Configurações' },
   ],
 }

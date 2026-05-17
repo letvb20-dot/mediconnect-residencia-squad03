@@ -1,16 +1,21 @@
 import { appointmentRepository } from './appointmentRepository.js'
 import { patientRepository } from './patientRepository.js'
+import { professionalRepository } from './professionalRepository.js'
 import { normalizeRole } from '../config/permissions.js'
 
 export const homeRepository = {
   async getDashboardOverview({ now = new Date(), profile, role, user } = {}) {
     const normalizedRole = normalizeRole(role)
-    const [allAppointments, allPatients] = await Promise.all([
+    const [allAppointments, allPatients, professionals] = await Promise.all([
       appointmentRepository.getAll().catch(() => []),
       patientRepository.getDirectoryRows().catch(() => []),
+      normalizedRole === 'medico' ? professionalRepository.getAll().catch(() => []) : Promise.resolve([]),
     ])
+    const currentProfessional = normalizedRole === 'medico'
+      ? professionalRepository.resolveCurrentProfessional(resolveViewerProfile(profile, user), professionals || [])
+      : null
     const appointments = normalizedRole === 'medico'
-      ? allAppointments.filter((appointment) => isDoctorAppointment(appointment, { profile, user }))
+      ? allAppointments.filter((appointment) => isDoctorAppointment(appointment, { profile, user, professional: currentProfessional }))
       : allAppointments
     const patientIds = new Set(appointments.map((appointment) => String(appointment.patientId || '')).filter(Boolean))
     const patients = normalizedRole === 'medico'
@@ -22,12 +27,15 @@ export const homeRepository = {
       .filter((appointment) => appointment.date === todayKey)
       .sort((a, b) => String(a.time || '').localeCompare(String(b.time || '')))
 
+    const completedToday = todayAppointments.filter((appointment) => isCompletedStatus(appointment.status))
     const completedAppointments = appointments.filter((appointment) => isCompletedStatus(appointment.status))
-    const noShowAppointments = appointments.filter((appointment) => isNoShowStatus(appointment.status))
+    const noShowAppointments = appointments.filter((appointment) => isNoShowAppointment(appointment, now))
     const pendingToday = todayAppointments.filter((appointment) => isPendingStatus(appointment.status))
-    const occupancyRate = Math.min(100, Math.round((todayAppointments.length / 24) * 1000) / 10)
-    const noShowRate = appointments.length
-      ? Math.round((noShowAppointments.length / appointments.length) * 1000) / 10
+    const dailySlots = 23
+    const occupancyRate = Math.min(100, Math.round((todayAppointments.length / dailySlots) * 1000) / 10)
+    const noShowBaseAppointments = appointments.filter((appointment) => isPastAppointment(appointment, now) && !isCancelledStatus(appointment.status))
+    const noShowRate = noShowBaseAppointments.length
+      ? Math.round((noShowAppointments.length / noShowBaseAppointments.length) * 1000) / 10
       : 0
     const weeklyAppointments = buildWeeklyAppointmentSeries(appointments, now)
 
@@ -39,8 +47,8 @@ export const homeRepository = {
         status: appointment.status || 'Agendado',
       })),
       metrics: [
-        { label: 'Consultas Hoje', value: String(todayAppointments.length), change: `${completedAppointments.length} concluídas`, tone: 'blue' },
-        { label: 'Taxa de Ocupação', value: `${occupancyRate}%`, change: `${todayAppointments.length}/24 slots`, tone: 'violet' },
+        { label: 'Consultas Hoje', value: String(todayAppointments.length), change: `${completedToday.length} concluídas`, tone: 'blue' },
+        { label: 'Taxa de Ocupação', value: `${occupancyRate}%`, change: `${todayAppointments.length}/${dailySlots} slots`, tone: 'violet' },
         { label: 'No-show', value: `${noShowRate}%`, change: `${noShowAppointments.length} registros`, tone: 'green' },
       ],
       predictiveAlert: pendingToday.length
@@ -82,12 +90,16 @@ export function buildWeeklyAppointmentSeries(appointments = [], now = new Date()
   }
 }
 
-function isDoctorAppointment(appointment, { profile, user }) {
+function isDoctorAppointment(appointment, { profile, user, professional }) {
   const candidates = [
     profile?.doctorId,
     profile?.doctor_id,
     profile?.id,
     profile?.email,
+    professional?.id,
+    professional?.userId,
+    professional?.authUserId,
+    professional?.email,
     user?.id,
     user?.user_id,
     user?.email,
@@ -113,6 +125,16 @@ function isDoctorAppointment(appointment, { profile, user }) {
     .map((value) => String(value).trim().toLowerCase())
 
   return appointmentCandidates.some((value) => candidates.includes(value))
+}
+
+function resolveViewerProfile(profile, user) {
+  return {
+    ...(profile || {}),
+    id: profile?.id || user?.id,
+    userId: profile?.userId || profile?.user_id || user?.id || user?.user_id,
+    authUserId: profile?.authUserId || profile?.auth_user_id || user?.auth_user_id || user?.id,
+    email: profile?.email || user?.email,
+  }
 }
 
 function formatDateKey(date) {
@@ -149,11 +171,32 @@ function normalizeStatus(status) {
 }
 
 function isCompletedStatus(status) {
-  return ['concluida', 'concluido', 'completed', 'finalizada', 'finalizado'].includes(normalizeStatus(status))
+  return ['realizado', 'realizada', 'concluida', 'concluido', 'completed', 'finalizada', 'finalizado'].includes(normalizeStatus(status))
 }
 
 function isNoShowStatus(status) {
   return ['no_show', 'no-show', 'falta', 'ausente', 'faltou'].includes(normalizeStatus(status).replace(/\s+/g, '_'))
+}
+
+function isNoShowAppointment(appointment, now) {
+  if (isNoShowStatus(appointment.status)) return true
+  if (isCancelledStatus(appointment.status) || isCompletedStatus(appointment.status)) return false
+  return isPastAppointment(appointment, now)
+}
+
+function isPastAppointment(appointment, now) {
+  const date = parseAppointmentDateTime(appointment)
+  return Boolean(date && date.getTime() < now.getTime())
+}
+
+function parseAppointmentDateTime(appointment) {
+  if (!appointment?.date) return null
+
+  const [year, month, day] = String(appointment.date).split('-').map(Number)
+  const [hours = 0, minutes = 0] = String(appointment.time || '00:00').split(':').map(Number)
+  if (!year || !month || !day || Number.isNaN(hours) || Number.isNaN(minutes)) return null
+
+  return new Date(year, month - 1, day, hours, minutes)
 }
 
 function isCancelledStatus(status) {
@@ -161,5 +204,5 @@ function isCancelledStatus(status) {
 }
 
 function isPendingStatus(status) {
-  return ['aguardando', 'requested', 'solicitada', 'pendente'].includes(normalizeStatus(status))
+  return ['agendado', 'agendada', 'aguardando', 'requested', 'solicitada', 'pendente'].includes(normalizeStatus(status))
 }

@@ -392,7 +392,7 @@ export function MessagesPage({ role }) {
     notificationRepository.notifyCurrentUser({
       domain: 'communication',
       title: 'Campanha disparada',
-      detail: `${campaignRecord.name} enviada para ${campaignRecord.total} pacientes elegiveis.`,
+      detail: `${campaignRecord.name} enviada para ${campaignRecord.total} pacientes elegíveis.`,
     }).catch(() => null)
     setCampaignDraft(emptyCampaign)
     setCampaignOpen(false)
@@ -456,10 +456,7 @@ export function MessagesPage({ role }) {
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#f5f5f5]">Comunicacao</h1>
-          <p className="mt-1 text-sm text-[#b8b8b8]">
-            {isSecretary ? 'WhatsApp e SMS para contato operacional com pacientes' : 'WhatsApp, E-mail e SMS com pacientes carregados da API'}
-          </p>
+          <h1 className="text-[32px] font-bold leading-8 tracking-[-0.02em] text-[#f5f5f5]">Comunicação</h1>
         </div>
 
         <div className="flex flex-wrap gap-3">
@@ -712,7 +709,7 @@ function CampaignsTab({ campaignHistory, eligibleCount, onCreate, onResend, opte
         <div>
           <h2 className="text-lg font-bold text-[#f5f5f5]">Campanhas</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[#a3a3a3]">
-            Uma campanha e uma comunicacao enviada para um grupo de pacientes elegiveis, usando o canal, mensagem e
+            Uma campanha é uma comunicação enviada para um grupo de pacientes elegíveis, usando o canal, mensagem e
             recorrencia definidos pela equipe.
           </p>
           <button
@@ -733,10 +730,10 @@ function CampaignsTab({ campaignHistory, eligibleCount, onCreate, onResend, opte
             <span className="text-sm font-bold text-[#f5f5f5]">Elegibilidade</span>
           </div>
           <p className="text-xs leading-6 text-[#a3a3a3]">
-            Pacientes com opt-out marcado no perfil nao aparecem para selecao em mensagens ou campanhas.
+            Pacientes com opt-out marcado no perfil não aparecem para seleção em mensagens ou campanhas.
           </p>
           <div className="mt-4 grid grid-cols-2 gap-3">
-            <MiniCount label="Elegiveis" value={eligibleCount} />
+            <MiniCount label="Elegíveis" value={eligibleCount} />
             <MiniCount label="Opt-out" value={optedOutCount} />
           </div>
         </div>
@@ -754,7 +751,7 @@ function ManagementTab({ campaignHistory, customTemplates, eligibleCount, onEdit
         <h2 className="text-sm font-bold text-[#f5f5f5]">Pacientes</h2>
         <div className="mt-4 grid gap-3">
           <MiniCount label="Total na API" value={totalPatients} />
-          <MiniCount label="Elegiveis" value={eligibleCount} />
+          <MiniCount label="Elegíveis" value={eligibleCount} />
           <MiniCount label="Com opt-out" value={optedOutCount} />
         </div>
       </article>
@@ -961,7 +958,7 @@ function MessageComposer({ allowedChannelKeys, draft, onChange, onClose, onSubmi
             className={inputClass}
             list={datalistId}
             onChange={(event) => selectPatientByName(event.target.value)}
-            placeholder="Busque por nome do paciente elegivel"
+            placeholder="Busque por nome do paciente elegível"
             type="search"
             value={patientSearch}
           />
@@ -971,7 +968,7 @@ function MessageComposer({ allowedChannelKeys, draft, onChange, onClose, onSubmi
             ))}
           </datalist>
           {patientSearch && !draft.patientId ? (
-            <p className="text-xs text-amber-400">Selecione um paciente elegivel sugerido pela busca.</p>
+            <p className="text-xs text-amber-400">Selecione um paciente elegível sugerido pela busca.</p>
           ) : null}
         </DarkField>
 
@@ -1105,7 +1102,7 @@ function CampaignComposer({ allowedChannelKeys, draft, onChange, onClose, onSubm
           </DarkField>
         </div>
 
-        <DarkField label={`Pacientes elegiveis selecionados (${selectedCount})`}>
+        <DarkField label={`Pacientes elegíveis selecionados (${selectedCount})`}>
           <div className="space-y-3">
             <div className="flex gap-2">
               <input
@@ -1140,7 +1137,7 @@ function CampaignComposer({ allowedChannelKeys, draft, onChange, onClose, onSubm
                   </span>
                 </label>
               )) : (
-                <p className="px-3 py-4 text-center text-xs text-[#737373]">Nenhum paciente elegivel encontrado.</p>
+                <p className="px-3 py-4 text-center text-xs text-[#737373]">Nenhum paciente elegível encontrado.</p>
               )}
             </div>
           </div>

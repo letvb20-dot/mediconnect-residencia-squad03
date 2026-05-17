@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 
-import { ROLE_LABELS, ROLE_NAV_ITEMS } from '../config/permissions.js'
+import { canAccess, ROLE_LABELS, ROLE_NAV_ITEMS } from '../config/permissions.js'
 import { authRepository } from '../repositories/authRepository.js'
 import {
   NOTIFICATION_ACTION_EVENT,
@@ -95,6 +95,7 @@ export function AppShell({ children, currentPath, navigate, role, routeTitle }) 
       ),
     [role],
   )
+  const canOpenProfile = useMemo(() => canAccess(role, '/perfil'), [role])
   useEffect(() => {
     let active = true
 
@@ -238,7 +239,7 @@ export function AppShell({ children, currentPath, navigate, role, routeTitle }) 
             className={`w-full rounded-md border border-[#404040] bg-[#303030] text-left transition hover:border-[#525252] hover:bg-[#333333] ${
               sidebarCollapsed ? 'grid h-10 place-items-center px-0 py-0 lg:rounded-full' : 'px-3 py-2.5'
             }`}
-            onClick={() => goTo('/perfil')}
+            onClick={() => goTo(canOpenProfile ? '/perfil' : '/configuracoes')}
             title={sidebarCollapsed ? `${viewerProfile.name} - ${viewerProfile.role}` : undefined}
             type="button"
           >
@@ -383,15 +384,17 @@ export function AppShell({ children, currentPath, navigate, role, routeTitle }) 
                     className="absolute right-0 top-12 z-30 w-56 rounded-md border border-[#404040] bg-[#262626] p-1 shadow-2xl shadow-black/30"
                     role="menu"
                   >
-                    <button
-                      className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-left text-sm font-medium text-[#e5e5e5] transition hover:bg-[#303030]"
-                      onClick={() => goTo('/perfil')}
-                      role="menuitem"
-                      type="button"
-                    >
-                      <UserIcon className="size-4 text-[#a3a3a3]" />
-                      Ver perfil
-                    </button>
+                    {canOpenProfile ? (
+                      <button
+                        className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-left text-sm font-medium text-[#e5e5e5] transition hover:bg-[#303030]"
+                        onClick={() => goTo('/perfil')}
+                        role="menuitem"
+                        type="button"
+                      >
+                        <UserIcon className="size-4 text-[#a3a3a3]" />
+                        Ver perfil
+                      </button>
+                    ) : null}
 
                     {canOpenSettings ? (
                       <button

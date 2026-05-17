@@ -106,18 +106,26 @@ export const patientRepository = {
   async update(patientId, data) {
     validatePatientPayload(data)
     const body = buildUpdatePatientBody(data)
+    const attempts = buildUpdateAttempts(body)
+    let lastError = null
 
-    const response = await fetch(`${apiConfig.restUrl}/patients?id=eq.${patientId}`, {
-      method: 'PATCH',
-      headers: getAuthenticatedHeaders({ Prefer: 'return=representation' }),
-      body: JSON.stringify(body),
-    })
+    if (!attempts.length) return []
 
-    if (!response.ok) {
-      throw new Error(await getResponseError(response, 'Erro ao atualizar paciente.'))
+    for (const attempt of attempts) {
+      const response = await fetch(`${apiConfig.restUrl}/patients?id=eq.${encodeURIComponent(patientId)}`, {
+        method: 'PATCH',
+        headers: getAuthenticatedHeaders({ Prefer: 'return=representation' }),
+        body: JSON.stringify(attempt),
+      })
+
+      if (response.ok) {
+        return response.json()
+      }
+
+      lastError = new Error(await getResponseError(response, 'Erro ao atualizar paciente.'))
     }
 
-    return response.json()
+    throw lastError || new Error('Erro ao atualizar paciente.')
   },
 
   // POST /storage/v1/object/avatars/{path}
@@ -261,7 +269,7 @@ function mapPatientToDirectory(patient, appointments = []) {
     insuranceCardValidUntil: patient.insuranceCardValidUntil || patient.insurance_card_valid_until || patient.validade_carteira || '',
     insuranceIndefiniteValidity: Boolean(patient.insuranceIndefiniteValidity || patient.insurance_indefinite_validity || patient.validade_indeterminada),
     cns: patient.cns || patient.sus_card || patient.cartao_sus || '',
-    lgpdOptIn: Boolean(patient.lgpdOptIn ?? patient.lgpd_opt_in ?? patient.accepts_messages ?? patient.opt_in_messages ?? patient.receber_mensagens),
+    lgpdOptIn: Boolean(patient.lgpdOptIn ?? patient.lgpd_opt_in ?? patient.accepts_messages ?? patient.opt_in_messages ?? patient.receber_mensagens ?? true),
     attachments: normalizeAttachments(patient.attachments || patient.anexos || patient.documents || patient.documentos),
     notesText: patient.notesText || patient.notes_text || patient.observations || patient.observacoes || '',
     lastVisitIso: patient.lastVisitIso || patient.last_visit_iso || appointmentSummary.lastVisitIso || null,
@@ -499,6 +507,28 @@ function buildUpdatePatientBody(data) {
     full_name: cleanPersonName(data.name, data.full_name) || undefined,
     phone_mobile: data.phone || data.phone_mobile ? onlyDigits(data.phone || data.phone_mobile) : undefined,
     email: data.email?.trim() || undefined,
+  })
+}
+
+function buildUpdateAttempts(body) {
+  const attempts = [
+    body,
+    { full_name: body.full_name, phone_mobile: body.phone_mobile },
+    { full_name: body.full_name, email: body.email },
+    { full_name: body.full_name },
+    { phone_mobile: body.phone_mobile },
+    { email: body.email },
+  ].map((attempt) => cleanPayload(attempt))
+
+  const seen = new Set()
+  return attempts.filter((attempt) => {
+    const entries = Object.entries(attempt)
+    if (!entries.length) return false
+
+    const key = JSON.stringify(attempt)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
   })
 }
 

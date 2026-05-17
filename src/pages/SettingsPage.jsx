@@ -18,7 +18,7 @@ export function SettingsPage() {
   return (
     <div className="mx-auto max-w-5xl">
       <header className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight text-[#f5f5f5]">Configurações</h1>
+        <h1 className="text-[32px] font-bold leading-8 tracking-[-0.02em] text-[#f5f5f5]">Configurações</h1>
         <p className="mt-1 text-sm text-[#b8b8b8]">Gerencie preferências, segurança e integrações do MediConnect</p>
       </header>
 

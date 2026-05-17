@@ -3,17 +3,17 @@ import { useEffect, useMemo, useState } from 'react'
 import { analyticsRepository } from '../repositories/analyticsRepository.js'
 import { translateErrorMessage } from '../repositories/repositoryUtils.js'
 
-const periods = [
-  ['1m', '1 Mes'],
-  ['3m', '3 Meses'],
-  ['6m', '6 Meses'],
-  ['1a', '1 Ano'],
+const chartPeriods = [
+  ['week', 'Semana'],
+  ['month', 'Mês'],
+  ['six_months', '6 meses'],
 ]
 
 const cardClass = 'rounded-2xl border border-[#404040] bg-[#262626] shadow-sm'
 
 export function AnalyticsPage() {
-  const [period, setPeriod] = useState('6m')
+  const [absenteeismPeriod, setAbsenteeismPeriod] = useState('week')
+  const [consultationsPeriod, setConsultationsPeriod] = useState('week')
   const [dashboard, setDashboard] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -23,10 +23,7 @@ export function AnalyticsPage() {
     doctorPerformance = [],
     insuranceData = [],
     kpis = [],
-    revenueData = [],
-    annualRevenue = 0,
     attendanceMetrics = {},
-    satisfactionIndicators = {},
     topPatients = [],
   } = dashboard || {}
   const topPatientMaxVisits = useMemo(
@@ -38,7 +35,7 @@ export function AnalyticsPage() {
     let active = true
 
     analyticsRepository
-      .getDashboardData(period)
+      .getDashboardData({ absenteeismPeriod, consultationsPeriod })
       .then((data) => {
         if (active) setDashboard(data)
       })
@@ -55,10 +52,10 @@ export function AnalyticsPage() {
     return () => {
       active = false
     }
-  }, [period])
+  }, [absenteeismPeriod, consultationsPeriod])
 
-  function handlePeriodChange(nextPeriod) {
-    setPeriod(nextPeriod)
+  function handleChartPeriodChange(setter, nextPeriod) {
+    setter(nextPeriod)
     setLoading(true)
     setError('')
   }
@@ -67,23 +64,7 @@ export function AnalyticsPage() {
     <div className="mx-auto max-w-7xl space-y-6">
       <section className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#f5f5f5]">Analytics</h1>
-          <p className="mt-1 text-sm text-[#b8b8b8]">Dashboard executivo calculado com agenda, pacientes e profissionais da API</p>
-        </div>
-
-        <div className="flex overflow-hidden rounded-sm border border-[#404040] bg-[#171717]">
-          {periods.map(([key, label]) => (
-            <button
-              className={`h-9 px-4 text-xs font-semibold transition ${
-                period === key ? 'bg-[#3b82f6] text-white' : 'text-[#b8b8b8] hover:bg-[#303030] hover:text-[#e5e5e5]'
-              }`}
-              key={key}
-              onClick={() => handlePeriodChange(key)}
-              type="button"
-            >
-              {label}
-            </button>
-          ))}
+          <h1 className="text-[32px] font-bold leading-8 tracking-[-0.02em] text-[#f5f5f5]">Analytics</h1>
         </div>
       </section>
 
@@ -105,28 +86,41 @@ export function AnalyticsPage() {
         ))}
       </section> : null}
 
-      {!loading && !error ? <section className="grid gap-4 md:grid-cols-4" aria-label="Métricas de atendimento e financeiro">
+      {!loading && !error ? <section className="grid gap-4 md:grid-cols-3" aria-label="Métricas de atendimento">
         <MiniMetric title="Métricas de atendimento" value={`${attendanceMetrics.completed || 0}/${attendanceMetrics.scheduled || 0}`} detail="realizadas sobre agendadas" />
-        <MiniMetric title="Faturamento anual" value={formatCurrency(annualRevenue)} detail="ano corrente" />
         <MiniMetric title="Taxa de no-show" value={`${attendanceMetrics.noShowRate || 0}%`} detail={`${attendanceMetrics.noShow || 0} ausências`} />
-        <MiniMetric title="Satisfação" value={satisfactionIndicators.average ? `${satisfactionIndicators.average}/5` : '-'} detail={satisfactionIndicators.label || 'sem respostas'} />
+        <MiniMetric title="Canceladas" value={attendanceMetrics.cancelled || 0} detail="consultas canceladas" />
       </section> : null}
 
       {!loading && !error ? <section className="grid gap-6 lg:grid-cols-2" aria-label="Gráficos principais">
-        <ChartCard description="Evolução mensal vs meta" title="Taxa de Absenteísmo">
+        <ChartCard
+          actions={(
+            <PeriodToggle
+              onChange={(nextPeriod) => handleChartPeriodChange(setAbsenteeismPeriod, nextPeriod)}
+              value={absenteeismPeriod}
+            />
+          )}
+          description="Consultas não realizadas vs meta"
+          title="Taxa de Absenteísmo"
+        >
           <AreaMetricChart data={absenteeismData} />
         </ChartCard>
 
-        <ChartCard description="Agendadas vs realizadas" title="Consultas por Período">
+        <ChartCard
+          actions={(
+            <PeriodToggle
+              onChange={(nextPeriod) => handleChartPeriodChange(setConsultationsPeriod, nextPeriod)}
+              value={consultationsPeriod}
+            />
+          )}
+          description="Agendadas vs realizadas"
+          title="Consultas por Período"
+        >
           <GroupedBarChart data={consultationsData} />
         </ChartCard>
       </section> : null}
 
-      {!loading && !error ? <section className="grid gap-6 lg:grid-cols-3" aria-label="Analytics complementares">
-        <ChartCard description="Valores financeiros informados na agenda" title="Faturamento Mensal">
-          <RevenueChart data={revenueData} />
-        </ChartCard>
-
+      {!loading && !error ? <section className="grid gap-6 lg:grid-cols-2" aria-label="Analytics complementares">
         <ChartCard description="Distribuição de atendimentos" title="Convênios">
           <InsuranceBreakdown insuranceData={insuranceData} />
         </ChartCard>
@@ -139,7 +133,7 @@ export function AnalyticsPage() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-xs font-semibold text-[#f5f5f5]">{patient.name}</p>
                   <p className="mt-0.5 text-[10px] text-[#a3a3a3]">
-                    {patient.visits} visitas • R$ {patient.revenue.toLocaleString('pt-BR')}
+                    {patient.visits} visitas
                   </p>
                 </div>
                 <div className="h-1.5 w-16 overflow-hidden rounded-full bg-[#303030]">
@@ -166,7 +160,6 @@ export function AnalyticsPage() {
                 <th className="px-4 py-3">Consultas</th>
                 <th className="px-4 py-3">No-Show</th>
                 <th className="px-4 py-3">Taxa No-Show</th>
-                <th className="px-4 py-3">Satisfação</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#404040] bg-[#262626]">
@@ -180,21 +173,11 @@ export function AnalyticsPage() {
                     <td className="px-4 py-3">
                       <span className={`text-xs font-semibold ${rateClass(noShowRate)}`}>{noShowRate.toFixed(1)}%</span>
                     </td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex items-center gap-1 text-sm font-semibold text-[#f5f5f5]">
-                        {doctor.satisfacao ? (
-                          <>
-                            <span className="text-amber-400">★</span>
-                            {doctor.satisfacao}
-                          </>
-                        ) : '-'}
-                      </span>
-                    </td>
                   </tr>
                 )
               }) : (
                 <tr>
-                  <td className="px-4 py-8 text-center text-[#a3a3a3]" colSpan={5}>
+                  <td className="px-4 py-8 text-center text-[#a3a3a3]" colSpan={4}>
                     Nenhum atendimento encontrado para calcular performance médica.
                   </td>
                 </tr>
@@ -233,29 +216,57 @@ function MiniMetric({ detail, title, value }) {
   )
 }
 
-function ChartCard({ children, description, title }) {
+function ChartCard({ actions = null, children, description, title }) {
   return (
     <article className={`${cardClass} p-6`}>
-      <h2 className="text-sm font-bold text-[#f5f5f5]">{title}</h2>
-      <p className="mt-1 text-xs text-[#a3a3a3]">{description}</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-sm font-bold text-[#f5f5f5]">{title}</h2>
+          <p className="mt-1 text-xs text-[#a3a3a3]">{description}</p>
+        </div>
+        {actions}
+      </div>
       <div className="mt-4">{children}</div>
     </article>
   )
 }
 
+function PeriodToggle({ onChange, value }) {
+  return (
+    <div className="flex shrink-0 overflow-hidden rounded-sm border border-[#404040] bg-[#171717]">
+      {chartPeriods.map(([key, label]) => (
+        <button
+          className={`h-8 px-3 text-[11px] font-semibold transition ${
+            value === key ? 'bg-[#3b82f6] text-white' : 'text-[#b8b8b8] hover:bg-[#303030] hover:text-[#e5e5e5]'
+          }`}
+          key={key}
+          onClick={() => {
+            if (value !== key) onChange(key)
+          }}
+          type="button"
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function AreaMetricChart({ data }) {
-  const points = getLinePoints(data.map((item) => item.taxa), 0, 24)
-  const metaPoints = getLinePoints(data.map((item) => item.meta), 0, 24)
+  const maxRate = Math.max(30, ...data.flatMap((item) => [item.taxa, item.meta]))
+  const points = getLinePoints(data.map((item) => item.taxa), 0, maxRate)
+  const metaPoints = getLinePoints(data.map((item) => item.meta), 0, maxRate)
   const area = `${points} 600,260 42,260`
+  const labelStep = 558 / Math.max(data.length - 1, 1)
 
   return (
     <svg className="h-[250px] w-full overflow-visible" role="img" viewBox="0 0 640 300">
-      <ChartGrid labels={[24, 18, 12, 6, 0]} />
+      <ChartGrid labels={[maxRate, Math.round(maxRate * 0.75), Math.round(maxRate * 0.5), Math.round(maxRate * 0.25), 0]} />
       <polygon className="analytics-chart-area" fill="#3b82f6" opacity="0.12" points={area} />
       <polyline className="analytics-chart-line-fade" fill="none" points={metaPoints} stroke="#64748b" strokeDasharray="6 8" strokeWidth="2" />
       <polyline className="analytics-chart-line-draw" fill="none" pathLength="1" points={points} stroke="#3b82f6" strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" />
       {data.map((item, index) => (
-        <text className="fill-[#94a3b8] text-[13px]" key={item.month} x={42 + index * 111.6} y="285" textAnchor="middle">
+        <text className="fill-[#94a3b8] text-[13px]" key={item.month} x={42 + index * labelStep} y="285" textAnchor="middle">
           {item.month}
         </text>
       ))}
@@ -265,12 +276,18 @@ function AreaMetricChart({ data }) {
 
 function GroupedBarChart({ data }) {
   const maxValue = Math.max(...data.flatMap((item) => [item.total, item.realizadas]), 1)
+  const chartLeft = 54
+  const chartWidth = 540
+  const slotWidth = chartWidth / Math.max(data.length, 1)
+  const barWidth = Math.min(30, Math.max(14, slotWidth * 0.28))
+  const barGap = Math.min(10, Math.max(5, slotWidth * 0.08))
 
   return (
     <svg className="h-[250px] w-full overflow-visible" role="img" viewBox="0 0 640 300">
       <ChartGrid labels={[maxValue, Math.round(maxValue * 0.75), Math.round(maxValue * 0.5), Math.round(maxValue * 0.25), 0]} />
       {data.map((item, index) => {
-        const x = 58 + index * 94
+        const x = chartLeft + index * slotWidth + (slotWidth - (barWidth * 2 + barGap)) / 2
+        const labelX = chartLeft + index * slotWidth + slotWidth / 2
         const totalHeight = (item.total / maxValue) * 220
         const doneHeight = (item.realizadas / maxValue) * 220
         return (
@@ -281,7 +298,7 @@ function GroupedBarChart({ data }) {
               height={totalHeight}
               rx="5"
               style={{ animationDelay: `${index * 70}ms` }}
-              width="32"
+              width={barWidth}
               x={x}
               y={260 - totalHeight}
             />
@@ -291,54 +308,16 @@ function GroupedBarChart({ data }) {
               height={doneHeight}
               rx="5"
               style={{ animationDelay: `${index * 70 + 90}ms` }}
-              width="32"
-              x={x + 38}
+              width={barWidth}
+              x={x + barWidth + barGap}
               y={260 - doneHeight}
             />
-            <text className="fill-[#94a3b8] text-[13px]" textAnchor="middle" x={x + 35} y="285">
+            <text className="fill-[#94a3b8] text-[13px]" textAnchor="middle" x={labelX} y="285">
               {item.month}
             </text>
           </g>
         )
       })}
-    </svg>
-  )
-}
-
-function RevenueChart({ data }) {
-  const maxValue = Math.max(...data.map((item) => item.valor), 1)
-  const points = getLinePoints(
-    data.map((item) => item.valor),
-    0,
-    maxValue,
-    { left: 32, top: 18, width: 270, height: 160 },
-  )
-
-  return (
-    <svg className="h-[200px] w-full overflow-visible" role="img" viewBox="0 0 340 220">
-      {[0, 1, 2, 3].map((line) => (
-        <line key={line} stroke="#1e3a5f" strokeDasharray="3 5" x1="32" x2="320" y1={20 + line * 50} y2={20 + line * 50} />
-      ))}
-      <polyline className="analytics-chart-line-draw" fill="none" pathLength="1" points={points} stroke="#10b981" strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" />
-      {points.split(' ').map((point, index) => {
-        const [x, y] = point.split(',').map(Number)
-        return (
-          <circle
-            className="analytics-chart-point"
-            cx={x}
-            cy={y}
-            fill="#10b981"
-            key={point}
-            r={4 + (index === data.length - 1 ? 1 : 0)}
-            style={{ animationDelay: `${320 + index * 70}ms` }}
-          />
-        )
-      })}
-      {data.map((item, index) => (
-        <text className="fill-[#94a3b8] text-[11px]" key={item.month} textAnchor="middle" x={32 + index * 54} y="205">
-          {item.month}
-        </text>
-      ))}
     </svg>
   )
 }
@@ -440,14 +419,6 @@ function rateClass(rate) {
   return 'text-emerald-400'
 }
 
-function formatCurrency(value) {
-  return new Intl.NumberFormat('pt-BR', {
-    currency: 'BRL',
-    maximumFractionDigits: 0,
-    style: 'currency',
-  }).format(Number(value) || 0)
-}
-
 function AnalyticsIcon({ className = 'size-4', name }) {
   const common = {
     className,
@@ -487,6 +458,15 @@ function AnalyticsIcon({ className = 'size-4', name }) {
     return (
       <svg {...common}>
         <path d="M16 19a4 4 0 0 0-8 0M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM20 19a3 3 0 0 0-3-3M4 19a3 3 0 0 1 3-3" />
+      </svg>
+    )
+  }
+
+  if (name === 'building') {
+    return (
+      <svg {...common}>
+        <path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16" />
+        <path d="M16 8h2a2 2 0 0 1 2 2v11M8 7h4M8 11h4M8 15h4M3 21h18" />
       </svg>
     )
   }

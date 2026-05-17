@@ -1,7 +1,10 @@
 import { authRepository } from './authRepository.js'
+import { apiConfig, getAuthenticatedHeaders, getAuthSession, saveAuthSession } from '../config/api.js'
 import { normalizeRole, ROLE_LABELS } from '../config/permissions.js'
-import { apiConfig, getAuthenticatedHeaders } from '../config/api.js'
 import { getResponseError } from './repositoryUtils.js'
+
+const USER_PROFILE_TABLES = ['profiles', 'user_profiles']
+const PROFILE_AVATAR_OVERRIDES_KEY = 'mediconnect.profile.avatar.overrides'
 
 export const profileRepository = {
   async getCurrentUserProfile() {
@@ -26,12 +29,15 @@ export const profileRepository = {
 
     return {
       id: profile?.id || user?.id || user?.user_id || user?.uid || '',
+      userId: profile?.user_id || user?.user_id || user?.id || '',
+      authUserId: profile?.auth_user_id || user?.auth_user_id || user?.id || user?.uid || '',
       email: profile?.email || user?.email || meta.email || '',
       name: profile?.full_name || user?.name || user?.nome || user?.full_name || meta.full_name || meta.name || 'Usuário',
       phone: profile?.phone || user?.phone || user?.telefone || meta.phone || meta.telefone || '',
+      cpf: profile?.cpf || user?.cpf || meta.cpf || '',
       role: ROLE_LABELS[normalizedRole] || user?.role || user?.cargo || meta.role || meta.cargo || 'Usuário do Sistema',
       unit: profile?.unit || user?.unit || user?.unidade || meta.unit || meta.unidade || 'Clínica Boa Vista',
-      avatarUrl: getAvatarUrl(avatarUrl),
+      avatarUrl: getStoredAvatarOverride(profile, user) || getAvatarUrl(avatarUrl),
       doctorId: data?.doctor_id || data?.doctorId || null,
       patientId: data?.patient_id || data?.patientId || null,
       roles,
@@ -40,6 +46,7 @@ export const profileRepository = {
       isAdmin: normalizedRole === 'admin',
       isManager: normalizedRole === 'gestor',
       isSecretary: normalizedRole === 'secretaria',
+      isPatient: normalizedRole === 'paciente',
     }
   },
 
@@ -66,8 +73,13 @@ export const profileRepository = {
       throw new Error(await getResponseError(response, 'Falha ao enviar avatar.'))
     }
 
+    const avatarUrl = getAvatarUrl(objectPath)
+    await persistProfileAvatar(profile, avatarUrl).catch(() => false)
+    storeAvatarOverride(profile, avatarUrl)
+    updateStoredSessionAvatar(avatarUrl, objectPath)
+
     return {
-      avatarUrl: getAvatarUrl(objectPath),
+      avatarUrl,
       path: objectPath,
     }
   },
@@ -95,7 +107,109 @@ function getAvatarUrl(path) {
   const objectPath = String(path || '').replace(/^\/+/, '')
   if (!objectPath) return ''
   if (/^https?:\/\//i.test(objectPath)) return objectPath
-  return `${apiConfig.storageUrl}/object/avatars/${objectPath}`
+  return `${apiConfig.storageUrl}/object/public/avatars/${objectPath}`
+}
+
+async function persistProfileAvatar(profile, avatarUrl) {
+  const identifiers = [
+    ['id', profile?.id],
+    ['user_id', profile?.userId],
+    ['auth_user_id', profile?.authUserId],
+    ['email', profile?.email],
+  ].filter(([, value]) => value)
+  const payload = { avatar_url: avatarUrl }
+  let lastError = null
+
+  for (const table of USER_PROFILE_TABLES) {
+    for (const [field, value] of identifiers) {
+      const response = await fetch(`${apiConfig.restUrl}/${table}?${field}=eq.${encodeURIComponent(value)}`, {
+        method: 'PATCH',
+        headers: getAuthenticatedHeaders({ Prefer: 'return=representation' }),
+        body: JSON.stringify(payload),
+      }).catch((error) => {
+        lastError = error
+        return null
+      })
+
+      if (!response) continue
+      if (response.ok) {
+        const data = await response.json().catch(() => null)
+        const rows = Array.isArray(data) ? data : data ? [data] : []
+        if (rows.length) return true
+        continue
+      }
+      lastError = new Error(await getResponseError(response, 'Falha ao salvar avatar no perfil.'))
+    }
+  }
+
+  if (lastError) throw lastError
+  return false
+}
+
+function updateStoredSessionAvatar(avatarUrl, avatarPath) {
+  const session = getAuthSession()
+  if (!session) return
+
+  const profile = {
+    ...(session.profile || session.perfil || {}),
+    avatar_url: avatarUrl,
+    avatar_path: avatarPath,
+  }
+  const user = {
+    ...(session.user || session.usuario || {}),
+    avatar_url: avatarUrl,
+    avatar_path: avatarPath,
+  }
+
+  saveAuthSession({
+    ...session,
+    profile,
+    perfil: session.perfil ? profile : session.perfil,
+    user,
+    usuario: session.usuario ? user : session.usuario,
+  })
+}
+
+function getStoredAvatarOverride(profile, user) {
+  const overrides = readAvatarOverrides()
+  for (const key of getProfileAvatarKeys(profile, user)) {
+    if (overrides[key]) return overrides[key]
+  }
+  return ''
+}
+
+function storeAvatarOverride(profile, avatarUrl) {
+  if (typeof window === 'undefined' || !avatarUrl) return
+  const overrides = readAvatarOverrides()
+  for (const key of getProfileAvatarKeys(profile)) {
+    overrides[key] = avatarUrl
+  }
+  window.localStorage.setItem(PROFILE_AVATAR_OVERRIDES_KEY, JSON.stringify(overrides))
+}
+
+function readAvatarOverrides() {
+  if (typeof window === 'undefined') return {}
+  try {
+    return JSON.parse(window.localStorage.getItem(PROFILE_AVATAR_OVERRIDES_KEY) || '{}') || {}
+  } catch {
+    window.localStorage.removeItem(PROFILE_AVATAR_OVERRIDES_KEY)
+    return {}
+  }
+}
+
+function getProfileAvatarKeys(profile, user = {}) {
+  return [
+    profile?.id,
+    profile?.userId,
+    profile?.user_id,
+    profile?.authUserId,
+    profile?.auth_user_id,
+    profile?.email,
+    user?.id,
+    user?.user_id,
+    user?.auth_user_id,
+    user?.email,
+  ].map((value) => String(value || '').trim().toLowerCase()).filter(Boolean)
 }
 
 function collectRoles({ data, meta, profile, user }) {

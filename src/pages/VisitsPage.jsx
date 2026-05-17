@@ -61,7 +61,6 @@ export function VisitsPage({ navigate }) {
       <header className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-2xl font-bold tracking-tight text-[var(--text-primary)]">Consultas</h1>
-          <p className="mt-1 truncate text-sm text-[var(--text-muted)]">Fila de atendimento derivada dos agendamentos da API.</p>
         </div>
         <div className="flex shrink-0 flex-wrap gap-3">
           <button

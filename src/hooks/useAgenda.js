@@ -9,6 +9,11 @@ import { professionalRepository } from '../repositories/professionalRepository.j
 import { profileRepository } from '../repositories/profileRepository.js'
 import { userRepository } from '../repositories/userRepository.js'
 import { formatLocalDateInput, parseLocalDate, sortAppointmentsByTime } from '../utils/agendaDate.js'
+import { resolveCurrentPatient } from '../utils/patientIdentity.js'
+
+const BOOKING_DAY_START = '07:00'
+const BOOKING_DAY_END = '18:00'
+const BOOKING_SLOT_MINUTES = 30
 
 const initialForm = {
   patientId: '',
@@ -27,6 +32,7 @@ export function useAgenda() {
   const [professionals, setProfessionals] = useState([])
   const [users, setUsers] = useState([])
   const [currentProfessional, setCurrentProfessional] = useState(null)
+  const [currentPatient, setCurrentPatient] = useState(null)
   const [viewerProfile, setViewerProfile] = useState(null)
   const [localAppointments, setLocalAppointments] = useState([])
   const [agendaExceptions, setAgendaExceptions] = useState([])
@@ -46,10 +52,11 @@ export function useAgenda() {
   const [editingAppointment, setEditingAppointment] = useState(null)
   const [form, setForm] = useState(initialForm)
 
-  const agendaScope = viewerProfile?.isDoctor ? 'doctor' : 'global'
-  const canCreateAppointment = agendaScope === 'doctor'
+  const agendaScope = viewerProfile?.isPatient ? 'patient' : viewerProfile?.isDoctor ? 'doctor' : 'global'
+  const canManageAppointment = agendaScope !== 'patient'
+  const canCreateAppointment = canManageAppointment && (agendaScope === 'doctor'
     ? Boolean(currentProfessional?.id)
-    : professionals.length > 0
+    : professionals.length > 0)
 
   useEffect(() => {
     let active = true
@@ -67,21 +74,25 @@ export function useAgenda() {
 
         if (!active) return
 
-        const currentScope = currentProfile?.isDoctor ? 'doctor' : 'global'
+        const currentScope = currentProfile?.isPatient ? 'patient' : currentProfile?.isDoctor ? 'doctor' : 'global'
         const resolvedProfessional = professionalRepository.resolveCurrentProfessional(currentProfile, professionalsData)
+        const resolvedPatient = currentScope === 'patient'
+          ? resolveCurrentPatient(currentProfile, patientsData || [])
+          : null
         const initialProfessionalId =
           currentScope === 'doctor'
             ? resolvedProfessional?.id || ''
             : professionalsData?.[0]?.id || ''
 
         setViewerProfile(currentProfile)
-        setPatients(patientsData || [])
+        setPatients(currentScope === 'patient' ? (resolvedPatient ? [resolvedPatient] : []) : patientsData || [])
         setUsers(usersData || [])
         setCurrentProfessional(resolvedProfessional)
+        setCurrentPatient(resolvedPatient)
         setProfessionals(professionalsData || [])
         setForm((current) => ({
           ...current,
-          patientId: patientsData?.length ? patientsData[0].id : '',
+          patientId: resolvedPatient?.id || (patientsData?.length ? patientsData[0].id : ''),
           professionalId: initialProfessionalId,
         }))
 
@@ -91,8 +102,15 @@ export function useAgenda() {
           return
         }
 
+        if (currentScope === 'patient' && !resolvedPatient?.id) {
+          setLocalAppointments([])
+          setError('Não foi possível vincular o usuário logado a um paciente da base.')
+          return
+        }
+
         const appointmentsData = await appointmentRepository.getAll({
           doctorId: currentScope === 'doctor' ? resolvedProfessional?.id : undefined,
+          patientId: currentScope === 'patient' ? resolvedPatient?.id : undefined,
         })
 
         if (!active) return
@@ -107,6 +125,8 @@ export function useAgenda() {
         setLocalAppointments(
           currentScope === 'doctor' && resolvedProfessional
             ? filterAppointmentsByProfessional(appointmentsWithCreatorNames, resolvedProfessional.id)
+            : currentScope === 'patient' && resolvedPatient
+              ? filterAppointmentsByPatient(appointmentsWithCreatorNames, resolvedPatient.id)
             : sortAppointmentsByTime(appointmentsWithCreatorNames),
         )
       } catch (loadError) {
@@ -139,6 +159,7 @@ export function useAgenda() {
       if (!targetProfessionalId) {
         setAvailableSlots([])
         setSlotsError('')
+        setForm((current) => current.time ? { ...current, time: '' } : current)
         return
       }
 
@@ -149,12 +170,15 @@ export function useAgenda() {
         const slots = await availabilityRepository.getAvailableSlots({
           doctorId: targetProfessionalId,
           date: formatLocalDateInput(baseDate),
-          appointmentType: form.mode,
         })
 
         if (!active) return
 
-        const activeSlots = slots.filter((slot) => slot.available)
+        const activeSlots = filterBookableAvailableSlots(slots, {
+          appointments: localAppointments,
+          date: formatLocalDateInput(baseDate),
+          doctorId: targetProfessionalId,
+        })
         setAvailableSlots(activeSlots)
 
         if (activeSlots.length) {
@@ -163,6 +187,8 @@ export function useAgenda() {
               ? current
               : { ...current, time: activeSlots[0].time },
           )
+        } else {
+          setForm((current) => current.time ? { ...current, time: '' } : current)
         }
       } catch (loadError) {
         if (!active) return
@@ -178,7 +204,7 @@ export function useAgenda() {
     return () => {
       active = false
     }
-  }, [agendaScope, baseDate, currentProfessional?.id, editingAppointment, form.mode, form.professionalId, modalOpen])
+  }, [agendaScope, baseDate, currentProfessional?.id, editingAppointment, form.mode, form.professionalId, localAppointments, modalOpen])
 
   useEffect(() => {
     let active = true
@@ -214,6 +240,10 @@ export function useAgenda() {
 
   const scopedAppointments = useMemo(() => {
     let filtered = localAppointments
+
+    if (agendaScope === 'patient') {
+      return sortAppointmentsByTime(filtered)
+    }
 
     if (agendaScope !== 'doctor' && doctorFilter !== 'Todos') {
       filtered = filterAppointmentsByProfessional(filtered, doctorFilter)
@@ -286,10 +316,16 @@ export function useAgenda() {
   )
 
   function updateForm(field, value) {
-    setForm((current) => ({ ...current, [field]: value }))
+    setForm((current) => {
+      const next = { ...current, [field]: value }
+      if (['professionalId', 'mode'].includes(field)) next.time = ''
+      return next
+    })
   }
 
   function openCreateModal({ date, patientId, time } = {}) {
+    if (!canCreateAppointment) return
+
     if (date) {
       const parsedDate = parseLocalDate(date)
       if (parsedDate) setBaseDate(parsedDate)
@@ -346,6 +382,7 @@ export function useAgenda() {
 
   async function handleSubmitAppointment(event) {
     event.preventDefault()
+    if (!canManageAppointment) return
 
     if (editingAppointment) {
       await updateAppointment()
@@ -361,6 +398,21 @@ export function useAgenda() {
 
     if (isAppointmentInPast(payload.date, payload.time)) {
       alert('Não é possível agendar consultas em horários anteriores ao horário atual.')
+      return
+    }
+
+    if (!isBookableTimeSlot(payload.time)) {
+      alert('Selecione um horário entre 07:00 e 18:00, em intervalos de 30 minutos.')
+      return
+    }
+
+    if (!isDoctorSlotAvailable(payload, localAppointments)) {
+      alert('Este médico já possui outro agendamento nesse horário.')
+      return
+    }
+
+    if (!availableSlots.some((slot) => slot.time === normalizeTime(payload.time))) {
+      alert('Selecione um horário disponível para o médico escolhido.')
       return
     }
 
@@ -390,6 +442,16 @@ export function useAgenda() {
       return
     }
 
+    if (!isBookableTimeSlot(payload.time)) {
+      alert('Selecione um horário entre 07:00 e 18:00, em intervalos de 30 minutos.')
+      return
+    }
+
+    if (!isDoctorSlotAvailable(payload, localAppointments, editingAppointment.id)) {
+      alert('Este médico já possui outro agendamento nesse horário.')
+      return
+    }
+
     if (await patientHasAppointmentOnDate(payload, editingAppointment.id)) {
       alert('Este paciente já possui outro agendamento neste dia.')
       return
@@ -414,6 +476,7 @@ export function useAgenda() {
   }
 
   async function handleCancelAppointment() {
+    if (!canManageAppointment) return
     if (!editingAppointment) return
     if (!window.confirm('Tem certeza que deseja cancelar este agendamento?')) return
 
@@ -491,9 +554,11 @@ export function useAgenda() {
     patients,
     professionals,
     currentProfessional,
+    currentPatient,
     viewerProfile,
     users,
     agendaScope,
+    canManageAppointment,
     loading,
     error,
     canCreateAppointment,
@@ -554,6 +619,26 @@ function filterAppointmentsByProfessional(appointments, professionalId) {
   )
 }
 
+function filterAppointmentsByPatient(appointments, patientId) {
+  const normalizedPatientId = normalizeValue(patientId)
+
+  return sortAppointmentsByTime(
+    appointments.filter((appointment) => normalizeValue(appointment.patientId) === normalizedPatientId),
+  )
+}
+
+function filterBookableAvailableSlots(slots, { appointments, date, doctorId }) {
+  const allowedTimes = new Set(generateTimesInclusive(BOOKING_DAY_START, BOOKING_DAY_END, BOOKING_SLOT_MINUTES))
+
+  return slots
+    .map((slot) => ({ ...slot, time: normalizeTime(slot.time) }))
+    .filter((slot) =>
+      slot.available &&
+      allowedTimes.has(slot.time) &&
+      isDoctorSlotAvailable({ date, professionalId: doctorId, time: slot.time }, appointments),
+    )
+}
+
 function resolveAppointmentCreatorNames(appointments, users, viewerProfile, professionals) {
   return appointments.map((appointment) => ({
     ...appointment,
@@ -609,6 +694,28 @@ function hasPatientAppointmentOnDate(appointments, patientId, date, ignoredAppoi
 
     return appointment.date === date
   })
+}
+
+function isDoctorSlotAvailable(payload, appointments, ignoredAppointmentId = null) {
+  const targetDoctorId = normalizeValue(payload.professionalId)
+  const targetTime = normalizeTime(payload.time)
+  if (!targetDoctorId || !payload.date || !targetTime) return false
+
+  return !appointments.some((appointment) => {
+    if (ignoredAppointmentId && String(appointment.id) === String(ignoredAppointmentId)) return false
+    if (normalizeValue(appointment.professionalId) !== targetDoctorId) return false
+    if (appointment.date !== payload.date) return false
+    if (normalizeTime(appointment.time) !== targetTime) return false
+    return !['cancelada', 'cancelado', 'cancelled'].includes(normalizeStatus(appointment.status))
+  })
+}
+
+function isBookableTimeSlot(time) {
+  const minutes = minutesFromTime(time)
+  const start = minutesFromTime(BOOKING_DAY_START)
+  const end = minutesFromTime(BOOKING_DAY_END)
+  if (minutes === null || start === null || end === null) return false
+  return minutes >= start && minutes <= end && (minutes - start) % BOOKING_SLOT_MINUTES === 0
 }
 
 function isHighPriorityAppointment(appointment) {
@@ -680,8 +787,8 @@ function buildExceptionOccupancy(exceptions, professionals) {
       return []
     }
 
-    const start = normalizeTime(exception.startTime) || '07:00'
-    const end = normalizeTime(exception.endTime) || '19:00'
+    const start = normalizeTime(exception.startTime) || BOOKING_DAY_START
+    const end = normalizeTime(exception.endTime) || '18:30'
     return generateTimes(start, end, 30).map((time) => exceptionToAppointment(exception, professionals, time))
   })
 }
@@ -718,6 +825,18 @@ function generateTimes(start, end, intervalMinutes) {
 
   const times = []
   for (let cursor = startMinutes; cursor < endMinutes; cursor += intervalMinutes) {
+    times.push(formatMinutes(cursor))
+  }
+  return times
+}
+
+function generateTimesInclusive(start, end, intervalMinutes) {
+  const startMinutes = minutesFromTime(start)
+  const endMinutes = minutesFromTime(end)
+  if (startMinutes === null || endMinutes === null || startMinutes > endMinutes) return []
+
+  const times = []
+  for (let cursor = startMinutes; cursor <= endMinutes; cursor += intervalMinutes) {
     times.push(formatMinutes(cursor))
   }
   return times

@@ -4,10 +4,10 @@ import { getResponseError, normalizeCollection, normalizeItem } from './reposito
 const availabilityBaseUrl = `${apiConfig.restUrl}/doctor_availability`
 const exceptionsBaseUrl = `${apiConfig.restUrl}/doctor_exceptions`
 export const AGENDA_EXCEPTIONS_CHANGED_EVENT = 'mediconnect:agenda-exceptions-changed'
+const DEFAULT_SLOT_MINUTES = 30
 
 export const availabilityRepository = {
   // GET /rest/v1/doctor_availability
-  // Filtros documentados: doctor_id, weekday (0-6), active, appointment_type, select
   async getAll(filters = {}) {
     const query = buildAvailabilityQuery(filters)
     const response = await fetch(`${availabilityBaseUrl}?${query.toString()}`, {
@@ -22,7 +22,6 @@ export const availabilityRepository = {
   },
 
   // POST /rest/v1/doctor_availability
-  // Body documentado: doctor_id*, weekday* (0-6), start_time*, end_time*, slot_minutes?, appointment_type?, active?
   async create(data) {
     const response = await fetch(availabilityBaseUrl, {
       method: 'POST',
@@ -38,7 +37,6 @@ export const availabilityRepository = {
   },
 
   // PATCH /rest/v1/doctor_availability?id=eq.{uuid}
-  // Body documentado: start_time?, end_time?, slot_minutes?, active?, appointment_type?
   async update(id, data) {
     const response = await fetch(`${availabilityBaseUrl}?id=eq.${encodeURIComponent(id)}`, {
       method: 'PATCH',
@@ -68,7 +66,6 @@ export const availabilityRepository = {
   },
 
   // GET /rest/v1/doctor_exceptions
-  // Filtros documentados: doctor_id, date, kind (bloqueio|disponibilidade_extra)
   async getExceptions(filters = {}) {
     const query = new URLSearchParams()
     query.set('select', filters.select || '*')
@@ -88,7 +85,6 @@ export const availabilityRepository = {
   },
 
   // POST /rest/v1/doctor_exceptions
-  // Body documentado: doctor_id*, date*, kind* (bloqueio|disponibilidade_extra), created_by*, start_time?, end_time?, reason?
   async createException(data) {
     const response = await fetch(exceptionsBaseUrl, {
       method: 'POST',
@@ -103,9 +99,8 @@ export const availabilityRepository = {
     return mapException(normalizeItem(await response.json()))
   },
 
-  // POST /functions/v1/get-available-slots
-  // Body documentado: doctor_id*, start_date*, end_date*, appointment_type?
-  async getAvailableSlots({ date, startDate, endDate, doctorId, appointmentType }) {
+  // O modal de novo agendamento deve refletir somente a disponibilidade cadastrada.
+  async getAvailableSlots({ date, startDate, endDate, doctorId }) {
     const rangeStart = startDate || date
     const rangeEnd = endDate || date || startDate
 
@@ -113,27 +108,36 @@ export const availabilityRepository = {
       throw new Error('Selecione médico e data para calcular os horários disponíveis.')
     }
 
-    const response = await fetch(`${apiConfig.functionsUrl}/get-available-slots`, {
-      method: 'POST',
-      headers: getAuthenticatedHeaders(),
-      body: JSON.stringify(cleanPayload({
-        doctor_id: doctorId,
-        start_date: rangeStart,
-        end_date: rangeEnd,
-        appointment_type: appointmentType ? normalizeAppointmentType(appointmentType) : undefined,
-      })),
+    return buildSlotsFromConfiguredAvailability({
+      doctorId,
+      endDate: rangeEnd,
+      startDate: rangeStart,
     })
-
-    if (!response.ok) {
-      throw new Error(await getResponseError(response, 'Falha ao calcular slots disponíveis.'))
-    }
-
-    const data = await response.json()
-    return normalizeCollection(data, ['slots']).map(mapSlot)
   },
 }
 
 const WEEKDAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+const PORTUGUESE_WEEKDAYS = {
+  domingo: 0,
+  dom: 0,
+  segunda: 1,
+  segunda_feira: 1,
+  seg: 1,
+  terca: 2,
+  terca_feira: 2,
+  ter: 2,
+  quarta: 3,
+  quarta_feira: 3,
+  qua: 3,
+  quinta: 4,
+  quinta_feira: 4,
+  qui: 4,
+  sexta: 5,
+  sexta_feira: 5,
+  sex: 5,
+  sabado: 6,
+  sab: 6,
+}
 
 function weekdayToApi(value) {
   const num = Number(value)
@@ -144,11 +148,14 @@ function weekdayToApi(value) {
 }
 
 function weekdayToUi(value) {
-  const idx = WEEKDAY_NAMES.indexOf(String(value || '').toLowerCase())
-  if (idx >= 0) return idx
+  const englishIndex = WEEKDAY_NAMES.indexOf(String(value || '').toLowerCase())
+  if (englishIndex >= 0) return englishIndex
+
   const num = Number(value)
   if (Number.isInteger(num) && num >= 0 && num <= 6) return num
-  return value
+
+  const normalized = normalizeKey(value)
+  return PORTUGUESE_WEEKDAYS[normalized] ?? value
 }
 
 function buildAvailabilityQuery(filters) {
@@ -174,76 +181,181 @@ function toAvailabilityPayload(data) {
   validateAvailabilityPayload({ ...data, startTime, endTime })
 
   return cleanPayload({
-    doctor_id: data.doctorId,
-    weekday: weekdayToApi(data.weekday),
-    start_time: startTime,
-    end_time: endTime,
-    slot_minutes: data.slotMinutes !== undefined ? Number(data.slotMinutes) : 30,
-    appointment_type: normalizeAppointmentType(data.appointmentType),
     active: data.active === undefined ? true : Boolean(data.active),
+    appointment_type: normalizeAppointmentType(data.appointmentType),
+    doctor_id: data.doctorId,
+    end_time: endTime,
+    slot_minutes: data.slotMinutes !== undefined ? Number(data.slotMinutes) : DEFAULT_SLOT_MINUTES,
+    start_time: startTime,
+    weekday: weekdayToApi(data.weekday),
   })
 }
 
 function toAvailabilityUpdatePayload(data) {
-  // PATCH: enviar somente campos que vieram explicitamente (não incluir doctor_id nem weekday)
   return cleanPayload({
-    start_time: data.startTime !== undefined ? formatTimeForApi(data.startTime) : undefined,
-    end_time: data.endTime !== undefined ? formatTimeForApi(data.endTime) : undefined,
-    slot_minutes: data.slotMinutes !== undefined ? Number(data.slotMinutes) : undefined,
     active: data.active !== undefined ? Boolean(data.active) : undefined,
     appointment_type: data.appointmentType !== undefined
       ? normalizeAppointmentType(data.appointmentType)
       : undefined,
+    end_time: data.endTime !== undefined ? formatTimeForApi(data.endTime) : undefined,
+    slot_minutes: data.slotMinutes !== undefined ? Number(data.slotMinutes) : undefined,
+    start_time: data.startTime !== undefined ? formatTimeForApi(data.startTime) : undefined,
   })
 }
 
 function toExceptionPayload(data) {
   return cleanPayload({
-    doctor_id: data.doctorId,
-    date: data.date,
-    kind: data.kind,
-    start_time: data.startTime ? formatTimeForApi(data.startTime) : null,
-    end_time: data.endTime ? formatTimeForApi(data.endTime) : null,
-    reason: data.reason || null,
     created_by: data.createdBy || getCurrentUserId(),
+    date: data.date,
+    doctor_id: data.doctorId,
+    end_time: data.endTime ? formatTimeForApi(data.endTime) : null,
+    kind: data.kind,
+    reason: data.reason || null,
+    start_time: data.startTime ? formatTimeForApi(data.startTime) : null,
   }, { keepNull: true })
 }
 
 function mapAvailability(item) {
   return {
-    id: item.id,
-    doctorId: item.doctor_id,
-    weekday: weekdayToUi(item.weekday),
-    startTime: item.start_time,
-    endTime: item.end_time,
-    slotMinutes: item.slot_minutes,
+    active: parseAvailabilityActive(item.active),
     appointmentType: item.appointment_type,
-    active: item.active,
     createdAt: item.created_at,
+    doctorId: item.doctor_id,
+    endTime: item.end_time,
+    id: item.id,
+    slotMinutes: item.slot_minutes,
+    startTime: item.start_time,
     updatedAt: item.updated_at,
+    weekday: weekdayToUi(item.weekday),
   }
 }
 
 function mapException(item) {
   return {
-    id: item.id,
-    doctorId: item.doctor_id,
-    date: item.date,
-    kind: item.kind,
-    startTime: item.start_time,
-    endTime: item.end_time,
-    reason: item.reason,
     createdBy: item.created_by,
+    date: item.date,
+    doctorId: item.doctor_id,
+    endTime: item.end_time,
+    id: item.id,
+    kind: item.kind,
+    reason: item.reason,
+    startTime: item.start_time,
   }
 }
 
-function mapSlot(slot) {
-  return {
-    date: slot.date,
-    datetime: slot.datetime,
-    time: slot.time,
-    available: Boolean(slot.available),
+async function buildSlotsFromConfiguredAvailability({ doctorId, startDate, endDate }) {
+  const dates = buildDateRange(startDate, endDate)
+  if (!dates.length) return []
+
+  const [availabilities, exceptionsByDate] = await Promise.all([
+    availabilityRepository.getAll({ doctorId, order: 'weekday.asc,start_time.asc' }),
+    Promise.all(dates.map((date) =>
+      availabilityRepository.getExceptions({ date, doctorId }).catch(() => []),
+    )),
+  ])
+
+  return dates.flatMap((date, index) => {
+    const weekday = parseLocalDate(date)?.getDay()
+    const dayExceptions = exceptionsByDate[index] || []
+    const regularSlots = availabilities
+      .filter((availability) =>
+        Number(availability.weekday) === weekday &&
+        availability.active !== false,
+      )
+      .flatMap((availability) =>
+        buildSlotsForRange({
+          date,
+          endTime: availability.endTime,
+          slotMinutes: Number(availability.slotMinutes) || DEFAULT_SLOT_MINUTES,
+          startTime: availability.startTime,
+        }),
+      )
+    const extraSlots = dayExceptions
+      .filter((exception) => exception.kind === 'disponibilidade_extra')
+      .flatMap((exception) =>
+        buildSlotsForRange({
+          date,
+          endTime: exception.endTime,
+          slotMinutes: DEFAULT_SLOT_MINUTES,
+          startTime: exception.startTime,
+        }),
+      )
+
+    return uniqueSlotsByDateTime([...regularSlots, ...extraSlots])
+      .filter((slot) => !isBlockedByException(slot.time, dayExceptions))
+  })
+}
+
+function buildDateRange(startDate, endDate) {
+  const start = parseLocalDate(startDate)
+  const end = parseLocalDate(endDate)
+  if (!start || !end || start.getTime() > end.getTime()) return []
+
+  const dates = []
+  const cursor = new Date(start)
+  while (cursor.getTime() <= end.getTime()) {
+    dates.push(formatDateKey(cursor))
+    cursor.setDate(cursor.getDate() + 1)
   }
+  return dates
+}
+
+function buildSlotsForRange({ date, endTime, slotMinutes, startTime }) {
+  const start = minutesFromTime(normalizeTime(startTime))
+  const end = minutesFromTime(normalizeTime(endTime))
+  const interval = Number(slotMinutes) || DEFAULT_SLOT_MINUTES
+  if (start === null || end === null || start > end || interval <= 0) return []
+
+  const slots = []
+  for (let cursor = start; cursor <= end; cursor += interval) {
+    const time = formatMinutes(cursor)
+    slots.push({
+      available: true,
+      date,
+      datetime: `${date}T${time}:00`,
+      time,
+    })
+  }
+  return slots
+}
+
+function uniqueSlotsByDateTime(slots) {
+  const seen = new Set()
+  return slots
+    .filter((slot) => {
+      const key = `${slot.date}-${slot.time}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    .sort((first, second) => minutesFromTime(first.time) - minutesFromTime(second.time))
+}
+
+function isBlockedByException(time, exceptions) {
+  const target = minutesFromTime(time)
+  if (target === null) return true
+
+  return exceptions.some((exception) => {
+    if (exception.kind !== 'bloqueio') return false
+    if (!exception.startTime && !exception.endTime) return true
+
+    const start = minutesFromTime(normalizeTime(exception.startTime))
+    const end = minutesFromTime(normalizeTime(exception.endTime))
+    if (start === null && end === null) return true
+    if (start !== null && end !== null) return target >= start && target < end
+    if (start !== null) return target >= start
+    return target < end
+  })
+}
+
+function parseAvailabilityActive(value) {
+  if (value === undefined || value === null) return true
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value !== 0
+
+  return !['false', '0', 'no', 'nao', 'não', 'inactive', 'inativo'].includes(
+    String(value).trim().toLowerCase(),
+  )
 }
 
 function normalizeAppointmentType(type) {
@@ -267,7 +379,6 @@ function cleanPayload(payload, { keepNull = false } = {}) {
 }
 
 function formatTimeForApi(value) {
-  // API aceita HH:MM. Aceita também HH:MM:SS (formato 'time'), mas HH:MM é suficiente.
   const match = String(value || '').match(/^(\d{2}):(\d{2})(?::(\d{2}))?$/)
   if (!match) return value
   return `${match[1]}:${match[2]}`
@@ -289,16 +400,59 @@ function validateAvailabilityPayload(data) {
     throw new Error('O horário inicial da disponibilidade deve ser menor que o horário final.')
   }
 
-  const slotMinutes = Number(data.slotMinutes ?? 30)
+  const slotMinutes = Number(data.slotMinutes ?? DEFAULT_SLOT_MINUTES)
   if (!Number.isFinite(slotMinutes) || slotMinutes < 5 || slotMinutes > 240) {
     throw new Error('Informe um intervalo de slot válido.')
   }
+}
+
+function normalizeTime(value) {
+  const raw = String(value || '')
+  const directMatch = raw.match(/(\d{1,2}):(\d{2})/)
+  if (directMatch) {
+    return `${directMatch[1].padStart(2, '0')}:${directMatch[2]}`
+  }
+
+  const date = new Date(raw)
+  if (Number.isNaN(date.getTime())) return ''
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
 function minutesFromTime(value) {
   const match = String(value || '').match(/^(\d{2}):(\d{2})$/)
   if (!match) return null
   return Number(match[1]) * 60 + Number(match[2])
+}
+
+function formatMinutes(totalMinutes) {
+  const hours = String(Math.floor(totalMinutes / 60)).padStart(2, '0')
+  const minutes = String(totalMinutes % 60).padStart(2, '0')
+  return `${hours}:${minutes}`
+}
+
+function parseLocalDate(value) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) return null
+
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function formatDateKey(date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function normalizeKey(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
 }
 
 function getCurrentUserId() {

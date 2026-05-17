@@ -72,7 +72,6 @@ export function ProfilePage({ navigate }) {
     <div className="mx-auto max-w-6xl space-y-6">
       <header>
         <h1 className="text-2xl font-bold tracking-tight text-[#f5f5f5]">Perfil</h1>
-        <p className="mt-1 text-sm text-[#b8b8b8]">Dados do usuário logado e preferências básicas do shell.</p>
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">

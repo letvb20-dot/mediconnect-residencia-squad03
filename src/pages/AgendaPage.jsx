@@ -58,6 +58,7 @@ export function AgendaPage({ navigate }) {
     professionals,
     users,
     currentProfessional,
+    currentPatient,
     viewerProfile,
     agendaScope,
     loading,
@@ -97,11 +98,11 @@ export function AgendaPage({ navigate }) {
     const params = new URLSearchParams(window.location.search)
     const patientId = params.get('patientId')
     const shouldOpenNew = params.get('new') === '1'
-    if (!shouldOpenNew || !patientId) return
+    if (!shouldOpenNew || !patientId || !canCreateAppointment) return
 
     shortcutHandledRef.current = true
     openCreateModal({ patientId })
-  }, [loading, openCreateModal])
+  }, [canCreateAppointment, loading, openCreateModal])
 
   useEffect(() => {
     if (loading) return undefined
@@ -135,6 +136,7 @@ export function AgendaPage({ navigate }) {
   const weekStart = startOfWeek(baseDate, { weekStartsOn: 0 })
   const weekEnd = endOfWeek(baseDate, { weekStartsOn: 0 })
   const isDoctorScope = agendaScope === 'doctor'
+  const isPatientScope = agendaScope === 'patient'
   const unitOptions = [
     ...new Set(professionals.map((professional) => professional.unit).filter(Boolean)),
   ].sort((a, b) => a.localeCompare(b, 'pt-BR'))
@@ -226,21 +228,25 @@ export function AgendaPage({ navigate }) {
           >
             Hoje
           </button>
-          <button
-            className="h-9 rounded-sm border border-[#404040] bg-[#262626] px-4 text-sm font-medium text-[#e5e5e5] transition hover:bg-[#303030]"
-            onClick={() => navigate('/consultas')}
-            type="button"
-          >
-            Fila de consultas
-          </button>
-          <button
-            className="h-9 rounded-sm border border-[#3b82f6] bg-[#3b82f6] px-4 text-sm font-semibold text-white shadow-[0_10px_15px_rgba(59,130,246,0.16)] transition hover:bg-[#3478ed] disabled:cursor-not-allowed disabled:border-[#404040] disabled:bg-[#303030] disabled:text-[#737373] disabled:shadow-none"
-            disabled={!canCreateAppointment}
-            onClick={() => openCreate()}
-            type="button"
-          >
-            + Novo agendamento
-          </button>
+          {!isPatientScope ? (
+            <>
+              <button
+                className="h-9 rounded-sm border border-[#404040] bg-[#262626] px-4 text-sm font-medium text-[#e5e5e5] transition hover:bg-[#303030]"
+                onClick={() => navigate('/consultas')}
+                type="button"
+              >
+                Fila de consultas
+              </button>
+              <button
+                className="h-9 rounded-sm border border-[#3b82f6] bg-[#3b82f6] px-4 text-sm font-semibold text-white shadow-[0_10px_15px_rgba(59,130,246,0.16)] transition hover:bg-[#3478ed] disabled:cursor-not-allowed disabled:border-[#404040] disabled:bg-[#303030] disabled:text-[#737373] disabled:shadow-none"
+                disabled={!canCreateAppointment}
+                onClick={() => openCreate()}
+                type="button"
+              >
+                + Novo agendamento
+              </button>
+            </>
+          ) : null}
         </div>
       </section>
 
@@ -255,7 +261,7 @@ export function AgendaPage({ navigate }) {
           </div>
         </section>
       ) : (
-        <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_460px] 2xl:grid-cols-[minmax(0,1fr)_520px]">
+        <section className={`grid gap-6 ${isPatientScope ? '' : 'xl:grid-cols-[minmax(0,1fr)_460px] 2xl:grid-cols-[minmax(0,1fr)_520px]'}`}>
           <div className="self-start rounded-2xl border border-[#404040] bg-[#262626] p-5 shadow-[0_1px_3px_rgba(0,0,0,0.2)]">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
@@ -265,10 +271,13 @@ export function AgendaPage({ navigate }) {
                   </h2>
                 </div>
                 <p className="mt-1 text-sm leading-5 text-[#a3a3a3]">
-                  Visualização: {activeView.toLowerCase()} | {visibleAppointments.length} registros visíveis
+                  {isPatientScope
+                    ? `${visibleAppointments.length} agendamentos em seu nome nesta data`
+                    : `Visualização: ${activeView.toLowerCase()} | ${visibleAppointments.length} registros visíveis`}
                 </p>
               </div>
 
+              {!isPatientScope ? (
               <div className="flex max-w-full flex-wrap items-center justify-start gap-2 lg:justify-end">
                 <div className="flex shrink-0 gap-2">
                   {viewFilters.map((view) => (
@@ -299,8 +308,10 @@ export function AgendaPage({ navigate }) {
                   ))}
                 </div>
               </div>
+              ) : null}
             </div>
 
+            {!isPatientScope ? (
             <div className="mt-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-end">
               {!isDoctorScope ? (
                 <div className="grid w-full gap-3 sm:grid-cols-[minmax(22rem,1.35fr)_minmax(13rem,0.65fr)] lg:max-w-[48rem]">
@@ -340,15 +351,22 @@ export function AgendaPage({ navigate }) {
                 </div>
               ) : null}
             </div>
+            ) : null}
 
-            {!isDoctorScope && (
+            {!isDoctorScope && !isPatientScope && (
               <div className="mt-4 rounded-xl border border-[#404040] bg-[#1f1f1f] px-4 py-3 text-sm text-[#a3a3a3]">
                 Perfil atual: {viewerProfile?.role || 'Administrador'}
               </div>
             )}
 
             <div className="mt-6 grid gap-3">
-              {activeView === 'Semana' && (
+              {isPatientScope ? (
+                <PatientAgendaList
+                  appointments={visibleAppointments}
+                  currentPatient={currentPatient}
+                  onAppointmentClick={openManage}
+                />
+              ) : activeView === 'Semana' && (
                 <AgendaWeeklyView
                   baseDate={baseDate}
                   appointments={visibleAppointments}
@@ -358,7 +376,7 @@ export function AgendaPage({ navigate }) {
                 />
               )}
 
-              {activeView === 'Mes' && (
+              {!isPatientScope && activeView === 'Mes' && (
                 <AgendaMonthlyView
                   baseDate={baseDate}
                   appointments={visibleAppointments}
@@ -369,7 +387,7 @@ export function AgendaPage({ navigate }) {
                 />
               )}
 
-              {activeView === 'Dia' && (
+              {!isPatientScope && activeView === 'Dia' && (
                 <AgendaDailyView
                   appointments={visibleAppointments}
                   baseDate={baseDate}
@@ -381,16 +399,21 @@ export function AgendaPage({ navigate }) {
               )}
             </div>
           </div>
-          <AvailabilitySidebar
-            currentProfessional={currentProfessional}
-            isDoctorScope={isDoctorScope}
-            professionals={professionals}
-            viewerProfile={viewerProfile}
-          />
+          {!isPatientScope ? (
+            <AvailabilitySidebar
+              currentProfessional={currentProfessional}
+              isDoctorScope={isDoctorScope}
+              professionals={professionals}
+              viewerProfile={viewerProfile}
+            />
+          ) : null}
         </section>
       )}
 
-      <DarkModal onClose={closeModal} open={modalOpen} title={editingAppointment ? 'Gerenciar agendamento' : 'Novo agendamento'}>
+      <DarkModal onClose={closeModal} open={modalOpen} title={isPatientScope ? 'Detalhes do agendamento' : editingAppointment ? 'Gerenciar agendamento' : 'Novo agendamento'}>
+        {isPatientScope ? (
+          <AppointmentReadOnlyDetails appointment={editingAppointment} onClose={closeModal} />
+        ) : (
         <form className="grid gap-4" onSubmit={handleSubmitAppointment}>
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="grid content-start gap-4">
@@ -480,28 +503,31 @@ export function AgendaPage({ navigate }) {
                 </DarkField>
 
                 <DarkField label="Horário">
-              {timeOptions.length ? (
-                <select
-                  className="h-11 rounded-md border border-[#404040] bg-[#303030] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#3b82f6]"
-                  onChange={(event) => updateForm('time', event.target.value)}
-                  value={form.time}
-                >
-                  {timeOptions.map((time) => (
-                    <option key={time} value={time}>
-                      {time}
+                  <select
+                    className="h-11 rounded-md border border-[#404040] bg-[#303030] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#3b82f6] disabled:cursor-not-allowed disabled:text-[#737373]"
+                    disabled={!form.professionalId || slotsLoading || !timeOptions.length}
+                    onChange={(event) => updateForm('time', event.target.value)}
+                    required
+                    value={form.time}
+                  >
+                    <option value="">
+                      {slotsLoading
+                        ? 'Calculando horários...'
+                        : form.professionalId
+                          ? 'Selecione um horário disponível'
+                          : 'Selecione um médico'}
                     </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  className="h-11 rounded-md border border-[#404040] bg-[#303030] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#3b82f6]"
-                  onChange={(event) => updateForm('time', event.target.value)}
-                  type="time"
-                  value={form.time}
-                />
-              )}
-              {slotsLoading ? <span className="text-xs font-normal text-[#a3a3a3]">Calculando horários...</span> : null}
-              {slotsError ? <span className="text-xs font-normal text-amber-400">{slotsError}</span> : null}
+                    {timeOptions.map((time) => (
+                      <option key={time} value={time}>
+                        {time}
+                      </option>
+                    ))}
+                  </select>
+                  {slotsLoading ? <span className="text-xs font-normal text-[#a3a3a3]">Calculando horários...</span> : null}
+                  {slotsError ? <span className="text-xs font-normal text-amber-400">{slotsError}</span> : null}
+                  {!slotsLoading && form.professionalId && !timeOptions.length ? (
+                    <span className="text-xs font-normal text-amber-400">Nenhum horário disponível para este médico nesta data.</span>
+                  ) : null}
                 </DarkField>
               </div>
 
@@ -610,7 +636,102 @@ export function AgendaPage({ navigate }) {
             </button>
           </div>
         </form>
+        )}
       </DarkModal>
+    </div>
+  )
+}
+
+function PatientAgendaList({ appointments, currentPatient, onAppointmentClick }) {
+  const patientName = getPatientLabel(currentPatient) || 'paciente'
+
+  if (!appointments.length) {
+    return (
+      <div className="rounded-2xl border border-dashed border-[#404040] bg-[#1f1f1f] p-8 text-center">
+        <p className="text-sm font-semibold text-[#e5e5e5]">Nenhum agendamento encontrado nesta data.</p>
+        <p className="mt-2 text-sm leading-6 text-[#a3a3a3]">
+          Esta agenda mostra apenas consultas vinculadas a {patientName}.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid gap-3">
+      {appointments.map((appointment) => (
+        <button
+          className="rounded-xl border border-[#404040] bg-[#1f1f1f] p-4 text-left transition hover:border-[#3b82f6]/50 hover:bg-[#242424]"
+          key={appointment.id}
+          onClick={() => onAppointmentClick?.(appointment)}
+          type="button"
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-[#e5e5e5]">{appointment.type || 'Consulta'}</p>
+              <p className="mt-1 text-sm text-[#a3a3a3]">
+                {appointment.professional || 'Médico(a) não informado'}
+              </p>
+            </div>
+            <div className="shrink-0 text-left sm:text-right">
+              <p className="text-lg font-bold text-[#3b82f6]">{appointment.time || '--:--'}</p>
+              <span className="mt-1 inline-flex rounded-full border border-[#404040] bg-[#262626] px-2.5 py-1 text-xs font-semibold text-[#e5e5e5]">
+                {appointment.status || 'Agendado'}
+              </span>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-[#a3a3a3]">
+            {appointment.mode ? <span className="rounded-full bg-[#303030] px-2.5 py-1">{appointment.mode}</span> : null}
+            {appointment.room ? <span className="rounded-full bg-[#303030] px-2.5 py-1">{appointment.room}</span> : null}
+          </div>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function AppointmentReadOnlyDetails({ appointment, onClose }) {
+  if (!appointment) {
+    return (
+      <div className="grid gap-4">
+        <p className="text-sm text-[#a3a3a3]">Agendamento não encontrado.</p>
+        <div className="flex justify-end">
+          <button className="h-10 rounded-sm bg-[#3b82f6] px-4 text-sm font-semibold text-white" onClick={onClose} type="button">
+            Fechar
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid gap-4">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <ReadOnlyDetail label="Paciente" value={appointment.patient || '-'} />
+        <ReadOnlyDetail label="Médico" value={appointment.professional || '-'} />
+        <ReadOnlyDetail label="Data" value={formatDisplayDate(appointment.date)} />
+        <ReadOnlyDetail label="Horário" value={appointment.time || '-'} />
+        <ReadOnlyDetail label="Tipo" value={appointment.type || '-'} />
+        <ReadOnlyDetail label="Status" value={appointment.status || '-'} />
+        <ReadOnlyDetail label="Formato" value={appointment.mode || '-'} />
+        <ReadOnlyDetail label="Local" value={appointment.room || '-'} />
+      </div>
+      {appointment.notes ? (
+        <ReadOnlyDetail label="Observações" value={appointment.notes} />
+      ) : null}
+      <div className="flex justify-end">
+        <button className="h-10 rounded-sm bg-[#3b82f6] px-4 text-sm font-semibold text-white" onClick={onClose} type="button">
+          Fechar
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function ReadOnlyDetail({ label, value }) {
+  return (
+    <div className="rounded-lg border border-[#404040] bg-[#1f1f1f] px-3 py-2.5">
+      <p className="text-xs font-semibold uppercase tracking-wide text-[#a3a3a3]">{label}</p>
+      <p className="mt-1 whitespace-pre-wrap text-sm leading-5 text-[#e5e5e5]">{value}</p>
     </div>
   )
 }
@@ -651,7 +772,9 @@ function AvailabilitySidebar({ currentProfessional, isDoctorScope, professionals
     reason: '',
   })
   const [exceptionRows, setExceptionRows] = useState([])
+  const [availabilityFormRows, setAvailabilityFormRows] = useState([])
   const [loadingAvailability, setLoadingAvailability] = useState(false)
+  const [savingAvailability, setSavingAvailability] = useState(false)
   const [availabilityError, setAvailabilityError] = useState('')
   const [availabilityCheck, setAvailabilityCheck] = useState(null)
 
@@ -688,6 +811,45 @@ function AvailabilitySidebar({ currentProfessional, isDoctorScope, professionals
     loadExceptions()
   }, [loadExceptions])
 
+  const loadAvailabilityFormRows = useCallback(async () => {
+    if (isSecretary) return
+    if (!availabilityForm.doctorId) {
+      setAvailabilityFormRows([])
+      setAvailabilityForm((current) => ({ ...current, weekdays: [] }))
+      return
+    }
+
+    setAvailabilityError('')
+
+    try {
+      const rows = await availabilityRepository.getAll({
+        doctorId: availabilityForm.doctorId,
+        order: 'weekday.asc,start_time.asc',
+      })
+      const sortedRows = sortAvailabilityRows(rows)
+      const activeRows = sortedRows.filter((row) => row.active !== false)
+      const template = activeRows[0] || sortedRows[0]
+
+      setAvailabilityFormRows(sortedRows)
+      setAvailabilityForm((current) => ({
+        ...current,
+        active: template?.active ?? current.active,
+        appointmentType: template?.appointmentType || current.appointmentType,
+        endTime: template?.endTime || current.endTime,
+        slotMinutes: template?.slotMinutes || current.slotMinutes,
+        startTime: template?.startTime || current.startTime,
+        weekdays: uniqueWeekdays(activeRows.map((row) => row.weekday)),
+      }))
+    } catch (err) {
+      setAvailabilityFormRows([])
+      setAvailabilityError(translateErrorMessage(err.message, 'Falha ao carregar disponibilidade cadastrada.'))
+    }
+  }, [availabilityForm.doctorId, isSecretary])
+
+  useEffect(() => {
+    loadAvailabilityFormRows()
+  }, [loadAvailabilityFormRows])
+
   async function verifyAvailability() {
     setLoadingAvailability(true)
     setAvailabilityError('')
@@ -709,39 +871,58 @@ function AvailabilitySidebar({ currentProfessional, isDoctorScope, professionals
     }
   }
 
-  async function createAvailability(event) {
+  async function saveAvailability(event) {
     event.preventDefault()
     if (!availabilityForm.doctorId) {
       window.alert('Selecione um médico para criar disponibilidade.')
       return
     }
-    if (!availabilityForm.weekdays.length) {
+    if (!availabilityForm.weekdays.length && !availabilityFormRows.length) {
       window.alert('Selecione ao menos um dia da semana.')
       return
     }
-    if (!isValidTimeRange(availabilityForm.startTime, availabilityForm.endTime)) {
+    if (availabilityForm.weekdays.length && !isValidTimeRange(availabilityForm.startTime, availabilityForm.endTime)) {
       window.alert('O horário inicial deve ser menor que o horário final.')
       return
     }
 
+    setSavingAvailability(true)
+
     try {
-      const conflictingWeekdays = await findConflictingAvailability(availabilityForm)
+      const rowsByWeekday = groupAvailabilityRowsByWeekday(availabilityFormRows)
+      const selectedWeekdays = new Set(availabilityForm.weekdays.map(Number))
+      const editedRowIds = new Set(availabilityFormRows.map((row) => String(row.id || '')).filter(Boolean))
+      const conflictingWeekdays = availabilityForm.weekdays.length
+        ? await findConflictingAvailability(availabilityForm, editedRowIds)
+        : []
       if (conflictingWeekdays.length) {
         window.alert(`Já existe disponibilidade sobreposta para: ${conflictingWeekdays.join(', ')}.`)
         return
       }
 
-      await Promise.all(
-        availabilityForm.weekdays.map((weekday) =>
-          availabilityRepository.create({
-            ...availabilityForm,
-            weekday,
-          }),
-        ),
-      )
-      window.alert('Disponibilidade cadastrada.')
+      const saves = availabilityForm.weekdays.map((weekday) => {
+        const rowsForDay = rowsByWeekday.get(Number(weekday)) || []
+        const [primaryRow, ...duplicateRows] = rowsForDay
+
+        return Promise.all([
+          primaryRow
+            ? availabilityRepository.update(primaryRow.id, availabilityForm)
+            : availabilityRepository.create({ ...availabilityForm, weekday }),
+          ...duplicateRows.map((row) => availabilityRepository.remove(row.id)),
+        ])
+      })
+      const removals = availabilityFormRows
+        .filter((row) => !selectedWeekdays.has(Number(row.weekday)))
+        .map((row) => availabilityRepository.remove(row.id))
+
+      await Promise.all([...saves, ...removals])
+      await loadAvailabilityFormRows()
+      window.dispatchEvent(new CustomEvent(AGENDA_EXCEPTIONS_CHANGED_EVENT))
+      window.alert(availabilityFormRows.length ? 'Disponibilidade atualizada.' : 'Disponibilidade cadastrada.')
     } catch (err) {
-      window.alert(translateErrorMessage(err.message, 'Erro ao criar disponibilidade.'))
+      window.alert(translateErrorMessage(err.message, 'Erro ao salvar disponibilidade.'))
+    } finally {
+      setSavingAvailability(false)
     }
   }
 
@@ -765,7 +946,7 @@ function AvailabilitySidebar({ currentProfessional, isDoctorScope, professionals
     }
   }
 
-  async function findConflictingAvailability(form) {
+  async function findConflictingAvailability(form, ignoredRowIds = new Set()) {
     const conflicts = []
 
     for (const weekday of form.weekdays) {
@@ -776,6 +957,7 @@ function AvailabilitySidebar({ currentProfessional, isDoctorScope, professionals
       })
 
       if (rows.some((row) =>
+        !ignoredRowIds.has(String(row.id || '')) &&
         row.active !== false &&
         intervalsOverlap(form.startTime, form.endTime, row.startTime, row.endTime)
       )) {
@@ -856,8 +1038,13 @@ function AvailabilitySidebar({ currentProfessional, isDoctorScope, professionals
         </button>
       </section>
 
-      {!isSecretary ? <form className="grid gap-3 rounded-xl border border-[#404040] bg-[#1f1f1f] p-3" onSubmit={createAvailability}>
-        <h3 className="text-sm font-bold text-[#f5f5f5]">Cadastrar Disponibilidade</h3>
+      {!isSecretary ? <form className="grid gap-3 rounded-xl border border-[#404040] bg-[#1f1f1f] p-3" onSubmit={saveAvailability}>
+        <div>
+          <h3 className="text-sm font-bold text-[#f5f5f5]">Cadastrar Disponibilidade</h3>
+          <p className="mt-1 text-xs leading-5 text-[#a3a3a3]">
+            {availabilityFormRows.length ? 'Edite os dias, horários e status da disponibilidade existente.' : 'Selecione os dias para criar uma nova disponibilidade.'}
+          </p>
+        </div>
         <SidebarField label="Médico">
           <select className={sidebarInputClass} disabled={isDoctorScope} onChange={(event) => updateAvailabilityForm('doctorId', event.target.value)} value={availabilityForm.doctorId}>
             <option value="">Selecione</option>
@@ -903,7 +1090,9 @@ function AvailabilitySidebar({ currentProfessional, isDoctorScope, professionals
             Ativa
           </label>
         </div>
-        <button className="h-9 rounded-sm bg-[#3b82f6] text-sm font-semibold text-white" type="submit">Cadastrar disponibilidade</button>
+        <button className="h-9 rounded-sm bg-[#3b82f6] text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60" disabled={savingAvailability} type="submit">
+          {savingAvailability ? 'Salvando...' : availabilityFormRows.length ? 'Salvar alteração' : 'Cadastrar disponibilidade'}
+        </button>
       </form> : null}
 
       {!isSecretary ? <section className="grid gap-3 rounded-xl border border-[#404040] bg-[#1f1f1f] p-3">
@@ -1019,6 +1208,28 @@ function SidebarField({ children, label }) {
       {children}
     </label>
   )
+}
+
+function groupAvailabilityRowsByWeekday(rows = []) {
+  return rows.reduce((map, row) => {
+    const weekday = Number(row.weekday)
+    if (!Number.isInteger(weekday)) return map
+    map.set(weekday, [...(map.get(weekday) || []), row])
+    return map
+  }, new Map())
+}
+
+function sortAvailabilityRows(rows = []) {
+  return [...rows].sort((first, second) => {
+    const weekdayDiff = Number(first.weekday) - Number(second.weekday)
+    if (weekdayDiff !== 0) return weekdayDiff
+    return String(first.startTime || '').localeCompare(String(second.startTime || ''))
+  })
+}
+
+function uniqueWeekdays(values = []) {
+  return [...new Set(values.map(Number).filter((value) => Number.isInteger(value) && value >= 0 && value <= 6))]
+    .sort((first, second) => first - second)
 }
 
 function getWeekdayLabel(value) {

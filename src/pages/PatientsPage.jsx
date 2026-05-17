@@ -293,7 +293,7 @@ async function uploadPatientAttachments(patientId, files = []) {
     <div className="mx-auto max-w-7xl space-y-6 text-[#e5e5e5]">
       <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#e5e5e5]">Pacientes</h1>
+          <h1 className="text-[32px] font-bold leading-8 tracking-[-0.02em] text-[#e5e5e5]">Pacientes</h1>
           <p className="mt-1 text-sm text-[#a3a3a3]">Gerencie as informações de seus pacientes</p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
@@ -709,7 +709,7 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
             <PatientIcon className="size-5" name="arrow-left" />
           </button>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-[#e5e5e5]">Paciente</h1>
+            <h1 className="text-[32px] font-bold leading-8 tracking-[-0.02em] text-[#e5e5e5]">Paciente</h1>
             <p className="mt-1 text-sm text-[#a3a3a3]">Gerencie as informações de seus pacientes</p>
           </div>
         </div>
@@ -1124,7 +1124,7 @@ export function PatientDetailPage({ navigate, patient, role }) {
           </button>
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#3b82f6]">Dados do Paciente</p>
-            <h1 className="mt-1 text-2xl font-bold tracking-tight text-[#f5f5f5]">{localPatient.name}</h1>
+            <h1 className="mt-1 text-[32px] font-bold leading-8 tracking-[-0.02em] text-[#f5f5f5]">{localPatient.name}</h1>
             <p className="mt-1 text-sm text-[#b8b8b8]">
               {localPatient.condition} • {localPatient.status} • {localPatient.document}
             </p>

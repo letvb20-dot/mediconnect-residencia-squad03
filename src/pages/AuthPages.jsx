@@ -30,7 +30,6 @@ const lightInputSimpleClass =
 export function LoginPage({ navigate }) {
   const [form, setForm] = useState({ email: '', password: '' })
   const [showPassword, setShowPassword] = useState(false)
-  const [rememberMe, setRememberMe] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -186,16 +185,6 @@ export function LoginPage({ navigate }) {
                   </button>
                 </div>
               </div>
-
-              <label className="flex cursor-pointer items-center gap-2.5 text-sm text-gray-600">
-                <input
-                  checked={rememberMe}
-                  className="size-4 rounded border-gray-300 accent-[#3b82f6]"
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  type="checkbox"
-                />
-                Manter-me conectado
-              </label>
 
               <button
                 className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#3b82f6] text-sm font-semibold text-white shadow-sm transition hover:bg-blue-600 disabled:opacity-50"

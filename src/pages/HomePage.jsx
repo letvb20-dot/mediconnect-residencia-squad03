@@ -34,12 +34,17 @@ export function HomePage({ navigate, profile, role, user }) {
     return <p className="p-8 text-center text-sm text-[#a3a3a3]">Carregando painel...</p>
   }
 
-  const { appointmentsToday = [], metrics = [], predictiveAlert = '', weeklyAppointments = null } = overview || {}
+  const {
+    appointmentsToday = [],
+    metrics = [],
+    predictiveAlert = '',
+    weeklyAppointments = null,
+  } = overview || {}
   const displayName = getDisplayName(profile, user)
   const canManageUsers = hasCapability(role, 'manageUsers')
 
   return (
-    <div className={`mx-auto w-full text-[#e5e5e5] ${canManageUsers ? 'grid max-w-none gap-8 2xl:grid-cols-[minmax(0,1fr)_560px]' : 'flex max-w-[1280px] flex-col gap-8'}`}>
+    <div className={`mx-auto w-full text-[#e5e5e5] ${canManageUsers ? 'grid max-w-none gap-8 2xl:grid-cols-[minmax(0,1fr)_620px]' : 'flex max-w-[1280px] flex-col gap-8'}`}>
       <div className="min-w-0 space-y-8">
         <section className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
@@ -131,7 +136,7 @@ export function HomePage({ navigate, profile, role, user }) {
 
       </div>
       {canManageUsers ? (
-        <aside className="min-w-0 self-start 2xl:sticky 2xl:top-6 2xl:pt-[104px]">
+        <aside className="min-w-0 self-start 2xl:sticky 2xl:top-6 2xl:pt-[96px]">
           <UsersPage embedded navigate={navigate} role={role} />
         </aside>
       ) : null}

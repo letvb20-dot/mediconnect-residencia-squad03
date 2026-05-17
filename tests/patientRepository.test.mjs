@@ -147,6 +147,7 @@ test('patientRepository.create envia apenas campos aceitos pelo create-patient',
     motherName: 'Maria Souza',
     responsibleCpf: '111.222.333-44',
     responsibleName: 'Carlos Souza',
+    lgpdOptIn: true,
   })
 
   assert.equal(body.cpf, '12345678901')
@@ -157,31 +158,83 @@ test('patientRepository.create envia apenas campos aceitos pelo create-patient',
   assert.equal('insurance' in body, false)
   assert.equal('plan' in body, false)
   assert.equal('cns' in body, false)
+  assert.equal('lgpd_opt_in' in body, false)
 })
 
-test('availabilityRepository.getAvailableSlots envia start_date e end_date documentados', async () => {
-  let body
+test('patientRepository.update tenta payload menor quando a API recusa coluna opcional', async () => {
+  const bodies = []
 
   globalThis.fetch = async (url, options = {}) => {
-    assert.match(String(url), /\/functions\/v1\/get-available-slots$/)
-    body = JSON.parse(options.body)
-    return Response.json({ slots: [{ time: '10:00', available: true }] })
+    assert.match(String(url), /\/patients\?id=eq.patient-1$/)
+    bodies.push(JSON.parse(options.body))
+
+    if (bodies.length === 1) {
+      return Response.json({ message: 'bad request' }, { status: 400 })
+    }
+
+    return Response.json([{ id: 'patient-1', full_name: bodies.at(-1).full_name }])
+  }
+
+  const { patientRepository } = await import('../src/repositories/patientRepository.js')
+  await patientRepository.update('patient-1', {
+    email: 'ana@exemplo.com',
+    name: 'Ana Souza',
+    phone: '(11) 99999-8888',
+    lgpdOptIn: true,
+  })
+
+  assert.deepEqual(bodies[0], {
+    email: 'ana@exemplo.com',
+    full_name: 'Ana Souza',
+    phone_mobile: '11999998888',
+  })
+  assert.deepEqual(bodies[1], {
+    full_name: 'Ana Souza',
+    phone_mobile: '11999998888',
+  })
+  assert.equal(bodies.some((body) => 'lgpd_opt_in' in body), false)
+})
+
+test('availabilityRepository.getAvailableSlots usa a disponibilidade cadastrada do medico', async () => {
+  const calls = []
+
+  globalThis.fetch = async (url) => {
+    const requestUrl = String(url)
+    calls.push(requestUrl)
+
+    if (requestUrl.includes('/doctor_availability?')) {
+      assert.match(requestUrl, /doctor_id=eq.doctor-1/)
+      return Response.json([
+        {
+          active: true,
+          doctor_id: 'doctor-1',
+          end_time: '11:00',
+          id: 'availability-1',
+          slot_minutes: 30,
+          start_time: '10:00',
+          weekday: 'monday',
+        },
+      ])
+    }
+
+    if (requestUrl.includes('/doctor_exceptions?')) {
+      assert.match(requestUrl, /doctor_id=eq.doctor-1/)
+      assert.match(requestUrl, /date=eq.2026-05-18/)
+      return Response.json([])
+    }
+
+    throw new Error(`URL inesperada: ${requestUrl}`)
   }
 
   const { availabilityRepository } = await import('../src/repositories/availabilityRepository.js')
   const slots = await availabilityRepository.getAvailableSlots({
-    date: '2026-05-14',
+    date: '2026-05-18',
     doctorId: 'doctor-1',
     appointmentType: 'Teleconsulta',
   })
 
-  assert.deepEqual(body, {
-    doctor_id: 'doctor-1',
-    start_date: '2026-05-14',
-    end_date: '2026-05-14',
-    appointment_type: 'telemedicina',
-  })
-  assert.equal(slots[0].available, true)
+  assert.deepEqual(slots.map((slot) => slot.time), ['10:00', '10:30', '11:00'])
+  assert.equal(calls.some((url) => url.includes('/functions/v1/get-available-slots')), false)
 })
 
 test('availabilityRepository.create bloqueia intervalo invalido antes do POST', async () => {

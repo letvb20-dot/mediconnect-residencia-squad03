@@ -25,6 +25,17 @@ test('secretaria acessa painel, agenda e pacientes', () => {
   assert.equal(canAccess('secretaria', '/pacientes'), true)
 })
 
+test('paciente acessa agenda, relatorios clinicos, configuracoes e perfil', () => {
+  assert.equal(canAccess('paciente', '/agenda'), true)
+  assert.equal(canAccess('paciente', '/laudos'), true)
+  assert.equal(canAccess('paciente', '/configuracoes'), true)
+  assert.equal(canAccess('paciente', '/perfil'), true)
+  assert.equal(canAccess('paciente', '/inicio'), false)
+  assert.equal(canAccess('paciente', '/pacientes'), false)
+  assert.equal(canAccess('paciente', '/relatorios'), false)
+  assert.equal(canAccess('paciente', '/comunicacao'), false)
+})
+
 test('roles administrativos mantem capacidades criticas', () => {
   assert.equal(hasCapability('admin', 'manageUsers'), true)
   assert.equal(hasCapability('gestor', 'hardDeletePatients'), true)

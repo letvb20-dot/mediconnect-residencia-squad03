@@ -21,7 +21,9 @@ const UsersPage = lazyPage(() => import('./pages/UsersPage.jsx'), 'UsersPage')
 const VisitsPage = lazyPage(() => import('./pages/VisitsPage.jsx'), 'VisitsPage')
 
 const PANEL_PATHS = ['/inicio', '/home', '/dashboard']
-const ROLE_HOME_PATHS = {}
+const ROLE_HOME_PATHS = {
+  paciente: '/agenda',
+}
 const FREE_TEXT_INPUT_LIMIT = 255
 const FREE_TEXTAREA_LIMIT = 2000
 const RICH_TEXT_LIMIT = 12000

@@ -4,7 +4,7 @@ import { ptBR } from 'date-fns/locale'
 import { sortAppointmentsByTime } from '../../utils/agendaDate.js'
 
 const DAY_START = '07:00'
-const DAY_END = '19:00'
+const DAY_END = '18:30'
 const SLOT_MINUTES = 30
 
 export function AgendaDailyView({
@@ -56,11 +56,12 @@ export function AgendaDailyView({
           const occupiedSlotAppointments = occupiedAppointmentsByTime.get(time) || []
           const primaryAppointment = slotAppointments[0]
           const hasHiddenAppointment = !primaryAppointment && occupiedSlotAppointments.length > 0
-          const primaryBlocksSlot = Boolean(primaryAppointment) && !isAvailabilityExtra(primaryAppointment)
+          const primaryBlocksSlot = slotAppointments.some((appointment) => !isAvailabilityExtra(appointment))
           const isBooked = primaryBlocksSlot || hasHiddenAppointment
           const isPast = isPastSlot(baseDate, time)
-          const canCreateSlot = canCreateAppointment && !isBooked && !isPast
+          const canCreateSlot = canCreateAppointment && !isPast
           const visualStatus = getAppointmentVisualStatus(primaryAppointment)
+          const slotStatus = slotAppointments.length > 1 ? `${slotAppointments.length} agendamentos` : visualStatus
 
           return (
             <article
@@ -76,27 +77,31 @@ export function AgendaDailyView({
               <div className="shrink-0">
                 <p className="text-xl font-bold leading-none">{time}</p>
                 <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] opacity-80">
-                  {visualStatus || (isBooked ? 'Agendado' : isPast ? 'Encerrado' : 'Disponível')}
+                  {slotStatus || (isBooked ? 'Agendado' : isPast ? 'Encerrado' : 'Disponível')}
                 </p>
               </div>
 
-              {primaryAppointment ? (
-                <div className="min-w-0">
-                  <button
-                    className="block w-full truncate text-left text-sm font-bold transition hover:opacity-85"
-                    onClick={() => !primaryAppointment.isException && onAppointmentClick?.(primaryAppointment)}
-                    type="button"
-                  >
-                    {primaryAppointment.patient}
-                  </button>
-                  <p className="mt-1 truncate text-sm opacity-90">
-                    {primaryAppointment.type} com {primaryAppointment.professional}
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-2 text-xs font-medium opacity-80">
-                    {primaryAppointment.room ? <span className="agenda-slot-chip rounded-full bg-black/25 px-2.5 py-1 shadow-sm">{primaryAppointment.room}</span> : null}
-                    {primaryAppointment.mode ? <span className="agenda-slot-chip rounded-full bg-black/25 px-2.5 py-1 shadow-sm">{primaryAppointment.mode}</span> : null}
-                    {slotAppointments.length > 1 ? <span className="agenda-slot-chip rounded-full bg-black/25 px-2.5 py-1 shadow-sm">+{slotAppointments.length - 1}</span> : null}
-                  </div>
+              {slotAppointments.length ? (
+                <div className="grid min-w-0 gap-2">
+                  {slotAppointments.map((appointment) => (
+                    <div className="py-1" key={appointment.id}>
+                      <button
+                        className="block w-full truncate text-left text-sm font-bold transition hover:opacity-85"
+                        onClick={() => !appointment.isException && onAppointmentClick?.(appointment)}
+                        type="button"
+                      >
+                        {appointment.patient}
+                      </button>
+                      <p className="mt-1 truncate text-sm opacity-90">
+                        {appointment.type} com {appointment.professional}
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs font-medium opacity-80">
+                        {appointment.room ? <span className="agenda-slot-chip rounded-full bg-black/25 px-2.5 py-1 shadow-sm">{appointment.room}</span> : null}
+                        {appointment.mode ? <span className="agenda-slot-chip rounded-full bg-black/25 px-2.5 py-1 shadow-sm">{appointment.mode}</span> : null}
+                        {appointment.status ? <span className="agenda-slot-chip rounded-full bg-black/25 px-2.5 py-1 shadow-sm">{getAppointmentVisualStatus(appointment)}</span> : null}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : hasHiddenAppointment ? (
                 <div className="flex items-center text-sm font-medium opacity-90">
@@ -114,7 +119,7 @@ export function AgendaDailyView({
 
               <div className="flex shrink-0 flex-wrap items-start justify-start gap-2 md:justify-end">
                 <span className="agenda-slot-status rounded-full border border-current/30 bg-black/25 px-3 py-1 text-xs font-bold shadow-sm">
-                  {visualStatus || (hasHiddenAppointment ? 'Ocupado' : isPast ? 'Encerrado' : 'Livre')}
+                  {slotStatus || (hasHiddenAppointment ? 'Ocupado' : isPast ? 'Encerrado' : 'Livre')}
                 </span>
                 {canCreateSlot ? (
                   <button

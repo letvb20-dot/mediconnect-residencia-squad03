@@ -1507,10 +1507,11 @@ function normalizeSearch(value) {
 }
 
 function printReportAsPdf(report, status) {
-  const dateDetails = report.hideDate
-    ? ''
-    : `${printDetail('Criado em', formatDate(report.createdAt))}${printDetail('Prazo', formatDateTime(report.dueAt))}`
-  const signatureDetails = report.hideSignature ? '' : printDetail('Criado por', report.createdByName)
+  const printedAt = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+  const createdDate = report.hideDate ? '-' : formatDate(report.createdAt)
+  const dueDate = report.hideDate ? '-' : formatDateTime(report.dueAt)
+  const createdBy = report.hideSignature ? '-' : report.createdByName
+  const signatureName = report.hideSignature ? 'Responsável técnico' : report.createdByName || 'Responsável técnico'
   const iframe = document.createElement('iframe')
   iframe.setAttribute('title', 'Impressão do relatório')
   iframe.style.position = 'fixed'
@@ -1537,44 +1538,106 @@ function printReportAsPdf(report, status) {
         <title>Relatório ${escapeHtml(report.orderNumber || '')}</title>
         <style>
           * { box-sizing: border-box; }
-          body { color: #171717; font-family: Arial, sans-serif; margin: 40px; }
-          h1 { font-size: 24px; margin: 0 0 4px; }
-          .muted { color: #525252; font-size: 12px; }
-          .grid { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 24px; }
-          .box { border: 1px solid #d4d4d4; border-radius: 8px; padding: 12px; }
-          .label { color: #525252; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-          .value { font-size: 13px; margin-top: 6px; white-space: pre-wrap; }
-          .section { margin-top: 20px; }
-          @page { margin: 18mm; }
-          @media print { body { margin: 0; } }
+          html { background: #eef2f3; }
+          body { background: #eef2f3; color: #1f2933; font-family: Arial, 'Helvetica Neue', sans-serif; font-size: 12.5px; line-height: 1.55; margin: 0; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+          .page { background: #ffffff; box-shadow: 0 18px 44px rgba(15, 23, 42, 0.12); display: flex; flex-direction: column; margin: 18mm auto; max-width: 210mm; min-height: 297mm; padding: 20mm 18mm 16mm; }
+          .document-header { align-items: flex-start; border-bottom: 2px solid #1d3557; display: grid; gap: 24px; grid-template-columns: minmax(0, 1fr) auto; padding-bottom: 16px; position: relative; }
+          .document-header::after { background: #2f7d78; bottom: -2px; content: ''; height: 2px; left: 0; position: absolute; width: 148px; }
+          .eyebrow { color: #2f7d78; font-size: 10px; font-weight: 700; letter-spacing: 0.14em; margin: 0 0 7px; text-transform: uppercase; }
+          h1 { color: #102a43; font-family: Georgia, 'Times New Roman', serif; font-size: 30px; font-weight: 700; line-height: 1.1; margin: 0; }
+          .document-number { color: #52606d; font-size: 12px; margin: 8px 0 0; }
+          .brand { min-width: 160px; text-align: right; }
+          .brand-mark { align-items: center; background: #102a43; color: #ffffff; display: inline-flex; font-size: 13px; font-weight: 700; height: 36px; justify-content: center; margin-bottom: 8px; width: 36px; }
+          .brand-name { color: #102a43; font-size: 14px; font-weight: 700; margin: 0; }
+          .brand-caption { color: #6b7280; font-size: 10px; letter-spacing: 0.1em; margin: 2px 0 0; text-transform: uppercase; }
+          .patient-summary { align-items: center; background: #f7fbfa; border: 1px solid #cfd8dc; display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) auto; margin-top: 18px; padding: 14px 16px; }
+          .summary-label { color: #52606d; display: block; font-size: 10px; font-weight: 700; letter-spacing: 0.12em; margin-bottom: 4px; text-transform: uppercase; }
+          .patient-name { color: #102a43; display: block; font-size: 18px; font-weight: 700; }
+          .status-box { border-left: 3px solid #2f7d78; min-width: 116px; padding-left: 12px; text-align: left; }
+          .status-value { color: #102a43; display: block; font-size: 13px; font-weight: 700; }
+          .metadata { border: 1px solid #d7dde1; border-collapse: collapse; margin-top: 16px; table-layout: fixed; width: 100%; }
+          .metadata th { background: #f4f7f7; border: 1px solid #d7dde1; color: #52606d; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; padding: 9px 10px; text-align: left; text-transform: uppercase; width: 18%; }
+          .metadata td { border: 1px solid #d7dde1; color: #1f2933; font-size: 12.5px; padding: 9px 10px; vertical-align: top; width: 32%; word-break: break-word; }
+          .section { break-inside: avoid; margin-top: 20px; }
+          .section-heading { align-items: center; border-bottom: 1px solid #cfd8dc; color: #102a43; display: flex; font-size: 12px; font-weight: 700; gap: 9px; letter-spacing: 0.12em; margin: 0 0 10px; padding-bottom: 7px; text-transform: uppercase; }
+          .section-heading::before { background: #2f7d78; content: ''; display: inline-block; height: 17px; width: 4px; }
+          .section-body { color: #1f2933; font-size: 13px; line-height: 1.8; white-space: pre-wrap; }
+          .section-body p { margin: 0; }
+          .report-body { white-space: normal; }
+          .report-body p { margin: 0 0 12px; }
+          .report-body ul,
+          .report-body ol { margin: 0 0 12px 20px; padding: 0; }
+          .report-body li { margin: 0 0 7px; }
+          .report-body strong { color: #102a43; }
+          .signature { break-inside: avoid; display: flex; justify-content: flex-end; margin-top: 34px; }
+          .signature-card { color: #334e68; text-align: center; width: 280px; }
+          .signature-line { border-top: 1px solid #52606d; height: 1px; margin-bottom: 8px; width: 100%; }
+          .signature-name { color: #102a43; font-size: 12px; font-weight: 700; margin: 0; }
+          .signature-meta { color: #6b7280; font-size: 10px; letter-spacing: 0.08em; margin: 2px 0 0; text-transform: uppercase; }
+          .footer { border-top: 1px solid #d7dde1; color: #6b7280; display: flex; font-size: 10.5px; gap: 16px; justify-content: space-between; margin-top: auto; padding-top: 10px; }
+          @page { size: A4; margin: 0; }
+          @media print {
+            html,
+            body { background: #ffffff; }
+            .page { box-shadow: none; margin: 0; min-height: 297mm; padding: 18mm 16mm 14mm; page-break-after: always; }
+          }
         </style>
       </head>
       <body>
-        <h1>Relatório</h1>
-        <p class="muted">${escapeHtml(report.orderNumber || 'Sem número')}</p>
-        <div class="grid">
-          ${printDetail('Paciente', report.patientName)}
-          ${printDetail('Solicitante', report.requestedBy || '-')}
-          ${dateDetails}
-          ${signatureDetails}
-          ${printDetail('Status', status.label)}
-        </div>
-        <div class="grid">
-          ${printDetail('Exame', report.exam || '-')}
-          ${printDetail('CID-10', report.cidCode || '-')}
-        </div>
-        <div class="section box">
-          <p class="label">Diagnóstico</p>
-          <p class="value">${escapeHtml(report.diagnosis || '-')}</p>
-        </div>
-        <div class="section box">
-          <p class="label">Conclusão</p>
-          <p class="value">${escapeHtml(report.conclusion || '-')}</p>
-        </div>
-        <div class="section box">
-          <p class="label">Relatório</p>
-          <div class="value">${report.contentHtml ? sanitizePreviewHtml(report.contentHtml) : 'Nenhum complemento informado.'}</div>
-        </div>
+        <main class="page">
+          <header class="document-header">
+            <div>
+              <p class="eyebrow">Documento clínico</p>
+              <h1>Relatório médico</h1>
+              <p class="document-number">${escapeHtml(report.orderNumber || 'Sem número')}</p>
+            </div>
+            <div class="brand">
+              <div class="brand-mark">MC</div>
+              <p class="brand-name">MediConnect</p>
+              <p class="brand-caption">Gestão clínica</p>
+            </div>
+          </header>
+
+          <section class="patient-summary">
+            <div>
+              <span class="summary-label">Paciente</span>
+              <span class="patient-name">${escapeHtml(report.patientName || '-')}</span>
+            </div>
+            <div class="status-box">
+              <span class="summary-label">Status</span>
+              <span class="status-value">${escapeHtml(status.label || '-')}</span>
+            </div>
+          </section>
+
+          <table class="metadata" aria-label="Identificação do relatório">
+            <tbody>
+              ${printMetadataRow('Solicitante', report.requestedBy || '-', 'Criado em', createdDate)}
+              ${printMetadataRow('Criado por', createdBy, 'Prazo', dueDate)}
+              ${printMetadataRow('Exame', report.exam || '-', 'CID-10', report.cidCode || '-')}
+            </tbody>
+          </table>
+
+          ${printPlainSection('Diagnóstico', report.diagnosis || '-')}
+          ${printPlainSection('Conclusão', report.conclusion || '-')}
+
+          <section class="section">
+            <h2 class="section-heading">Relatório</h2>
+            <div class="section-body report-body">${report.contentHtml ? sanitizePreviewHtml(report.contentHtml) : '<p>Nenhum complemento informado.</p>'}</div>
+          </section>
+
+          <section class="signature">
+            <div class="signature-card">
+              <div class="signature-line"></div>
+              <p class="signature-name">${escapeHtml(signatureName)}</p>
+              <p class="signature-meta">Assinatura e carimbo</p>
+            </div>
+          </section>
+
+          <footer class="footer">
+            <span>Documento gerado para impressão em ${escapeHtml(printedAt)}.</span>
+            <span>${escapeHtml(report.orderNumber || 'Sem número')}</span>
+          </footer>
+        </main>
       </body>
     </html>
   `)
@@ -1587,12 +1650,23 @@ function printReportAsPdf(report, status) {
   }, 100)
 }
 
-function printDetail(label, value) {
+function printMetadataRow(firstLabel, firstValue, secondLabel, secondValue) {
   return `
-    <div class="box">
-      <p class="label">${escapeHtml(label)}</p>
-      <p class="value">${escapeHtml(value || '-')}</p>
-    </div>
+    <tr>
+      <th>${escapeHtml(firstLabel)}</th>
+      <td>${escapeHtml(firstValue || '-')}</td>
+      <th>${escapeHtml(secondLabel)}</th>
+      <td>${escapeHtml(secondValue || '-')}</td>
+    </tr>
+  `
+}
+
+function printPlainSection(label, value) {
+  return `
+    <section class="section">
+      <h2 class="section-heading">${escapeHtml(label)}</h2>
+      <div class="section-body"><p>${escapeHtml(value || '-')}</p></div>
+    </section>
   `
 }
 

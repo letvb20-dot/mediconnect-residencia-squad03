@@ -2,6 +2,7 @@ import { appointmentRepository } from './appointmentRepository.js'
 import { patientRepository } from './patientRepository.js'
 import { professionalRepository } from './professionalRepository.js'
 import { normalizeRole } from '../config/permissions.js'
+import { getNoShowStats, isCancelledStatus, isCompletedStatus } from '../utils/appointmentMetrics.js'
 
 export const homeRepository = {
   async getDashboardOverview({ now = new Date(), profile, role, user } = {}) {
@@ -29,14 +30,10 @@ export const homeRepository = {
 
     const completedToday = todayAppointments.filter((appointment) => isCompletedStatus(appointment.status))
     const completedAppointments = appointments.filter((appointment) => isCompletedStatus(appointment.status))
-    const noShowAppointments = appointments.filter((appointment) => isNoShowAppointment(appointment, now))
+    const noShowStats = getNoShowStats(appointments, now)
     const pendingToday = todayAppointments.filter((appointment) => isPendingStatus(appointment.status))
     const dailySlots = 23
     const occupancyRate = Math.min(100, Math.round((todayAppointments.length / dailySlots) * 1000) / 10)
-    const noShowBaseAppointments = appointments.filter((appointment) => isPastAppointment(appointment, now) && !isCancelledStatus(appointment.status))
-    const noShowRate = noShowBaseAppointments.length
-      ? Math.round((noShowAppointments.length / noShowBaseAppointments.length) * 1000) / 10
-      : 0
     const weeklyAppointments = buildWeeklyAppointmentSeries(appointments, now)
 
     return {
@@ -49,7 +46,7 @@ export const homeRepository = {
       metrics: [
         { label: 'Consultas Hoje', value: String(todayAppointments.length), change: `${completedToday.length} concluídas`, tone: 'blue' },
         { label: 'Taxa de Ocupação', value: `${occupancyRate}%`, change: `${todayAppointments.length}/${dailySlots} slots`, tone: 'violet' },
-        { label: 'No-show', value: `${noShowRate}%`, change: `${noShowAppointments.length} registros`, tone: 'green' },
+        { label: 'No-show', value: `${noShowStats.rate}%`, change: `${noShowStats.count} registros`, tone: 'green' },
       ],
       predictiveAlert: pendingToday.length
         ? `${pendingToday.length} pacientes de hoje ainda aguardam confirmação. Recomenda-se confirmar presença antes do horário.`
@@ -162,47 +159,14 @@ function formatWeekdayLabel(date) {
     .replace('.', '')
 }
 
-function normalizeStatus(status) {
+function isPendingStatus(status) {
+  return ['agendado', 'agendada', 'aguardando', 'requested', 'solicitada', 'pendente'].includes(normalizePendingStatus(status))
+}
+
+function normalizePendingStatus(status) {
   return String(status || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .trim()
     .toLowerCase()
-}
-
-function isCompletedStatus(status) {
-  return ['realizado', 'realizada', 'concluida', 'concluido', 'completed', 'finalizada', 'finalizado'].includes(normalizeStatus(status))
-}
-
-function isNoShowStatus(status) {
-  return ['no_show', 'no-show', 'falta', 'ausente', 'faltou'].includes(normalizeStatus(status).replace(/\s+/g, '_'))
-}
-
-function isNoShowAppointment(appointment, now) {
-  if (isNoShowStatus(appointment.status)) return true
-  if (isCancelledStatus(appointment.status) || isCompletedStatus(appointment.status)) return false
-  return isPastAppointment(appointment, now)
-}
-
-function isPastAppointment(appointment, now) {
-  const date = parseAppointmentDateTime(appointment)
-  return Boolean(date && date.getTime() < now.getTime())
-}
-
-function parseAppointmentDateTime(appointment) {
-  if (!appointment?.date) return null
-
-  const [year, month, day] = String(appointment.date).split('-').map(Number)
-  const [hours = 0, minutes = 0] = String(appointment.time || '00:00').split(':').map(Number)
-  if (!year || !month || !day || Number.isNaN(hours) || Number.isNaN(minutes)) return null
-
-  return new Date(year, month - 1, day, hours, minutes)
-}
-
-function isCancelledStatus(status) {
-  return ['cancelada', 'cancelado', 'cancelled'].includes(normalizeStatus(status))
-}
-
-function isPendingStatus(status) {
-  return ['agendado', 'agendada', 'aguardando', 'requested', 'solicitada', 'pendente'].includes(normalizeStatus(status))
 }

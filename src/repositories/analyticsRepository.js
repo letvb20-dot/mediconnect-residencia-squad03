@@ -1,6 +1,13 @@
 import { appointmentRepository } from './appointmentRepository.js'
 import { patientRepository } from './patientRepository.js'
 import { professionalRepository } from './professionalRepository.js'
+import {
+  getNoShowStats,
+  isAttendanceDueAppointment,
+  isCancelledStatus,
+  isCompletedStatus,
+  parseAppointmentDateTime,
+} from '../utils/appointmentMetrics.js'
 
 const INSURANCE_COLORS = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444', '#14b8a6']
 
@@ -11,6 +18,7 @@ export const analyticsRepository = {
       : options || {}
     const absenteeismPeriod = normalizePeriod(normalizedOptions.absenteeismPeriod)
     const consultationsPeriod = normalizePeriod(normalizedOptions.consultationsPeriod)
+    const now = normalizeNow(normalizedOptions.now)
 
     const [appointments, patients, professionals] = await Promise.all([
       appointmentRepository.getAll().catch(() => []),
@@ -18,31 +26,28 @@ export const analyticsRepository = {
       professionalRepository.getAll().catch(() => []),
     ])
 
-    const consultationsBuckets = buildPeriodBuckets(consultationsPeriod)
+    const consultationsBuckets = buildPeriodBuckets(consultationsPeriod, now)
     const consultationsAppointments = appointments.filter((appointment) =>
       isInsideAnyBucket(parseAppointmentDate(appointment), consultationsBuckets),
     )
     const completedConsultations = consultationsAppointments.filter((appointment) => isCompletedStatus(appointment.status))
-    const absentConsultations = consultationsAppointments.filter((appointment) => !isCompletedStatus(appointment.status))
-    const absenteeismRate = consultationsAppointments.length
-      ? roundPercent(absentConsultations.length, consultationsAppointments.length)
-      : 0
+    const noShowStats = getNoShowStats(consultationsAppointments, now)
 
     return {
-      absenteeismData: buildAbsenteeismSeries(appointments, absenteeismPeriod),
-      consultationsData: buildConsultationsSeries(appointments, consultationsPeriod),
-      doctorPerformance: buildDoctorPerformance(appointments, professionals),
+      absenteeismData: buildAbsenteeismSeries(appointments, absenteeismPeriod, now),
+      consultationsData: buildConsultationsSeries(appointments, consultationsPeriod, now),
+      doctorPerformance: buildDoctorPerformance(appointments, professionals, now),
       insuranceData: buildInsuranceData(patients),
       attendanceMetrics: {
         scheduled: consultationsAppointments.length,
         completed: completedConsultations.length,
         cancelled: consultationsAppointments.filter((appointment) => isCancelledStatus(appointment.status)).length,
-        noShow: absentConsultations.length,
-        noShowRate: absenteeismRate,
+        noShow: noShowStats.count,
+        noShowRate: noShowStats.rate,
       },
       kpis: [
         { label: 'Consultas Realizadas', value: String(completedConsultations.length), change: `${consultationsAppointments.length} agendadas`, up: true, icon: 'calendar' },
-        { label: 'Taxa de Absenteísmo', value: `${absenteeismRate}%`, change: `${absentConsultations.length} ausências`, up: false, icon: 'activity' },
+        { label: 'Taxa de Absenteísmo', value: `${noShowStats.rate}%`, change: `${noShowStats.count} ausências`, up: false, icon: 'activity' },
         { label: 'Pacientes Ativos', value: String(patients.length), change: 'cadastro atual', up: true, icon: 'users' },
         { label: 'Convênios', value: String(countDistinctInsurances(patients)), change: 'pacientes cadastrados', up: true, icon: 'building' },
       ],
@@ -51,21 +56,21 @@ export const analyticsRepository = {
   },
 }
 
-function buildAbsenteeismSeries(appointments, period) {
-  return buildPeriodBuckets(period).map((bucket) => {
+function buildAbsenteeismSeries(appointments, period, now) {
+  return buildPeriodBuckets(period, now).map((bucket) => {
     const bucketAppointments = appointments.filter((appointment) => isInsideBucket(parseAppointmentDate(appointment), bucket))
-    const absentAppointments = bucketAppointments.filter((appointment) => !isCompletedStatus(appointment.status))
+    const noShowStats = getNoShowStats(bucketAppointments, now)
 
     return {
       month: bucket.label,
-      taxa: bucketAppointments.length ? roundPercent(absentAppointments.length, bucketAppointments.length) : 0,
+      taxa: noShowStats.rate,
       meta: 15,
     }
   })
 }
 
-function buildConsultationsSeries(appointments, period) {
-  return buildPeriodBuckets(period).map((bucket) => {
+function buildConsultationsSeries(appointments, period, now = new Date()) {
+  return buildPeriodBuckets(period, now).map((bucket) => {
     const bucketAppointments = appointments.filter((appointment) => isInsideBucket(parseAppointmentDate(appointment), bucket))
 
     return {
@@ -76,7 +81,7 @@ function buildConsultationsSeries(appointments, period) {
   })
 }
 
-function buildDoctorPerformance(appointments, professionals) {
+function buildDoctorPerformance(appointments, professionals, now) {
   const namesById = new Map(
     professionals
       .flatMap((professional) => [
@@ -88,6 +93,8 @@ function buildDoctorPerformance(appointments, professionals) {
   const groups = new Map()
 
   for (const appointment of appointments) {
+    if (!isAttendanceDueAppointment(appointment, now)) continue
+
     const professionalName =
       namesById.get(normalizeId(appointment.professionalId)) ||
       appointment.professional ||
@@ -145,8 +152,8 @@ function buildTopPatients(appointments) {
     .slice(0, 5)
 }
 
-function buildPeriodBuckets(period) {
-  const today = startOfDay(new Date())
+function buildPeriodBuckets(period, now = new Date()) {
+  const today = startOfDay(now)
 
   if (period === 'week') {
     return Array.from({ length: 7 }, (_, index) => {
@@ -204,14 +211,7 @@ function isInsideBucket(date, bucket) {
 }
 
 function parseAppointmentDate(appointment) {
-  if (!appointment?.date) return null
-
-  const [year, month, day] = String(appointment.date).split('-').map(Number)
-  if (!year || !month || !day) return null
-  const [hours = 0, minutes = 0] = String(appointment.time || '00:00').split(':').map(Number)
-  const date = new Date(year, month - 1, day, hours, minutes)
-
-  return Number.isNaN(date.getTime()) ? null : date
+  return parseAppointmentDateTime(appointment)
 }
 
 function startOfDay(date) {
@@ -232,22 +232,6 @@ function addDays(date, amount) {
   return nextDate
 }
 
-function normalizeStatus(status) {
-  return String(status || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toLowerCase()
-}
-
-function isCompletedStatus(status) {
-  return ['realizado', 'realizada', 'concluida', 'concluido', 'completed', 'finalizada', 'finalizado'].includes(normalizeStatus(status))
-}
-
-function isCancelledStatus(status) {
-  return ['cancelada', 'cancelado', 'cancelled'].includes(normalizeStatus(status))
-}
-
 function countDistinctInsurances(patients) {
   return new Set(patients.map((patient) => normalizeInsuranceName(patient.insurance || patient.plan))).size
 }
@@ -263,10 +247,13 @@ function normalizePeriod(period) {
   return 'six_months'
 }
 
-function roundPercent(part, total) {
-  return Math.round((part / Math.max(total, 1)) * 1000) / 10
-}
-
 function normalizeId(value) {
   return String(value || '').trim()
+}
+
+function normalizeNow(value) {
+  if (!value) return new Date()
+
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? new Date() : date
 }

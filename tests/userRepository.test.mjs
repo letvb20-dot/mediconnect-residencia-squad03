@@ -4,6 +4,8 @@ import test from 'node:test'
 process.env.VITE_SUPABASE_URL = 'https://example.supabase.co'
 process.env.VITE_SUPABASE_ANON_KEY = 'anon-key'
 
+const localStorageData = new Map()
+
 globalThis.Event = class Event {
   constructor(type) {
     this.type = type
@@ -12,6 +14,20 @@ globalThis.Event = class Event {
 
 globalThis.window = {
   dispatchEvent() {},
+  localStorage: {
+    clear() {
+      localStorageData.clear()
+    },
+    getItem(key) {
+      return localStorageData.has(key) ? localStorageData.get(key) : null
+    },
+    removeItem(key) {
+      localStorageData.delete(key)
+    },
+    setItem(key, value) {
+      localStorageData.set(key, String(value))
+    },
+  },
   sessionStorage: {
     getItem() {
       return JSON.stringify({
@@ -134,6 +150,7 @@ test('userRepository.update sincroniza dados do medico na tabela doctors', async
     crm_uf: 'sp',
     email: 'novo@exemplo.com',
     full_name: 'Dra Nome Novo',
+    doctorId: 'doctor-1',
     phone: '(11) 99999-8888',
     role: 'medico',
     specialty: 'Cardiologia',
@@ -141,6 +158,7 @@ test('userRepository.update sincroniza dados do medico na tabela doctors', async
 
   const doctorPatch = calls.find((call) => call.url.includes('/doctors?') && call.method === 'PATCH')
   assert.ok(doctorPatch)
+  assert.match(doctorPatch.url, /\/doctors\?id=eq.doctor-1/)
   assert.equal(doctorPatch.body.full_name, 'Dra Nome Novo')
   assert.equal(doctorPatch.body.crm, '45678')
   assert.equal(doctorPatch.body.crm_uf, 'SP')
@@ -148,7 +166,57 @@ test('userRepository.update sincroniza dados do medico na tabela doctors', async
   assert.equal(user.doctorId, 'doctor-1')
 })
 
+test('userRepository.update continua sincronizacao quando doctors nao retorna linha para um identificador', async () => {
+  const calls = []
+
+  globalThis.fetch = async (url, options = {}) => {
+    const requestUrl = String(url)
+    calls.push({ body: options.body ? JSON.parse(options.body) : null, method: options.method || 'GET', url: requestUrl })
+
+    if (requestUrl.includes('/profiles?')) {
+      return Response.json([{ id: 'user-1', email: 'medico@exemplo.com', full_name: 'Dra Nome Atualizado', role: 'medico' }])
+    }
+
+    if (requestUrl.includes('/doctors?user_id=eq.user-1') || requestUrl.includes('/doctors?auth_user_id=eq.user-1')) {
+      return Response.json([])
+    }
+
+    if (requestUrl.includes('/doctors?email=eq.medico%40exemplo.com')) {
+      return Response.json([
+        {
+          id: 'doctor-1',
+          user_id: 'auth-user-1',
+          email: 'medico@exemplo.com',
+          full_name: 'Dra Nome Atualizado',
+          crm: '45678',
+          crm_uf: 'SP',
+          specialty: 'Cardiologia',
+        },
+      ])
+    }
+
+    throw new Error(`URL inesperada: ${requestUrl}`)
+  }
+
+  const { userRepository } = await import('../src/repositories/userRepository.js')
+  const user = await userRepository.update('user-1', {
+    crm: '45678',
+    crm_uf: 'SP',
+    email: 'medico@exemplo.com',
+    full_name: 'Dra Nome Atualizado',
+    role: 'medico',
+    specialty: 'Cardiologia',
+  })
+
+  assert.ok(calls.some((call) => call.url.includes('/doctors?user_id=eq.user-1') && call.method === 'PATCH'))
+  assert.ok(calls.some((call) => call.url.includes('/doctors?email=eq.medico%40exemplo.com') && call.method === 'PATCH'))
+  assert.equal(user.doctorId, 'doctor-1')
+  assert.equal(user.full_name, 'Dra Nome Atualizado')
+})
+
 test('professionalRepository.getAll prefere nome atualizado do perfil vinculado', async () => {
+  window.localStorage.clear()
+
   globalThis.fetch = async (url) => {
     const requestUrl = String(url)
 
@@ -167,4 +235,111 @@ test('professionalRepository.getAll prefere nome atualizado do perfil vinculado'
   const professionals = await professionalRepository.getAll()
 
   assert.equal(professionals[0].name, 'Nome Atualizado')
+})
+
+test('userRepository.update usa doctor_id de profiles para atualizar doctors correspondente', async () => {
+  window.localStorage.clear()
+  const calls = []
+
+  globalThis.fetch = async (url, options = {}) => {
+    const requestUrl = String(url)
+    const method = options.method || 'GET'
+    calls.push({ body: options.body ? JSON.parse(options.body) : null, method, url: requestUrl })
+
+    if (requestUrl.includes('/profiles?') && method === 'PATCH') {
+      return Response.json([{ id: 'user-1', doctor_id: 'doctor-1', email: 'medico@exemplo.com', full_name: 'Nome Editado Pela Secretaria', role: 'medico' }])
+    }
+
+    if (requestUrl.includes('/doctors?id=eq.doctor-1') && method === 'PATCH') {
+      return Response.json([{
+        id: 'doctor-1',
+        user_id: 'user-1',
+        email: 'medico@exemplo.com',
+        full_name: 'Nome Editado Pela Secretaria',
+      }])
+    }
+
+    if (requestUrl.includes('/doctors?') && method === 'GET') {
+      return Response.json([{ id: 'doctor-1', user_id: 'user-1', full_name: 'Nome Editado Pela Secretaria', email: 'medico@exemplo.com' }])
+    }
+
+    if (requestUrl.includes('/profiles?') && method === 'GET') {
+      return Response.json([])
+    }
+
+    throw new Error(`URL inesperada: ${requestUrl}`)
+  }
+
+  const { userRepository } = await import('../src/repositories/userRepository.js')
+  await userRepository.update('user-1', {
+    email: 'medico@exemplo.com',
+    full_name: 'Nome Editado Pela Secretaria',
+    role: 'medico',
+  })
+
+  const doctorPatch = calls.find((call) => call.url.includes('/doctors?id=eq.doctor-1') && call.method === 'PATCH')
+  assert.ok(doctorPatch)
+  assert.equal(doctorPatch.body.full_name, 'Nome Editado Pela Secretaria')
+
+  const { professionalRepository } = await import('../src/repositories/professionalRepository.js')
+  const professionals = await professionalRepository.getAll()
+
+  assert.equal(professionals[0].name, 'Nome Editado Pela Secretaria')
+})
+
+test('userRepository.update preserva doctor_id existente quando secretária edita perfil médico', async () => {
+  window.localStorage.clear()
+  const calls = []
+
+  globalThis.fetch = async (url, options = {}) => {
+    const requestUrl = String(url)
+    const method = options.method || 'GET'
+    calls.push({ body: options.body ? JSON.parse(options.body) : null, method, url: requestUrl })
+
+    if (requestUrl.includes('/profiles?id=eq.user-1') && method === 'GET') {
+      return Response.json([{
+        id: 'user-1',
+        doctor_id: 'doctor-1',
+        email: 'medico@exemplo.com',
+        full_name: 'Nome Antigo',
+        role: 'medico',
+      }])
+    }
+
+    if (requestUrl.includes('/profiles?id=eq.user-1') && method === 'PATCH') {
+      return Response.json([])
+    }
+
+    if (requestUrl.includes('/doctors?id=eq.doctor-1') && method === 'PATCH') {
+      return Response.json([])
+    }
+
+    if (requestUrl.includes('/doctors?') && method === 'GET') {
+      return Response.json([{ id: 'doctor-1', user_id: 'user-1', full_name: 'Nome Antigo', email: 'medico@exemplo.com' }])
+    }
+
+    if (requestUrl.includes('/profiles?') && method === 'GET') {
+      return Response.json([])
+    }
+
+    throw new Error(`URL inesperada: ${requestUrl}`)
+  }
+
+  const { userRepository } = await import('../src/repositories/userRepository.js')
+  const user = await userRepository.update('user-1', {
+    email: 'medico@exemplo.com',
+    full_name: 'Nome Editado Pela Secretaria',
+    role: 'medico',
+  })
+
+  const doctorPatch = calls.find((call) => call.url.includes('/doctors?id=eq.doctor-1') && call.method === 'PATCH')
+  assert.ok(doctorPatch)
+  assert.equal(doctorPatch.body.full_name, 'Nome Editado Pela Secretaria')
+  assert.equal(user.doctorId, 'doctor-1')
+  assert.equal(user.full_name, 'Nome Editado Pela Secretaria')
+
+  const { professionalRepository } = await import('../src/repositories/professionalRepository.js')
+  const professionals = await professionalRepository.getAll()
+
+  assert.equal(professionals[0].name, 'Nome Editado Pela Secretaria')
 })

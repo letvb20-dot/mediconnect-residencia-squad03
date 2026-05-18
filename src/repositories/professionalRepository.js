@@ -1,5 +1,6 @@
 import { apiConfig, getAuthenticatedHeaders } from '../config/api.js'
 import { getResponseError, normalizeItem } from './repositoryUtils.js'
+import { applyProfessionalOverrides } from '../utils/professionalOverrides.js'
 
 const PROFILE_TABLES = ['profiles', 'user_profiles']
 
@@ -22,9 +23,11 @@ export const professionalRepository = {
 
     const data = await response.json()
     const profiles = await getProfiles().catch(() => [])
-    return (Array.isArray(data) ? data : [])
+    const professionals = (Array.isArray(data) ? data : [])
       .map(mapProfessional)
       .map((professional) => mergeProfessionalProfile(professional, profiles))
+
+    return applyProfessionalOverrides(professionals)
   },
 
   // POST /functions/v1/create-doctor

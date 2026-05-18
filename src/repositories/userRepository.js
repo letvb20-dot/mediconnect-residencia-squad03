@@ -1,6 +1,7 @@
 import { apiConfig, getAuthenticatedHeaders } from '../config/api.js'
 import { normalizeRole } from '../config/permissions.js'
 import { getResponseError, normalizeCollection } from './repositoryUtils.js'
+import { storeProfessionalOverride } from '../utils/professionalOverrides.js'
 
 const USER_PROFILE_TABLES = ['profiles', 'user_profiles']
 const USER_DOCTOR_TABLES = ['doctors', 'medicos']
@@ -99,6 +100,7 @@ export const userRepository = {
   // Atualização direta da tabela de perfis (não há endpoint dedicado na API)
   async update(userId, data) {
     let lastResponse = null
+    const profileReference = await getProfileReference(userId).catch(() => null)
     const body = cleanPayload({
       email: data.email?.trim(),
       full_name: data.full_name?.trim(),
@@ -117,11 +119,14 @@ export const userRepository = {
 
       if (response.ok) {
         const responseData = await response.json().catch(() => null)
-        const updatedUser = normalizeListedUser(normalizeCollection(responseData)[0] || responseData || { ...body, id: userId })
-        const syncedDoctor = await syncDoctorUser({ ...updatedUser, id: userId }, data).catch((error) => {
+        const updatedProfileRow = getUpdatedProfileRow(responseData, body, data, userId, profileReference)
+        const updatedUser = normalizeListedUser(updatedProfileRow)
+        const syncFormData = { ...(profileReference || {}), ...data }
+        const syncedDoctor = await syncDoctorUser({ ...(profileReference || {}), ...updatedUser, id: userId }, syncFormData).catch((error) => {
           if (isIgnorableDoctorSyncError(error)) return null
           throw error
         })
+        if (syncedDoctor) storeDoctorNameOverride({ formData: data, syncedDoctor, updatedUser, userId })
         return syncedDoctor ? mergeUserDoctor(updatedUser, [syncedDoctor]) : updatedUser
       }
 
@@ -162,31 +167,53 @@ async function syncDoctorUser(user, formData = {}) {
     pickPayload(payload, ['full_name', 'crm', 'crm_uf', 'specialty']),
     pickPayload(payload, ['full_name']),
   ])
+  const doctorId = firstValueFromSources([formData, user], ['doctorId', 'doctor_id', 'medico_id'])
+  const profileId = firstValueFromSources([formData, user], ['profileId', 'profile_id', 'id', 'userId', 'user_id', 'authUserId', 'auth_user_id'])
   const identifiers = uniqueIdentifiers([
-    ['id', formData.doctorId || user.doctorId || user.doctor_id],
-    ['user_id', user.id || user.user_id || user.auth_user_id || user.profile_id],
-    ['auth_user_id', user.id || user.auth_user_id],
+    ['id', doctorId, { allowEmptySuccess: true }],
+    ['id', doctorId ? '' : profileId],
+    ['user_id', formData.userId || formData.user_id || user.userId || user.user_id || user.id || user.auth_user_id || user.profile_id],
+    ['auth_user_id', formData.authUserId || formData.auth_user_id || user.authUserId || user.auth_user_id || user.id],
     ['email', formData.email || user.email],
     ['cpf', onlyDigits(formData.cpf || user.cpf)],
   ])
 
   if (!attempts.length || !identifiers.length) return null
 
+  if (doctorId) {
+    const syncedById = await patchDoctorByIdentifiers({
+      attempts,
+      identifiers: [['id', doctorId, { allowEmptySuccess: true }]],
+      requireUpdatedRow: true,
+    })
+    if (syncedById) return syncedById
+  }
+
+  const fallbackIdentifiers = doctorId ? identifiers.filter(([field]) => field !== 'id') : identifiers
+  if (!fallbackIdentifiers.length) return null
+
+  return patchDoctorByIdentifiers({ attempts, identifiers: fallbackIdentifiers })
+}
+
+async function patchDoctorByIdentifiers({ attempts, identifiers, requireUpdatedRow = false }) {
   for (const table of USER_DOCTOR_TABLES) {
-    for (const [field, value] of identifiers) {
+    for (const [field, value, options = {}] of identifiers) {
       for (const attempt of attempts) {
         const response = await fetch(`${apiConfig.restUrl}/${table}?${field}=eq.${encodeURIComponent(value)}`, {
           method: 'PATCH',
-          headers: getAuthenticatedHeaders({ Prefer: 'return=representation' }),
+          headers: getAuthenticatedHeaders({ Prefer: 'return=representation,count=exact' }),
           body: JSON.stringify(attempt),
         }).catch(() => null)
 
         if (!response) continue
         if (response.ok) {
           const data = await response.json().catch(() => null)
-          const row = normalizeCollection(data)[0] || data
+          const row = normalizeReturnedRow(data)
           if (row) return normalizeDoctorUser(row)
-          continue
+          if (options.allowEmptySuccess && getAffectedRowCount(response) !== 0) {
+            return normalizeDoctorUser(buildSyntheticDoctorRow(field, value, attempt))
+          }
+          break
         }
 
         const text = await response.text().catch(() => '')
@@ -197,7 +224,91 @@ async function syncDoctorUser(user, formData = {}) {
     }
   }
 
+  if (requireUpdatedRow) {
+    throw new Error('Nao foi possivel sincronizar o cadastro do medico correspondente. Verifique permissoes para atualizar doctors.')
+  }
+
   return null
+}
+
+async function getProfileReference(userId) {
+  for (const table of USER_PROFILE_TABLES) {
+    const response = await fetch(`${apiConfig.restUrl}/${table}?id=eq.${encodeURIComponent(userId)}&select=*`, {
+      headers: getAuthenticatedHeaders(),
+    }).catch(() => null)
+
+    if (!response) continue
+
+    if (response.ok) {
+      const data = await response.json().catch(() => null)
+      const row = normalizeReturnedRow(data)
+      if (row) return row
+      continue
+    }
+
+    if (![404, 406].includes(response.status)) return null
+  }
+
+  return null
+}
+
+function getUpdatedProfileRow(responseData, body, formData, userId, profileReference = null) {
+  const returnedRow = normalizeCollection(responseData)[0] || normalizeReturnedRow(responseData) || {}
+  const doctorId = firstValueFromSources([returnedRow, profileReference, formData], ['doctorId', 'doctor_id', 'medico_id'])
+
+  return {
+    ...(profileReference || {}),
+    ...returnedRow,
+    ...formData,
+    ...body,
+    id: returnedRow.id || profileReference?.id || formData.id || userId,
+    doctor_id: doctorId,
+    doctorId,
+  }
+}
+
+function storeDoctorNameOverride({ formData = {}, syncedDoctor = null, updatedUser = {}, userId }) {
+  const role = normalizeRole(formData.role || updatedUser.role)
+  const hasDoctorFields = ['doctorId', 'doctor_id', 'crm', 'crm_uf', 'crmUf', 'specialty', 'specialidade'].some((field) => formData[field] || updatedUser[field])
+  if (role !== 'medico' && !hasDoctorFields) return
+
+  storeProfessionalOverride({
+    ...(syncedDoctor || {}),
+    id: syncedDoctor?.id || formData.doctorId || formData.doctor_id || updatedUser.doctorId || updatedUser.doctor_id,
+    doctorId: formData.doctorId || formData.doctor_id || updatedUser.doctorId || updatedUser.doctor_id,
+    userId: syncedDoctor?.userId || formData.userId || formData.user_id || updatedUser.userId || updatedUser.user_id || userId,
+    authUserId: formData.authUserId || formData.auth_user_id || updatedUser.authUserId || updatedUser.auth_user_id || userId,
+    email: formData.email || updatedUser.email || syncedDoctor?.email,
+    cpf: formData.cpf || updatedUser.cpf || syncedDoctor?.cpf,
+    full_name: formData.full_name || updatedUser.full_name || syncedDoctor?.full_name,
+    phone: formData.phone || formData.phone_mobile || updatedUser.phone || updatedUser.phone_mobile || syncedDoctor?.phone,
+  })
+}
+
+function normalizeReturnedRow(data) {
+  const rows = normalizeCollection(data)
+  if (rows.length) return rows[0]
+  if (data && !Array.isArray(data) && typeof data === 'object' && Object.keys(data).length) return data
+  return null
+}
+
+function buildSyntheticDoctorRow(field, value, attempt) {
+  return cleanPayload({
+    ...attempt,
+    id: field === 'id' ? value : attempt.id,
+    user_id: field === 'user_id' ? value : attempt.user_id,
+    auth_user_id: field === 'auth_user_id' ? value : attempt.auth_user_id,
+    email: field === 'email' ? value : attempt.email,
+    cpf: field === 'cpf' ? value : attempt.cpf,
+  })
+}
+
+function getAffectedRowCount(response) {
+  const contentRange = response.headers?.get?.('content-range')
+  if (!contentRange) return null
+
+  const match = contentRange.match(/\/(\d+)$/)
+  return match ? Number(match[1]) : null
 }
 
 function buildDoctorSyncBody(user, data) {
@@ -219,7 +330,7 @@ function buildDoctorSyncBody(user, data) {
 function uniqueIdentifiers(identifiers) {
   const seen = new Set()
   return identifiers
-    .map(([field, value]) => [field, String(value || '').trim()])
+    .map(([field, value, options = {}]) => [field, String(value || '').trim(), options])
     .filter(([, value]) => value)
     .filter(([field, value]) => {
       const key = `${field}:${value.toLowerCase()}`

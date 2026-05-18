@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 
-import { canAccess, ROLE_LABELS, ROLE_NAV_ITEMS } from '../config/permissions.js'
+import { canAccess, normalizeRole, ROLE_LABELS, ROLE_NAV_ITEMS } from '../config/permissions.js'
 import { authRepository } from '../repositories/authRepository.js'
 import {
   NOTIFICATION_ACTION_EVENT,
@@ -45,6 +45,7 @@ const titles = {
 }
 
 export function AppShell({ children, currentPath, navigate, role, routeTitle }) {
+  const normalizedRole = normalizeRole(role)
   const [menuOpen, setMenuOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
@@ -77,25 +78,25 @@ export function AppShell({ children, currentPath, navigate, role, routeTitle }) 
 
   // Filtra os itens de navegação com base no role do usuário
   const navItems = useMemo(() => {
-    if (!role) return []
+    if (!normalizedRole) return []
 
-    const allowedPaths = ROLE_NAV_ITEMS[role]?.map((item) => item.path) ?? []
+    const allowedPaths = ROLE_NAV_ITEMS[normalizedRole]?.map((item) => item.path) ?? []
 
     return ALL_NAV_ITEMS.filter((item) =>
       allowedPaths.some(
         (allowed) => item.href === allowed || item.activePaths?.includes(allowed),
       ),
     )
-  }, [role])
+  }, [normalizedRole])
 
   const canOpenSettings = useMemo(
     () =>
-      (ROLE_NAV_ITEMS[role] ?? []).some(
+      (ROLE_NAV_ITEMS[normalizedRole] ?? []).some(
         (item) => item.path === '/configuracoes' || item.path === '/config',
       ),
-    [role],
+    [normalizedRole],
   )
-  const canOpenProfile = useMemo(() => canAccess(role, '/perfil'), [role])
+  const canOpenProfile = useMemo(() => canAccess(normalizedRole, '/perfil'), [normalizedRole])
   useEffect(() => {
     let active = true
 
@@ -106,15 +107,15 @@ export function AppShell({ children, currentPath, navigate, role, routeTitle }) 
 
         setViewerProfile({
           name: profile.name || 'Usuário',
-          role: ROLE_LABELS[role] || profile.role || 'Usuário do Sistema',
+          role: ROLE_LABELS[normalizedRole] || profile.role || 'Usuário do Sistema',
         })
       })
       .catch(() => {
         // Fallback: usa o label do role diretamente
-        if (active && role) {
+        if (active && normalizedRole) {
           setViewerProfile((prev) => ({
             ...prev,
-            role: ROLE_LABELS[role] || 'Usuário do Sistema',
+            role: ROLE_LABELS[normalizedRole] || 'Usuário do Sistema',
           }))
         }
       })
@@ -122,7 +123,7 @@ export function AppShell({ children, currentPath, navigate, role, routeTitle }) 
     return () => {
       active = false
     }
-  }, [role])
+  }, [normalizedRole])
 
   useEffect(() => {
     if (!profileMenuOpen && !notificationsOpen) return undefined

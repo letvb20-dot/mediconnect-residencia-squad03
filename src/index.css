@@ -451,17 +451,19 @@ button:disabled {
   transition-duration: 0.01ms !important;
 }
 
-.settings-high-contrast {
+.high-contrast {
+  /* Sobrescrita rigorosa dos tokens para alto contraste */
   --text-muted: #ffffff;
   --text-secondary: #ffffff;
   --border-default: #9ca3af;
   border-width: 2px !important;
 }
 
-[data-theme='light'].settings-high-contrast {
-  --text-muted: #000000;
-  --text-secondary: #000000;
-  --border-default: #4b5563;
+[data-theme='light'].high-contrast {
+  /* Sobrescrita rigorosa dos tokens para alto contraste */
+  --border-default: #000000; /* Exemplo de bordas pretas puras no light mode */
+  --text-muted: #262626; /* Escurecendo os textos secundários */
+  --text-secondary: #262626;
 }
 
 html.text-scale-sm { font-size: 14px; }

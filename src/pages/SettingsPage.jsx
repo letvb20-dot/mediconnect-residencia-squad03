@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import { useAccessibility } from '../contexts/AccessibilityContext.jsx'
 import { settingsRepository } from '../repositories/settingsRepository.js'
 import { getStoredTheme, setStoredTheme } from '../utils/theme.js'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select.jsx'
@@ -60,13 +61,13 @@ export function SettingsPage() {
 }
 
 function AppearanceSection() {
+  const { isHighContrast, toggleHighContrast } = useAccessibility()
   const [theme, setTheme] = useState(() => getStoredTheme())
   const [ui, setUi] = useState(() => getStoredUiSettings())
 
   useEffect(() => {
     localStorage.setItem(SETTINGS_UI_KEY, JSON.stringify(ui))
     document.documentElement.classList.toggle('settings-animations-off', !ui.animations)
-    document.documentElement.classList.toggle('settings-high-contrast', ui.contrast)
     
     document.documentElement.classList.remove('text-scale-sm', 'text-scale-standard', 'text-scale-lg')
     if (ui.typographicScale) {
@@ -125,7 +126,7 @@ function AppearanceSection() {
 
       <SettingsGroup>
         <ToggleRow checked={ui.animations} description="Transições suaves entre telas e componentes" label="Animações de interface" onChange={(value) => updateUi('animations', value)} />
-        <ToggleRow checked={ui.contrast} description="Aumenta o contraste dos elementos para melhor acessibilidade" label="Modo de alto contraste" onChange={(value) => updateUi('contrast', value)} />
+        <ToggleRow checked={isHighContrast} description="Aumenta o contraste dos elementos para melhor acessibilidade" label="Modo de alto contraste" onChange={toggleHighContrast} />
         
         <SettingRow description="Define o tamanho base da interface" label="Escala Tipográfica">
           <div className="w-48">

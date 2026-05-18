@@ -46,7 +46,7 @@ export const homeRepository = {
       metrics: [
         { label: 'Consultas Hoje', value: String(todayAppointments.length), change: `${completedToday.length} concluídas`, tone: 'blue' },
         { label: 'Taxa de Ocupação', value: `${occupancyRate}%`, change: `${todayAppointments.length}/${dailySlots} slots`, tone: 'violet' },
-        { label: 'No-show', value: `${noShowStats.rate}%`, change: `${noShowStats.count} registros`, tone: 'green' },
+        { label: 'No-show', value: `${noShowStats.rate}%`, change: formatNoShowSummary(noShowStats), tone: 'green' },
       ],
       predictiveAlert: pendingToday.length
         ? `${pendingToday.length} pacientes de hoje ainda aguardam confirmação. Recomenda-se confirmar presença antes do horário.`
@@ -60,6 +60,11 @@ export const homeRepository = {
       ],
     }
   },
+}
+
+function formatNoShowSummary(stats) {
+  const label = stats.total === 1 ? 'agendamento vencido' : 'agendamentos vencidos'
+  return `${stats.count} de ${stats.total} ${label}`
 }
 
 export function buildWeeklyAppointmentSeries(appointments = [], now = new Date()) {

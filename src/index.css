@@ -178,6 +178,104 @@ button:disabled {
   background-color: #ffffff;
 }
 
+[data-theme='light'] .app-topbar {
+  background: #1d4ed8;
+  border-color: #1e40af;
+  box-shadow: 0 1px 0 rgba(30, 64, 175, 0.28);
+}
+
+[data-theme='light'] .app-topbar-menu-button {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.32);
+  color: #ffffff;
+}
+
+[data-theme='light'] .app-topbar-menu-button:hover,
+[data-theme='light'] .app-topbar-profile-trigger:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+[data-theme='light'] .app-topbar-icon-button,
+[data-theme='light'] .app-topbar-profile-name,
+[data-theme='light'] .app-topbar-chevron {
+  color: #ffffff;
+}
+
+[data-theme='light'] .app-topbar-icon-button:hover {
+  color: #dbeafe;
+}
+
+[data-theme='light'] .app-topbar-profile-role {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+[data-theme='light'] .app-topbar-avatar {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.36);
+  color: #ffffff;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.16);
+}
+
+[data-theme='light'] .app-topbar-divider {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+[data-theme='light'] .app-sidebar {
+  background: #1d4ed8;
+  border-color: #1e40af;
+  box-shadow: 1px 0 0 rgba(30, 64, 175, 0.28);
+}
+
+[data-theme='light'] .app-sidebar > div:first-child {
+  background: #ffffff;
+  border-color: var(--border-default-v2);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+[data-theme='light'] .app-sidebar-brand-icon {
+  background: var(--accent-primary-v2);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.24);
+}
+
+[data-theme='light'] .app-sidebar-brand-text {
+  color: #1d4ed8;
+}
+
+[data-theme='light'] .app-sidebar-nav-item {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+[data-theme='light'] .app-sidebar-nav-item:hover {
+  background: rgba(255, 255, 255, 0.13);
+  color: #ffffff;
+}
+
+[data-theme='light'] .app-sidebar-nav-item[aria-current='page'] {
+  background: rgba(255, 255, 255, 0.18);
+  border-left-color: #ffffff;
+  color: #ffffff;
+}
+
+[data-theme='light'] .app-sidebar-profile-card {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+[data-theme='light'] .app-sidebar-profile-card:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.38);
+}
+
+[data-theme='light'] .app-sidebar-profile-name,
+[data-theme='light'] .app-sidebar-profile-initials {
+  color: #ffffff;
+}
+
+[data-theme='light'] .app-sidebar-profile-role {
+  color: rgba(255, 255, 255, 0.76);
+}
+
 [data-theme='light'] .bg-\[\#262626\] {
   background-color: #ffffff;
 }

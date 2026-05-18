@@ -211,13 +211,13 @@ export function AppShell({ children, currentPath, navigate, role, routeTitle }) 
           menuOpen ? 'translate-x-0' : ''
         }`}
       >
-        <div className={`flex h-[72px] items-center border-b border-border-subtle px-3 ${sidebarCollapsed ? 'lg:justify-center' : ''}`}>
+        <div className={`flex h-16 items-center border-b border-border-subtle px-3 ${sidebarCollapsed ? 'lg:justify-center' : ''}`}>
           <BrandLogo
-            iconClassName="size-8 rounded-sm"
+            iconClassName="app-sidebar-brand-icon size-8 rounded-sm"
             iconButtonLabel={sidebarCollapsed ? 'Expandir sidebar' : 'Recolher sidebar'}
             markClassName="size-5"
             onIconClick={toggleSidebarCollapsed}
-            textClassName={`text-xl font-bold leading-7 tracking-[-0.025em] text-text-heading ${sidebarCollapsed ? 'lg:hidden' : ''}`}
+            textClassName={`app-sidebar-brand-text text-xl font-bold leading-7 tracking-[-0.025em] text-text-heading ${sidebarCollapsed ? 'lg:hidden' : ''}`}
           />
         </div>
 
@@ -237,7 +237,7 @@ export function AppShell({ children, currentPath, navigate, role, routeTitle }) 
 
         <div className="p-3">
           <button
-            className={`w-full rounded-lg border border-border-default-v2 bg-surface-card-hover text-left transition hover:border-border-strong hover:bg-surface-elevated ${
+            className={`app-sidebar-profile-card w-full rounded-lg border border-border-default-v2 bg-surface-card-hover text-left transition hover:border-border-strong hover:bg-surface-elevated ${
               sidebarCollapsed ? 'grid h-10 place-items-center px-0 py-0 lg:rounded-full' : 'px-3 py-2.5'
             }`}
             onClick={() => goTo(canOpenProfile ? '/perfil' : '/configuracoes')}
@@ -245,11 +245,11 @@ export function AppShell({ children, currentPath, navigate, role, routeTitle }) 
             type="button"
           >
             {sidebarCollapsed ? (
-              <span className="text-xs font-bold text-accent-primary">{getInitials(viewerProfile.name)}</span>
+              <span className="app-sidebar-profile-initials text-xs font-bold text-accent-primary">{getInitials(viewerProfile.name)}</span>
             ) : (
               <>
-                <p className="truncate text-xs font-semibold text-text-heading">{viewerProfile.name}</p>
-                <p className="mt-0.5 truncate text-[11px] leading-4 text-text-muted-v2">{viewerProfile.role}</p>
+                <p className="app-sidebar-profile-name truncate text-xs font-semibold text-text-heading">{viewerProfile.name}</p>
+                <p className="app-sidebar-profile-role mt-0.5 truncate text-[11px] leading-4 text-text-muted-v2">{viewerProfile.role}</p>
               </>
             )}
           </button>
@@ -266,12 +266,12 @@ export function AppShell({ children, currentPath, navigate, role, routeTitle }) 
       ) : null}
 
       <div className={`transition-[padding] duration-200 ${sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-56'}`}>
-        <header className="sticky top-0 z-20 h-auto border-b border-border-subtle bg-surface-card/80 px-4 py-3 backdrop-blur-xl md:px-8 lg:h-16 lg:py-0">
+        <header className="app-topbar sticky top-0 z-20 h-auto border-b border-border-subtle bg-surface-card/80 px-4 py-3 backdrop-blur-xl md:px-8 lg:h-16 lg:py-0">
           <div className="flex h-full flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex min-w-0 items-center gap-3">
               <button
                 aria-label="Abrir menu"
-                className="rounded-lg border border-border-default-v2 bg-surface-card-hover px-3 py-2 text-sm font-semibold text-text-heading lg:hidden"
+                className="app-topbar-menu-button rounded-lg border border-border-default-v2 bg-surface-card-hover px-3 py-2 text-sm font-semibold text-text-heading lg:hidden"
                 onClick={() => setMenuOpen(true)}
                 type="button"
               >
@@ -285,7 +285,7 @@ export function AppShell({ children, currentPath, navigate, role, routeTitle }) 
                   aria-expanded={notificationsOpen}
                   aria-haspopup="menu"
                   aria-label="Notificações"
-                  className="relative grid size-8 place-items-center text-text-muted-v2 transition hover:text-text-heading"
+                  className="app-topbar-icon-button relative grid size-8 place-items-center text-text-muted-v2 transition hover:text-text-heading"
                   onClick={() => {
                     setNotificationsOpen((open) => {
                       const nextOpen = !open
@@ -352,31 +352,31 @@ export function AppShell({ children, currentPath, navigate, role, routeTitle }) 
                 ) : null}
               </div>
 
-              <span className="hidden h-6 w-px bg-border-default-v2 sm:block" aria-hidden="true" />
+              <span className="app-topbar-divider hidden h-6 w-px bg-border-default-v2 sm:block" aria-hidden="true" />
 
               <div className="relative z-30">
                 <button
                   aria-expanded={profileMenuOpen}
                   aria-haspopup="menu"
-                  className="flex min-w-0 items-center gap-3 rounded-lg px-1.5 py-1 text-left transition hover:bg-surface-card-hover focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40"
+                  className="app-topbar-profile-trigger flex min-w-0 items-center gap-3 rounded-lg px-1.5 py-1 text-left transition hover:bg-surface-card-hover focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40"
                   onClick={() => {
                     setProfileMenuOpen((open) => !open)
                     setNotificationsOpen(false)
                   }}
                   type="button"
                 >
-                  <span className="grid size-8 shrink-0 place-items-center rounded-full border border-[#3b82f6]/30 bg-[#3b82f6]/15 text-xs font-bold text-accent-primary ring-2 ring-[#3b82f6]/20">
+                  <span className="app-topbar-avatar grid size-8 shrink-0 place-items-center rounded-full border border-[#3b82f6]/30 bg-[#3b82f6]/15 text-xs font-bold text-accent-primary ring-2 ring-[#3b82f6]/20">
                     {getInitials(viewerProfile.name)}
                   </span>
                   <span className="hidden min-w-0 sm:block">
-                    <span className="block max-w-40 truncate text-sm font-semibold leading-4 text-text-heading">
+                    <span className="app-topbar-profile-name block max-w-40 truncate text-sm font-semibold leading-4 text-text-heading">
                       {viewerProfile.name}
                     </span>
-                    <span className="mt-0.5 block max-w-40 truncate text-[11px] font-medium leading-4 text-accent-primary">
+                    <span className="app-topbar-profile-role mt-0.5 block max-w-40 truncate text-[11px] font-medium leading-4 text-accent-primary">
                       {viewerProfile.role}
                     </span>
                   </span>
-                  <ChevronDownIcon className="hidden size-4 text-text-muted-v2 sm:block" />
+                  <ChevronDownIcon className="app-topbar-chevron hidden size-4 text-text-muted-v2 sm:block" />
                 </button>
 
                 {profileMenuOpen ? (
@@ -443,7 +443,7 @@ function NavItem({ active, item, onNavigate, sidebarCollapsed = false }) {
     <a
       aria-current={active ? 'page' : undefined}
       aria-label={sidebarCollapsed ? item.label : undefined}
-      className={`flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium transition ${
+      className={`app-sidebar-nav-item flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium transition ${
         active
           ? 'border-l-[3px] border-l-accent-primary bg-gradient-to-r from-[#3b82f6]/10 to-transparent text-accent-primary'
           : 'border-l-[3px] border-l-transparent text-text-muted-v2 hover:bg-surface-card-hover hover:text-text-heading'

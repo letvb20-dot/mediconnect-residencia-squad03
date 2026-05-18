@@ -40,6 +40,24 @@ const trustPoints = [
   'Prontuário eletrônico',
 ]
 
+const heroImages = [
+  {
+    alt: 'Medica conversando com paciente em consultorio',
+    className: 'absolute right-0 top-0 h-full w-[58%] object-cover object-center opacity-75',
+    src: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=1200&q=80',
+  },
+  {
+    alt: 'Profissional de saude em atendimento',
+    className: 'absolute right-[28%] bottom-12 h-44 w-64 rounded-2xl object-cover opacity-90 shadow-[0_24px_60px_rgba(0,0,0,0.42)]',
+    src: 'https://images.unsplash.com/photo-1582750433449-648ed127bb54?auto=format&fit=crop&w=700&q=80',
+  },
+  {
+    alt: 'Equipe medica analisando informacoes clinicas',
+    className: 'absolute right-[8%] top-[58%] h-36 w-56 rounded-2xl object-cover opacity-90 shadow-[0_24px_60px_rgba(0,0,0,0.38)]',
+    src: 'https://images.unsplash.com/photo-1551076805-e1869033e561?auto=format&fit=crop&w=700&q=80',
+  },
+]
+
 const pillars = [
   {
     Icon: CalendarCheck,
@@ -325,14 +343,30 @@ function LandingHeader({ accountLabel, accountPath, goTo, goToSection }) {
 function Hero({ goTo }) {
   return (
     <section
-      className="relative isolate flex min-h-[600px] items-center overflow-hidden bg-gradient-to-br from-[#030712] via-[#0c1a3d] to-[#1e3a5f] px-5 py-20 text-white sm:px-6 lg:min-h-[680px]"
+      className="relative isolate flex min-h-[600px] items-center overflow-hidden bg-[#082f5f] px-5 py-20 text-white sm:px-6 lg:min-h-[680px]"
     >
-      <div className="pointer-events-none absolute left-1/2 top-1/4 -translate-x-1/2 h-[600px] w-[600px] rounded-full bg-[radial-gradient(circle,rgba(59,130,246,0.15)_0%,transparent_70%)] blur-2xl" />
-      <div className="pointer-events-none absolute inset-0 opacity-[0.07]" style={{ backgroundImage: 'radial-gradient(rgba(148,163,184,0.5) 1px, transparent 1px)', backgroundSize: '28px 28px' }} />
+      <div className="pointer-events-none absolute inset-0 hidden overflow-hidden lg:block" aria-hidden="true">
+        {heroImages.slice(0, 1).map((image, index) => (
+          <img
+            alt=""
+            className={image.className}
+            decoding="async"
+            fetchPriority={index === 0 ? 'high' : 'auto'}
+            key={image.src}
+            loading={index === 0 ? 'eager' : 'lazy'}
+            src={image.src}
+          />
+        ))}
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,#082f5f_0%,#082f5f_40%,rgba(8,47,95,0.78)_66%,rgba(8,47,95,0.24)_100%)]" />
+        <div className="absolute left-[38%] top-[-16%] size-[620px] rounded-full border-[54px] border-white/[0.045]" />
+        <div className="absolute right-[-2rem] top-6 text-[26rem] font-black leading-none text-white/[0.035]">+</div>
+      </div>
+      <div className="pointer-events-none absolute left-[-4rem] bottom-8 hidden h-28 w-28 rounded-[28px] border-[18px] border-[#60a5fa]/35 sm:block" />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),transparent_42%)]" />
 
       <div className="relative mx-auto w-full max-w-7xl">
-        <div className="max-w-3xl">
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-sm text-white/80 backdrop-blur">
+        <div className="max-w-2xl">
+          <div className="mb-5 inline-flex items-center gap-2 text-base font-semibold text-[#7dd3fc]">
             <Sparkles className="size-4 text-[#60a5fa]" />
             Inteligência artificial para sua clínica
           </div>
@@ -341,14 +375,14 @@ function Hero({ goTo }) {
             A gestão da sua clínica, potencializada por IA.
           </h1>
 
-          <p className="mt-6 max-w-2xl text-base leading-7 text-white/70 sm:text-lg">
+          <p className="mt-6 max-w-xl text-base leading-7 text-white/82 sm:text-lg">
             Reduza absenteísmo, automatize laudos e tome decisões baseadas em dados. Uma
             plataforma pensada para médicos e clínicas brasileiras que precisam crescer com
             previsibilidade.
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <LandingButton className="min-h-12 px-5 shadow-[0_4px_20px_rgba(59,130,246,0.35)] hover:shadow-[0_6px_28px_rgba(59,130,246,0.5)]" onClick={() => goTo('/cadastro')}>
+            <LandingButton className="min-h-12 px-5" onClick={() => goTo('/cadastro')} variant="primaryFlat">
               Criar conta gratuita
               <ArrowRight className="size-4" />
             </LandingButton>
@@ -361,9 +395,9 @@ function Hero({ goTo }) {
             </LandingButton>
           </div>
 
-          <div className="mt-8 flex flex-wrap gap-3 text-sm">
+          <div className="mt-10 flex flex-wrap gap-3 text-sm">
             {trustPoints.map((point) => (
-              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-white/80 backdrop-blur-sm" key={point}>
+              <span className="inline-flex items-center gap-2 rounded-sm border border-white/12 bg-white/7 px-3 py-1.5 text-white/85 backdrop-blur-sm" key={point}>
                 <CheckCircle2 className="size-3.5 text-[#60a5fa]" />
                 {point}
               </span>
@@ -706,6 +740,7 @@ function LandingButton({ children, className = '', variant = 'primary', ...props
   const variants = {
     ghost: 'border-transparent bg-transparent text-gray-700 hover:bg-[#f4f7fb]',
     primary: 'border-transparent bg-gradient-to-b from-[#4f93f7] to-[#3b82f6] text-white shadow-[0_2px_8px_rgba(59,130,246,0.3)] hover:brightness-110',
+    primaryFlat: 'border-transparent bg-[#3b82f6] text-white hover:bg-[#2563eb]',
     secondary: 'border-gray-300 bg-white text-gray-800 hover:bg-[#f4f7fb]',
   }
 

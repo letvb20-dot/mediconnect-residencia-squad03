@@ -94,6 +94,31 @@ test('patientRepository.getDirectoryRows lista todos os pacientes mesmo com doct
   assert.ok(calls.some((url) => url.includes('/appointments?') && url.includes('doctor_id=eq.doctor-1')))
 })
 
+test('patientRepository.getDirectoryRows calcula idade pela data de nascimento', async () => {
+  globalThis.fetch = async (url) => {
+    const requestUrl = String(url)
+
+    if (requestUrl.includes('/patients?')) {
+      return Response.json([
+        { id: 'patient-1', birth_date: '2000-01-01', full_name: 'Ana Souza' },
+        { id: 'patient-2', age: 42, birth_date: '1980-01-01', full_name: 'Bruno Lima' },
+      ])
+    }
+
+    if (requestUrl.includes('/appointments?')) {
+      return Response.json([])
+    }
+
+    throw new Error(`URL inesperada: ${requestUrl}`)
+  }
+
+  const { patientRepository } = await import('../src/repositories/patientRepository.js')
+  const rows = await patientRepository.getDirectoryRows()
+
+  assert.equal(rows[0].age, calculateExpectedAge('2000-01-01'))
+  assert.equal(rows[1].age, 42)
+})
+
 test('patientRepository.registerPublicWithPassword usa endpoint publico com payload documentado', async () => {
   let captured
 
@@ -161,6 +186,34 @@ test('patientRepository.create envia apenas campos aceitos pelo create-patient',
   assert.equal('lgpd_opt_in' in body, false)
 })
 
+test('patientRepository.uploadAttachment tenta buckets de anexos antes de avatars', async () => {
+  const calls = []
+  const file = new Blob(['conteudo'], { type: 'application/pdf' })
+  file.name = 'exame.pdf'
+
+  globalThis.fetch = async (url) => {
+    const requestUrl = String(url)
+    calls.push(requestUrl)
+
+    if (requestUrl.includes('/object/patient-attachments/')) {
+      return Response.json({ message: 'bucket not found' }, { status: 404 })
+    }
+
+    if (requestUrl.includes('/object/attachments/')) {
+      return Response.json({ Key: 'ok' })
+    }
+
+    throw new Error(`URL inesperada: ${requestUrl}`)
+  }
+
+  const { patientRepository } = await import('../src/repositories/patientRepository.js')
+  const upload = await patientRepository.uploadAttachment('patient-1', file)
+
+  assert.equal(upload.bucket, 'attachments')
+  assert.match(upload.url, /\/object\/public\/attachments\/patients\/patient-1\/attachments\//)
+  assert.equal(calls.length, 2)
+})
+
 test('patientRepository.update tenta payload menor quando a API recusa coluna opcional', async () => {
   const bodies = []
 
@@ -169,7 +222,7 @@ test('patientRepository.update tenta payload menor quando a API recusa coluna op
     bodies.push(JSON.parse(options.body))
 
     if (bodies.length === 1) {
-      return Response.json({ message: 'bad request' }, { status: 400 })
+      return Response.json({ message: "Could not find the 'email' column of 'patients' in the schema cache" }, { status: 400 })
     }
 
     return Response.json([{ id: 'patient-1', full_name: bodies.at(-1).full_name }])
@@ -192,7 +245,101 @@ test('patientRepository.update tenta payload menor quando a API recusa coluna op
     full_name: 'Ana Souza',
     phone_mobile: '11999998888',
   })
-  assert.equal(bodies.some((body) => 'lgpd_opt_in' in body), false)
+  assert.equal(bodies.some((body) => body.lgpd_opt_in === true), true)
+})
+
+test('patientRepository.update persiste campos estendidos quando a API suporta', async () => {
+  const bodies = []
+
+  globalThis.fetch = async (url, options = {}) => {
+    assert.match(String(url), /\/patients\?id=eq.patient-1$/)
+    const body = JSON.parse(options.body)
+    bodies.push(body)
+    return Response.json([{ id: 'patient-1', ...body }])
+  }
+
+  const { patientRepository } = await import('../src/repositories/patientRepository.js')
+  await patientRepository.update('patient-1', {
+    addressNumber: '123',
+    addressStreet: 'Rua A',
+    birthDate: '1990-01-01',
+    bloodType: 'O+',
+    city: 'Recife',
+    cns: '1234567',
+    cpf: '123.456.789-01',
+    email: 'ana@exemplo.com',
+    height: '1,70',
+    insurance: 'Unimed',
+    insuranceNumber: 'ABC123',
+    lgpdOptIn: false,
+    motherName: 'Maria Souza',
+    name: 'Ana Souza',
+    phone: '(81) 99999-8888',
+    plan: 'Basico',
+    state: 'PE',
+    weight: '70,5',
+  })
+
+  assert.deepEqual(bodies[0], {
+    email: 'ana@exemplo.com',
+    full_name: 'Ana Souza',
+    phone_mobile: '81999998888',
+  })
+  assert.ok(bodies.some((body) => body.cpf === '12345678901' && body.birth_date === '1990-01-01'))
+  assert.ok(bodies.some((body) => body.street === 'Rua A' && body.number === '123' && body.city === 'Recife'))
+  assert.ok(bodies.some((body) => body.blood_type === 'O+' && body.weight_kg === 70.5 && body.height_m === 1.7))
+  assert.ok(bodies.some((body) => body.insurance === 'Unimed' && body.plan === 'Basico' && body.insurance_number === 'ABC123'))
+  assert.ok(bodies.some((body) => body.lgpd_opt_in === false))
+})
+
+test('patientRepository normaliza aliases completos retornados pela API', async () => {
+  globalThis.fetch = async (url) => {
+    const requestUrl = String(url)
+
+    if (requestUrl.includes('/patients?')) {
+      return Response.json([
+        {
+          id: 'patient-1',
+          full_name: 'Ana Souza',
+          cpf: '12345678900',
+          phone_mobile: '81999998888',
+          birth_date: '1990-01-01',
+          cep: '50000000',
+          street: 'Rua A',
+          number: '123',
+          complement: 'Apto 4',
+          city: 'Recife',
+          state: 'PE',
+          health_insurance: 'Unimed',
+          insurance_plan: 'Basico',
+          insurance_number: 'ABC123',
+          weight_kg: 70.5,
+          height_m: 1.7,
+          cns: '1234567',
+        },
+      ])
+    }
+
+    if (requestUrl.includes('/appointments?')) {
+      return Response.json([])
+    }
+
+    throw new Error(`URL inesperada: ${requestUrl}`)
+  }
+
+  const { patientRepository } = await import('../src/repositories/patientRepository.js')
+  const [patient] = await patientRepository.getDirectoryRows()
+
+  assert.equal(patient.phone, '(81) 99999-8888')
+  assert.equal(patient.addressStreet, 'Rua A')
+  assert.equal(patient.addressNumber, '123')
+  assert.equal(patient.addressComplement, 'Apto 4')
+  assert.equal(patient.insurance, 'Unimed')
+  assert.equal(patient.plan, 'Basico')
+  assert.equal(patient.insuranceNumber, 'ABC123')
+  assert.equal(patient.weight, 70.5)
+  assert.equal(patient.height, 1.7)
+  assert.equal(patient.cns, '1234567')
 })
 
 test('availabilityRepository.getAvailableSlots usa a disponibilidade cadastrada do medico', async () => {
@@ -287,3 +434,17 @@ test('userRepository.createWithPassword envia CPF e dados de medico exigidos pel
   assert.equal(body.specialty, 'Cardiologia')
   assert.equal(body.password, 'SenhaForte123')
 })
+
+function calculateExpectedAge(value) {
+  const [year, month, day] = value.split('-').map(Number)
+  const birthDate = new Date(year, month - 1, day)
+  const today = new Date()
+  let age = today.getFullYear() - birthDate.getFullYear()
+  const monthDiff = today.getMonth() - birthDate.getMonth()
+
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age -= 1
+  }
+
+  return age
+}

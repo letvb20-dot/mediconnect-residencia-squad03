@@ -5,11 +5,11 @@ import { authRepository } from '../repositories/authRepository.js'
 import { profileRepository } from '../repositories/profileRepository.js'
 import { translateErrorMessage } from '../repositories/repositoryUtils.js'
 
-const cardClass = 'rounded-2xl border border-[#404040] bg-[#262626] shadow-sm'
+const cardClass = 'rounded-2xl border border-border-default-v2 bg-surface-card shadow-sm'
 const inputClass =
-  'h-10 rounded-sm border border-[#404040] bg-[#171717] px-3 text-sm text-[#e5e5e5] outline-none transition placeholder:text-[#a3a3a3] focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20'
+  'h-10 rounded-sm border border-border-default-v2 bg-surface-inset px-3 text-sm text-text-heading outline-none transition placeholder:text-text-muted-v2 focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20'
 const readOnlyInputClass =
-  'h-10 rounded-sm border border-[#404040] bg-[#1f1f1f] px-3 text-sm text-[#a3a3a3] outline-none'
+  'h-10 rounded-sm border border-border-default-v2 bg-surface-inset px-3 text-sm text-text-muted-v2 outline-none'
 
 export function ProfilePage({ navigate }) {
   const [saved, setSaved] = useState(false)
@@ -61,7 +61,7 @@ export function ProfilePage({ navigate }) {
   }
 
   if (loading) {
-    return <div className="pt-20 text-center text-[#a3a3a3]">Localizando dados do perfil...</div>
+    return <div className="pt-20 text-center text-text-muted-v2">Localizando dados do perfil...</div>
   }
 
   const normalizedRole = normalizeRole(profile.role)
@@ -71,7 +71,7 @@ export function ProfilePage({ navigate }) {
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <header>
-        <h1 className="text-2xl font-bold tracking-tight text-[#f5f5f5]">Perfil</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-text-heading">Perfil</h1>
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
@@ -85,8 +85,8 @@ export function ProfilePage({ navigate }) {
               </div>
             )}
             <div>
-              <h2 className="text-lg font-bold text-[#f5f5f5]">{profile.name}</h2>
-              <p className="mt-1 text-sm text-[#a3a3a3]">{profile.role}</p>
+              <h2 className="text-lg font-bold text-text-heading">{profile.name}</h2>
+              <p className="mt-1 text-sm text-text-muted-v2">{profile.role}</p>
               <button
                 className="mt-1 text-xs font-semibold text-[#3b82f6] disabled:opacity-60"
                 disabled={uploadingAvatar}
@@ -152,12 +152,12 @@ export function ProfilePage({ navigate }) {
         </section>
 
         <aside className={`${cardClass} p-6`}>
-          <h2 className="text-xl font-bold text-[#f5f5f5]">Resumo de acesso</h2>
+          <h2 className="text-xl font-bold text-text-heading">Resumo de acesso</h2>
           <dl className="mt-5 grid gap-4 text-sm">
             <Info label="Perfil" value={profile.role} />
             <Info label="E-mail principal" value={profile.email} />
           </dl>
-          <div className="mt-8 border-t border-[#404040] pt-6">
+          <div className="mt-8 border-t border-border-default-v2 pt-6">
             <button
               className="h-10 w-full rounded-sm border border-red-500/30 text-sm font-semibold text-red-500 transition hover:bg-red-500/10"
               onClick={handleLogout}
@@ -175,7 +175,7 @@ export function ProfilePage({ navigate }) {
 function Field({ children, label }) {
   return (
     <label className="grid gap-2">
-      <span className="text-xs font-semibold text-[#a3a3a3]">{label}</span>
+      <span className="text-xs font-semibold text-text-muted-v2">{label}</span>
       {children}
     </label>
   )
@@ -183,9 +183,9 @@ function Field({ children, label }) {
 
 function Info({ label, value }) {
   return (
-    <div className="rounded-xl border border-[#404040] bg-[#171717] p-4">
-      <dt className="font-semibold text-[#a3a3a3]">{label}</dt>
-      <dd className="mt-1 text-[#e5e5e5]">{value || '-'}</dd>
+    <div className="rounded-xl border border-border-default-v2 bg-surface-inset p-4">
+      <dt className="font-semibold text-text-muted-v2">{label}</dt>
+      <dd className="mt-1 text-text-heading">{value || '-'}</dd>
     </div>
   )
 }

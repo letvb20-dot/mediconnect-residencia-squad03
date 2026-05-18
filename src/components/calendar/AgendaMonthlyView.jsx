@@ -22,10 +22,10 @@ export function AgendaMonthlyView({ baseDate, appointments, onDayClick }) {
   const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 
   return (
-    <div className="agenda-calendar-shell rounded-2xl border border-[#404040] bg-[#262626] p-5">
-      <div className="agenda-calendar-header grid grid-cols-7 gap-px border-b border-[#404040] pb-4">
+    <div className="agenda-calendar-shell rounded-2xl border border-border-default-v2 bg-surface-card p-5">
+      <div className="agenda-calendar-header grid grid-cols-7 gap-px border-b border-border-subtle pb-4">
         {weekDays.map((day) => (
-          <div key={day} className="text-center text-xs font-semibold uppercase tracking-widest text-[#a3a3a3]">
+          <div key={day} className="text-center text-xs font-semibold uppercase tracking-widest text-text-muted-v2">
             {day}
           </div>
         ))}
@@ -48,17 +48,17 @@ export function AgendaMonthlyView({ baseDate, appointments, onDayClick }) {
             <button
               key={day.toISOString()}
               onClick={() => onDayClick && onDayClick(day)}
-              className={`agenda-month-day flex min-h-[100px] flex-col rounded-xl border p-2 text-left transition hover:border-[#525252] ${
+              className={`agenda-month-day flex min-h-[100px] flex-col rounded-xl border p-2 text-left transition hover:border-border-strong ${
                 isCurrentMonth
-                  ? 'border-[#404040] bg-[#1f1f1f]'
+                  ? 'border-border-default-v2 bg-surface-inset'
                   : 'border-transparent bg-transparent opacity-40 hover:opacity-80'
               }`}
             >
               <span
                 className={`text-sm font-bold ${
                   isToday(day)
-                    ? 'flex h-6 w-6 items-center justify-center rounded-full bg-[#3b82f6] text-white'
-                    : 'text-[#e5e5e5]'
+                    ? 'flex h-6 w-6 items-center justify-center rounded-full bg-accent-primary text-white'
+                    : 'text-text-heading'
                 }`}
               >
                 {format(day, 'd')}
@@ -68,7 +68,7 @@ export function AgendaMonthlyView({ baseDate, appointments, onDayClick }) {
                 {dayAppointments.slice(0, 3).map((appointment) => (
                   <div
                     key={appointment.id}
-                    className={`agenda-month-event ${getStatusToneClass(appointment)} flex items-center gap-1.5 truncate rounded bg-[#303030] px-1.5 py-1 text-[10px] font-semibold text-[#a3a3a3]`}
+                    className={`agenda-month-event ${getStatusToneClass(appointment)} flex items-center gap-1.5 truncate rounded bg-surface-card-hover px-1.5 py-1 text-[10px] font-semibold text-text-muted-v2`}
                   >
                     <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${getDotColor(appointment)}`} />
                     <span className="truncate">
@@ -77,7 +77,7 @@ export function AgendaMonthlyView({ baseDate, appointments, onDayClick }) {
                   </div>
                 ))}
                 {dayAppointments.length > 3 && (
-                  <span className="text-[10px] font-semibold text-[#3b82f6]">
+                  <span className="text-[10px] font-semibold text-accent-primary">
                     + {dayAppointments.length - 3} mais
                   </span>
                 )}
@@ -131,7 +131,7 @@ function getDotColor(appointment) {
     case 'Aguardando':
       return 'bg-[#fbbf24]'
     case 'Bloqueado':
-      return 'bg-[#737373]'
+      return 'bg-slate-500'
     default:
       return 'bg-[#3b82f6]'
   }

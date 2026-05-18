@@ -140,7 +140,7 @@ export function ReportsPage({ role }) {
 
   const stats = useMemo(
     () => [
-      { label: 'Total', value: enrichedReports.length, className: 'text-[#e5e5e5]' },
+      { label: 'Total', value: enrichedReports.length, className: 'text-text-body' },
       {
         label: 'Rascunhos',
         value: enrichedReports.filter((report) => report.status === 'draft').length,
@@ -435,17 +435,17 @@ export function ReportsPage({ role }) {
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 text-[#e5e5e5]">
+    <div className="mx-auto max-w-7xl space-y-6 text-text-body">
       <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <h1 className="text-[32px] font-bold leading-8 tracking-[-0.02em] text-[#e5e5e5]">Relatórios</h1>
-          <p className="mt-1 text-sm text-[#a3a3a3]">
+          <h1 className="text-[32px] font-bold leading-8 tracking-[-0.02em] text-text-body">Relatórios</h1>
+          <p className="mt-1 text-sm text-text-muted-v2">
             {isPatientRole ? 'Consulta de relatórios vinculados ao seu cadastro.' : 'Consulta, criação e edição de relatórios.'}
           </p>
         </div>
         {canManageReports ? (
           <button
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#3b82f6] px-4 text-sm font-medium text-white transition hover:bg-[#2563eb]"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-accent-primary px-4 text-sm font-medium text-white transition hover:bg-accent-hover"
             onClick={openNew}
             type="button"
           >
@@ -459,7 +459,7 @@ export function ReportsPage({ role }) {
         {stats.map((stat) => (
           <div className={cardClass} key={stat.label}>
             <div className="p-4">
-              <p className="text-xs font-semibold text-[#a3a3a3]">{stat.label}</p>
+              <p className="text-xs font-semibold text-text-muted-v2">{stat.label}</p>
               <p className={`mt-1 text-2xl font-bold ${stat.className}`}>{stat.value}</p>
             </div>
           </div>
@@ -545,9 +545,9 @@ export function ReportsPage({ role }) {
           </div>
         ) : null}
 
-        <div className="overflow-x-auto rounded-xl border border-[#404040]">
+        <div className="overflow-x-auto rounded-xl border border-border-default-v2">
           <table className="w-full min-w-full table-fixed text-left text-sm">
-            <thead className="bg-[#171717] text-xs font-semibold uppercase text-[#a3a3a3]">
+            <thead className="bg-surface-inset text-xs font-semibold uppercase text-text-muted-v2">
               <tr>
                 <th className="w-[12%] px-4 py-3">Numero</th>
                 <th className="w-[20%] px-4 py-3">Exame</th>
@@ -555,13 +555,13 @@ export function ReportsPage({ role }) {
                 <th className="w-[18%] px-4 py-3">Solicitante</th>
                 <th className="w-[14%] px-4 py-3">Criado em</th>
                 <th className="w-[10%] px-4 py-3">Status</th>
-                <th className="sticky right-0 w-[8.5rem] bg-[#171717] px-4 py-3 text-right">Ações</th>
+                <th className="sticky right-0 w-[8.5rem] bg-surface-inset px-4 py-3 text-right">Ações</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#404040] bg-[#262626]">
+            <tbody className="divide-y divide-border-default-v2 bg-surface-card">
               {loading ? (
                 <tr>
-                  <td className="px-4 py-8 text-center text-sm text-[#a3a3a3]" colSpan={7}>
+                  <td className="px-4 py-8 text-center text-sm text-text-muted-v2" colSpan={7}>
                     Carregando relatórios...
                   </td>
                 </tr>
@@ -587,7 +587,7 @@ export function ReportsPage({ role }) {
                 ))
               ) : (
                 <tr>
-                  <td className="px-4 py-8 text-center text-sm text-[#a3a3a3]" colSpan={7}>
+                  <td className="px-4 py-8 text-center text-sm text-text-muted-v2" colSpan={7}>
                     {isPatientRole ? 'Nenhum relatório encontrado em seu nome.' : 'Nenhum relatório encontrado com os filtros atuais.'}
                   </td>
                 </tr>
@@ -596,8 +596,8 @@ export function ReportsPage({ role }) {
           </table>
         </div>
 
-        <div className="mt-4 flex flex-col gap-4 border-t border-[#404040] pt-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs text-[#a3a3a3]">
+        <div className="mt-4 flex flex-col gap-4 border-t border-border-default-v2 pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-text-muted-v2">
             Mostrando {enrichedReports.length ? startIndex + 1 : 0}-{Math.min(startIndex + ITEMS_PER_PAGE, enrichedReports.length)} de{' '}
             {enrichedReports.length} relatórios
           </p>
@@ -609,8 +609,8 @@ export function ReportsPage({ role }) {
               <button
                 className={`grid size-8 place-items-center rounded-lg text-xs font-medium transition ${
                   pageNumber === currentPage
-                    ? 'bg-[#3b82f6] text-white'
-                    : 'border border-[#404040] bg-[#1a1a1a] text-[#a3a3a3] hover:bg-[#333333]'
+                    ? 'bg-accent-primary text-white'
+                    : 'border border-border-default-v2 bg-surface-inset text-text-muted-v2 hover:bg-surface-card-hover'
                 }`}
                 key={pageNumber}
                 onClick={() => setPage(pageNumber)}
@@ -678,23 +678,23 @@ function ReportRow({ canDelete, isMenuOpen, menuAnchor, onCloseMenu, onDelete, o
   }
 
   return (
-    <tr className="transition hover:bg-[#303030]">
-      <td className="px-4 py-3 align-top text-[#a3a3a3]">{report.orderNumber || '-'}</td>
+    <tr className="transition hover:bg-surface-card-hover">
+      <td className="px-4 py-3 align-top text-text-muted-v2">{report.orderNumber || '-'}</td>
       <td className="px-4 py-3 align-top">
         <div className="flex items-center gap-2">
-          <ReportIcon className="mt-0.5 size-4 shrink-0 text-[#3b82f6]" name="file" />
-          <span className="whitespace-normal break-words font-medium text-[#e5e5e5]">{report.exam || 'Sem exame'}</span>
+          <ReportIcon className="mt-0.5 size-4 shrink-0 text-accent-primary" name="file" />
+          <span className="whitespace-normal break-words font-medium text-text-body">{report.exam || 'Sem exame'}</span>
         </div>
       </td>
-      <td className="px-4 py-3 align-top whitespace-normal break-words text-[#e5e5e5]">{report.patientName}</td>
-      <td className="px-4 py-3 align-top whitespace-normal break-words text-[#a3a3a3]">{report.requestedBy || '-'}</td>
-      <td className="px-4 py-3 align-top text-[#a3a3a3]">{formatDate(report.createdAt)}</td>
+      <td className="px-4 py-3 align-top whitespace-normal break-words text-text-body">{report.patientName}</td>
+      <td className="px-4 py-3 align-top whitespace-normal break-words text-text-muted-v2">{report.requestedBy || '-'}</td>
+      <td className="px-4 py-3 align-top text-text-muted-v2">{formatDate(report.createdAt)}</td>
       <td className="px-4 py-3 align-top">
         <span className={`rounded px-2 py-1 text-[10px] font-bold ${currentStatus.pill}`}>
           {currentStatus.label}
         </span>
       </td>
-      <td className="sticky right-0 bg-[#262626] px-4 py-3 text-right shadow-[-10px_0_12px_-12px_rgba(0,0,0,0.75)]">
+      <td className="sticky right-0 bg-surface-card px-4 py-3 text-right shadow-[-10px_0_12px_-12px_rgba(0,0,0,0.75)]">
         <div className="relative flex justify-end gap-2">
           <IconButton label="Visualizar" name="eye" onClick={onView} />
           {readOnly ? <IconButton label="Imprimir" name="print" onClick={onPrint} /> : null}
@@ -703,8 +703,8 @@ function ReportRow({ canDelete, isMenuOpen, menuAnchor, onCloseMenu, onDelete, o
             aria-label="Abrir ações do relatório"
             className={`grid size-8 place-items-center rounded-lg border transition ${
               isMenuOpen
-                ? 'border-[#3b82f6] bg-[#3b82f6]/15 text-[#3b82f6]'
-                : 'border-[#404040] bg-[#1a1a1a] text-[#a3a3a3] hover:bg-[#333333] hover:text-[#e5e5e5]'
+                ? 'border-accent-primary bg-accent-primary/15 text-accent-primary'
+                : 'border-border-default-v2 bg-surface-inset text-text-muted-v2 hover:bg-surface-card-hover hover:text-text-body'
             }`}
             onClick={toggleMenu}
             type="button"
@@ -714,7 +714,7 @@ function ReportRow({ canDelete, isMenuOpen, menuAnchor, onCloseMenu, onDelete, o
           ) : null}
           {!readOnly && isMenuOpen && menuAnchor ? createPortal(
             <div
-              className="report-action-menu fixed w-56 overflow-hidden rounded-lg border border-[#404040] bg-[#1a1a1a] py-1 text-left shadow-2xl"
+              className="report-action-menu fixed w-56 overflow-hidden rounded-lg border border-border-default-v2 bg-surface-inset py-1 text-left shadow-2xl"
               style={{ left: menuAnchor.left, top: menuAnchor.top, zIndex: 99999 }}
             >
               <ReportMenuButton onClick={() => run(onVersions)}>Controle de versões</ReportMenuButton>
@@ -738,7 +738,7 @@ function ReportMenuButton({ children, danger = false, disabled = false, onClick 
       className={`block w-full px-3 py-2 text-left text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-45 ${
         danger
           ? 'text-red-300 hover:bg-red-950/30'
-          : 'text-[#e5e5e5] hover:bg-[#303030]'
+          : 'text-text-body hover:bg-surface-card-hover'
       }`}
       disabled={disabled}
       onClick={onClick}
@@ -842,20 +842,20 @@ function ReportEditorModalV3({
   return (
     <div className="report-editor-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3" onClick={onClose}>
       <div
-        className="report-editor-shell flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-[#404040] bg-[#242424] shadow-2xl"
+        className="report-editor-shell flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-border-default-v2 bg-surface-card shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="report-editor-header flex items-center justify-between border-b border-[#404040] px-6 py-4">
+        <div className="report-editor-header flex items-center justify-between border-b border-border-default-v2 px-6 py-4">
           <div className="flex items-center gap-3">
-            <span className="grid size-9 place-items-center rounded-sm bg-[#3b82f6] text-white">
+            <span className="grid size-9 place-items-center rounded-sm bg-accent-primary text-white">
               <StethoscopeIcon className="size-5" />
             </span>
             <div>
-              <h2 className="text-lg font-bold text-[#f5f5f5]">{editor.id ? 'Editar relatório' : 'Novo relatório'}</h2>
-              <p className="text-xs text-[#a3a3a3]">Escolha um template opcional e edite o conteúdo do relatório.</p>
+              <h2 className="text-lg font-bold text-text-heading">{editor.id ? 'Editar relatório' : 'Novo relatório'}</h2>
+              <p className="text-xs text-text-muted-v2">Escolha um template opcional e edite o conteúdo do relatório.</p>
             </div>
           </div>
-          <button className="grid size-9 place-items-center rounded-sm text-[#a3a3a3] transition hover:bg-[#303030] hover:text-[#e5e5e5]" onClick={onClose} type="button">
+          <button className="grid size-9 place-items-center rounded-sm text-text-muted-v2 transition hover:bg-surface-card-hover hover:text-text-body" onClick={onClose} type="button">
             <ReportIcon className="size-4" name="x" />
           </button>
         </div>
@@ -872,7 +872,7 @@ function ReportEditorModalV3({
 
               <div className="relative">
                 <button
-                  className="report-template-trigger inline-flex h-10 items-center gap-2 rounded-sm border border-[#404040] bg-[#171717] px-4 text-sm font-semibold text-[#e5e5e5] transition hover:bg-[#303030]"
+                  className="report-template-trigger inline-flex h-10 items-center gap-2 rounded-sm border border-border-default-v2 bg-surface-inset px-4 text-sm font-semibold text-text-body transition hover:bg-surface-card-hover"
                   onClick={() => setTemplatesOpen((current) => !current)}
                   type="button"
                 >
@@ -882,11 +882,11 @@ function ReportEditorModalV3({
                 </button>
 
                 {templatesOpen ? (
-                  <div className="report-template-menu absolute right-0 top-12 z-10 w-[min(28rem,calc(100vw-2rem))] rounded-md border border-[#404040] bg-[#202020] p-3 shadow-2xl">
+                  <div className="report-template-menu absolute right-0 top-12 z-10 w-[min(28rem,calc(100vw-2rem))] rounded-md border border-border-default-v2 bg-surface-inset p-3 shadow-2xl">
                     <div className="relative mb-3">
-                      <ReportIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#a3a3a3]" name="search" />
+                      <ReportIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-muted-v2" name="search" />
                       <input
-                        className="h-10 w-full rounded-sm border border-[#404040] bg-[#171717] pl-10 pr-3 text-sm text-[#e5e5e5] outline-none transition placeholder:text-[#a3a3a3] focus:border-[#3b82f6]"
+                        className="h-10 w-full rounded-sm border border-border-default-v2 bg-surface-inset pl-10 pr-3 text-sm text-text-body outline-none transition placeholder:text-text-muted-v2 focus:border-accent-primary"
                         onChange={(event) => setTemplateSearch(event.target.value)}
                         placeholder="Buscar templates..."
                         value={templateSearch}
@@ -896,20 +896,20 @@ function ReportEditorModalV3({
                       {filteredTemplates.length ? (
                         filteredTemplates.map((template) => (
                           <button
-                            className="block w-full rounded-sm border border-transparent px-3 py-3 text-left transition hover:border-[#3b82f6]/40 hover:bg-[#303030]"
+                            className="block w-full rounded-sm border border-transparent px-3 py-3 text-left transition hover:border-accent-primary/40 hover:bg-surface-card-hover"
                             key={template.id}
                             onClick={() => applyTemplate(template)}
                             type="button"
                           >
                             <span className="flex items-center justify-between gap-3">
-                              <span className="font-semibold text-[#f5f5f5]">{template.title}</span>
+                              <span className="font-semibold text-text-heading">{template.title}</span>
                               {template.popular ? <span className="rounded bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-amber-300">Popular</span> : null}
                             </span>
-                            <span className="mt-1 block text-xs leading-5 text-[#a3a3a3]">{template.description}</span>
+                            <span className="mt-1 block text-xs leading-5 text-text-muted-v2">{template.description}</span>
                           </button>
                         ))
                       ) : (
-                        <p className="px-3 py-4 text-sm text-[#a3a3a3]">Nenhum template encontrado.</p>
+                        <p className="px-3 py-4 text-sm text-text-muted-v2">Nenhum template encontrado.</p>
                       )}
                     </div>
                   </div>
@@ -988,7 +988,7 @@ function ReportEditorModalV3({
               </DarkField>
 
               <DarkField label="Importar PDF">
-                <label className="flex h-11 cursor-pointer items-center justify-center rounded-sm border border-[#404040] bg-[#171717] px-3 text-center text-sm font-semibold text-[#e5e5e5] transition hover:border-[#3b82f6] hover:text-[#3b82f6]">
+                <label className="flex h-11 cursor-pointer items-center justify-center rounded-sm border border-border-default-v2 bg-surface-inset px-3 text-center text-sm font-semibold text-text-body transition hover:border-accent-primary hover:text-accent-primary">
                   Escolher arquivo.
                   <input
                     accept="application/pdf"
@@ -1005,7 +1005,7 @@ function ReportEditorModalV3({
               </DarkField>
 
               <DarkField label="Imagens">
-                <label className="flex h-11 cursor-pointer items-center justify-center rounded-sm border border-[#404040] bg-[#171717] px-3 text-center text-sm font-semibold text-[#e5e5e5] transition hover:border-[#3b82f6] hover:text-[#3b82f6]">
+                <label className="flex h-11 cursor-pointer items-center justify-center rounded-sm border border-border-default-v2 bg-surface-inset px-3 text-center text-sm font-semibold text-text-body transition hover:border-accent-primary hover:text-accent-primary">
                   Escolher arquivo.
                   <input
                     accept="image/*"
@@ -1021,7 +1021,7 @@ function ReportEditorModalV3({
                 <PendingFileList files={editor.imageFiles} onRemove={(index) => removeFile('imageFiles', index)} />
               </DarkField>
 
-              <label className="flex min-h-11 items-center gap-3 rounded-sm border border-[#404040] bg-[#171717] px-3 text-sm font-semibold text-[#e5e5e5]">
+              <label className="flex min-h-11 items-center gap-3 rounded-sm border border-border-default-v2 bg-surface-inset px-3 text-sm font-semibold text-text-body">
                 <input
                   checked={Boolean(editor.hideDate)}
                   className="size-4 accent-[#3b82f6]"
@@ -1031,7 +1031,7 @@ function ReportEditorModalV3({
                 Ocultar data
               </label>
 
-              <label className="flex min-h-11 items-center gap-3 rounded-sm border border-[#404040] bg-[#171717] px-3 text-sm font-semibold text-[#e5e5e5]">
+              <label className="flex min-h-11 items-center gap-3 rounded-sm border border-border-default-v2 bg-surface-inset px-3 text-sm font-semibold text-text-body">
                 <input
                   checked={Boolean(editor.hideSignature)}
                   className="size-4 accent-[#3b82f6]"
@@ -1049,23 +1049,23 @@ function ReportEditorModalV3({
               />
             </DarkField>
 
-            <div className="mt-5 rounded-xl border border-[#404040] bg-[#171717] p-5">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#a3a3a3]">Pré-visualização</p>
-              <div className="min-h-24 text-sm leading-6 text-[#e5e5e5]" dangerouslySetInnerHTML={{ __html: sanitizePreviewHtml(editor.contentHtml) || '<p>O conteúdo do relatório aparecerá aqui.</p>' }} />
+            <div className="mt-5 rounded-xl border border-border-default-v2 bg-surface-inset p-5">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-text-muted-v2">Pré-visualização</p>
+              <div className="min-h-24 text-sm leading-6 text-text-body" dangerouslySetInnerHTML={{ __html: sanitizePreviewHtml(editor.contentHtml) || '<p>O conteúdo do relatório aparecerá aqui.</p>' }} />
             </div>
           </main>
         </div>
 
-        <div className="report-editor-footer flex flex-wrap items-center justify-between gap-3 border-t border-[#404040] px-6 py-4">
+        <div className="report-editor-footer flex flex-wrap items-center justify-between gap-3 border-t border-border-default-v2 px-6 py-4">
           <p className="text-xs font-semibold text-amber-300">
             {!isValid ? '* Preencha o editor de texto para salvar.' : 'Relatório pronto para salvar.'}
           </p>
           <div className="flex gap-3">
-            <button className="rounded-sm border border-[#404040] bg-[#262626] px-4 py-2 text-sm font-semibold text-[#e5e5e5] transition hover:bg-[#303030]" onClick={onClose} type="button">
+            <button className="rounded-sm border border-border-default-v2 bg-surface-card px-4 py-2 text-sm font-semibold text-text-body transition hover:bg-surface-card-hover" onClick={onClose} type="button">
               Cancelar
             </button>
             <button
-              className="inline-flex items-center gap-2 rounded-sm border border-[#3b82f6] bg-[#3b82f6] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#2563eb] disabled:cursor-not-allowed disabled:border-[#404040] disabled:bg-[#303030] disabled:text-[#737373]"
+              className="inline-flex items-center gap-2 rounded-sm border border-accent-primary bg-accent-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:border-border-default-v2 disabled:bg-surface-card-hover disabled:text-text-muted-v2"
               disabled={!isValid || saving}
               onClick={onSave}
               type="button"
@@ -1093,26 +1093,26 @@ function ReportVersionsModal({ onClose, report }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-2xl border border-[#404040] bg-[#262626] p-6 shadow-xl" onClick={(event) => event.stopPropagation()}>
+      <div className="w-full max-w-lg rounded-2xl border border-border-default-v2 bg-surface-card p-6 shadow-xl" onClick={(event) => event.stopPropagation()}>
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-bold text-[#f5f5f5]">Controle de versões</h2>
-            <p className="mt-1 text-xs text-[#a3a3a3]">{report.orderNumber || report.exam || 'Relatório'}</p>
+            <h2 className="text-lg font-bold text-text-heading">Controle de versões</h2>
+            <p className="mt-1 text-xs text-text-muted-v2">{report.orderNumber || report.exam || 'Relatório'}</p>
           </div>
-          <button className="rounded-lg p-1.5 transition hover:bg-[#333333]" onClick={onClose} type="button">
-            <ReportIcon className="size-4 text-[#a3a3a3]" name="x" />
+          <button className="rounded-lg p-1.5 transition hover:bg-surface-card-hover" onClick={onClose} type="button">
+            <ReportIcon className="size-4 text-text-muted-v2" name="x" />
           </button>
         </div>
         <div className="mt-5 grid gap-3">
           {versions.map((version, index) => (
-            <div className="rounded-lg border border-[#404040] bg-[#1a1a1a] p-3" key={`${version.date}-${index}`}>
-              <p className="text-sm font-semibold text-[#e5e5e5]">{version.label || `Versão ${versions.length - index}`}</p>
-              <p className="mt-1 text-xs text-[#a3a3a3]">{formatDateTime(version.date)} - {version.user || 'Usuário não informado'}</p>
+            <div className="rounded-lg border border-border-default-v2 bg-surface-inset p-3" key={`${version.date}-${index}`}>
+              <p className="text-sm font-semibold text-text-body">{version.label || `Versão ${versions.length - index}`}</p>
+              <p className="mt-1 text-xs text-text-muted-v2">{formatDateTime(version.date)} - {version.user || 'Usuário não informado'}</p>
               {Array.isArray(version.changes) && version.changes.length ? (
-                <ul className="mt-3 grid gap-2 text-xs text-[#a3a3a3]">
+                <ul className="mt-3 grid gap-2 text-xs text-text-muted-v2">
                   {version.changes.map((change, changeIndex) => (
-                    <li className="rounded-md border border-[#303030] bg-[#202020] px-3 py-2" key={`${change.field}-${changeIndex}`}>
-                      <span className="font-semibold text-[#e5e5e5]">{change.field}</span>
+                    <li className="rounded-md border border-border-subtle bg-surface-inset px-3 py-2" key={`${change.field}-${changeIndex}`}>
+                      <span className="font-semibold text-text-body">{change.field}</span>
                       <span className="mt-1 block">
                         {change.from} → {change.to}
                       </span>
@@ -1150,14 +1150,14 @@ function DeliveryProtocolModal({ onClose, onSave, report, viewerProfile }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <form className="w-full max-w-xl rounded-2xl border border-[#404040] bg-[#262626] p-6 shadow-xl" onClick={(event) => event.stopPropagation()} onSubmit={submit}>
+      <form className="w-full max-w-xl rounded-2xl border border-border-default-v2 bg-surface-card p-6 shadow-xl" onClick={(event) => event.stopPropagation()} onSubmit={submit}>
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-bold text-[#f5f5f5]">Protocolo de entrega</h2>
-            <p className="mt-1 text-xs text-[#a3a3a3]">{report.patientName} - {report.exam}</p>
+            <h2 className="text-lg font-bold text-text-heading">Protocolo de entrega</h2>
+            <p className="mt-1 text-xs text-text-muted-v2">{report.patientName} - {report.exam}</p>
           </div>
-          <button className="rounded-lg p-1.5 transition hover:bg-[#333333]" onClick={onClose} type="button">
-            <ReportIcon className="size-4 text-[#a3a3a3]" name="x" />
+          <button className="rounded-lg p-1.5 transition hover:bg-surface-card-hover" onClick={onClose} type="button">
+            <ReportIcon className="size-4 text-text-muted-v2" name="x" />
           </button>
         </div>
         <div className="mt-5 grid gap-4">
@@ -1172,8 +1172,8 @@ function DeliveryProtocolModal({ onClose, onSave, report, viewerProfile }) {
           </DarkField>
         </div>
         <div className="mt-6 flex justify-end gap-3">
-          <button className="rounded-sm border border-[#404040] bg-[#1a1a1a] px-4 py-2 text-sm font-semibold text-[#e5e5e5]" onClick={onClose} type="button">Cancelar</button>
-          <button className="rounded-sm bg-[#3b82f6] px-4 py-2 text-sm font-semibold text-white" type="submit">Registrar entrega</button>
+          <button className="rounded-sm border border-border-default-v2 bg-surface-inset px-4 py-2 text-sm font-semibold text-text-body" onClick={onClose} type="button">Cancelar</button>
+          <button className="rounded-sm bg-accent-primary px-4 py-2 text-sm font-semibold text-white" type="submit">Registrar entrega</button>
         </div>
       </form>
     </div>
@@ -1192,25 +1192,25 @@ function ReportViewModal({ onClose, report }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
-        className="flex max-h-[92vh] w-full max-w-4xl flex-col rounded-2xl border border-[#404040] bg-[#262626] shadow-xl"
+        className="flex max-h-[92vh] w-full max-w-4xl flex-col rounded-2xl border border-border-default-v2 bg-surface-card shadow-xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-[#404040] px-6 py-4">
+        <div className="flex items-center justify-between border-b border-border-default-v2 px-6 py-4">
           <div>
-            <h2 className="text-lg font-bold text-[#e5e5e5]">Relatório</h2>
-            <p className="mt-1 text-xs text-[#a3a3a3]">{report.orderNumber || 'Sem número'} </p>
+            <h2 className="text-lg font-bold text-text-body">Relatório</h2>
+            <p className="mt-1 text-xs text-text-muted-v2">{report.orderNumber || 'Sem número'} </p>
           </div>
           <div className="flex items-center gap-2">
             <button
-              className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#404040] bg-[#1a1a1a] px-3 text-xs font-semibold text-[#e5e5e5] transition hover:bg-[#2a2a2a]"
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-border-default-v2 bg-surface-inset px-3 text-xs font-semibold text-text-body transition hover:bg-surface-card-hover"
               onClick={() => printReportAsPdf(report, currentStatus)}
               type="button"
             >
               <ReportIcon className="size-4" name="print" />
               Imprimir PDF
             </button>
-            <button className="rounded-lg p-1.5 transition hover:bg-[#2a2a2a]" onClick={onClose} type="button">
-              <ReportIcon className="size-4 text-[#a3a3a3]" name="x" />
+            <button className="rounded-lg p-1.5 transition hover:bg-surface-card-hover" onClick={onClose} type="button">
+              <ReportIcon className="size-4 text-text-muted-v2" name="x" />
             </button>
           </div>
         </div>
@@ -1234,15 +1234,15 @@ function ReportViewModal({ onClose, report }) {
             <DetailBlock label="Diagnóstico" value={report.diagnosis || '-'} />
             <DetailBlock label="Conclusão" value={report.conclusion || '-'} />
           </div>
-          <div className="mt-6 rounded-xl border border-[#404040] bg-[#1a1a1a] p-5">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#a3a3a3]">Relatório</p>
+          <div className="mt-6 rounded-xl border border-border-default-v2 bg-surface-inset p-5">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-text-muted-v2">Relatório</p>
             {report.contentHtml ? (
               <div
-                className="whitespace-pre-wrap text-sm leading-6 text-[#e5e5e5]"
+                className="whitespace-pre-wrap text-sm leading-6 text-text-body"
                 dangerouslySetInnerHTML={{ __html: sanitizePreviewHtml(report.contentHtml) }}
               />
             ) : (
-              <p className="text-sm text-[#a3a3a3]">Nenhum complemento informado.</p>
+              <p className="text-sm text-text-muted-v2">Nenhum complemento informado.</p>
             )}
           </div>
         </div>
@@ -1264,13 +1264,13 @@ function PendingFileList({ files = [], onRemove }) {
   if (!files?.length) return null
 
   return (
-    <ul className="mt-2 grid gap-2 text-xs text-[#a3a3a3]">
+    <ul className="mt-2 grid gap-2 text-xs text-text-muted-v2">
       {files.map((fileName, index) => (
-        <li className="flex items-center justify-between gap-3 rounded border border-[#404040] bg-[#262626] px-3 py-2" key={`${fileName}-${index}`}>
+        <li className="flex items-center justify-between gap-3 rounded border border-border-default-v2 bg-surface-card px-3 py-2" key={`${fileName}-${index}`}>
           <span className="min-w-0 truncate">{fileName}</span>
           <button
             aria-label={`Remover ${fileName}`}
-            className="grid size-5 shrink-0 place-items-center rounded-sm text-[#e5e5e5] transition hover:bg-[#404040]"
+            className="grid size-5 shrink-0 place-items-center rounded-sm text-text-body transition hover:bg-surface-card-hover"
             onClick={() => onRemove?.(index)}
             type="button"
           >
@@ -1284,11 +1284,11 @@ function PendingFileList({ files = [], onRemove }) {
 
 function SearchMenu({ emptyText, items, onSelect }) {
   return (
-    <div className="absolute left-0 right-0 top-11 z-20 max-h-56 overflow-y-auto rounded-md border border-[#404040] bg-[#202020] shadow-2xl">
+    <div className="absolute left-0 right-0 top-11 z-20 max-h-56 overflow-y-auto rounded-md border border-border-default-v2 bg-surface-inset shadow-2xl">
       {items.length ? (
         items.map((item) => (
           <button
-            className="block w-full px-3 py-2 text-left text-sm font-semibold text-[#e5e5e5] transition hover:bg-[#303030]"
+            className="block w-full px-3 py-2 text-left text-sm font-semibold text-text-body transition hover:bg-surface-card-hover"
             key={item.id || item.name}
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => onSelect(item)}
@@ -1298,7 +1298,7 @@ function SearchMenu({ emptyText, items, onSelect }) {
           </button>
         ))
       ) : (
-        <p className="px-3 py-2 text-xs text-[#737373]">{emptyText}</p>
+        <p className="px-3 py-2 text-xs text-text-muted-v2">{emptyText}</p>
       )}
     </div>
   )
@@ -1306,18 +1306,18 @@ function SearchMenu({ emptyText, items, onSelect }) {
 
 function DetailCard({ label, value }) {
   return (
-    <div className="rounded-lg border border-[#404040] bg-[#1a1a1a] px-3 py-2.5">
-      <p className="text-xs font-semibold uppercase tracking-wide text-[#a3a3a3]">{label}</p>
-      <p className="mt-1 text-sm leading-5 text-[#e5e5e5]">{value}</p>
+    <div className="rounded-lg border border-border-default-v2 bg-surface-inset px-3 py-2.5">
+      <p className="text-xs font-semibold uppercase tracking-wide text-text-muted-v2">{label}</p>
+      <p className="mt-1 text-sm leading-5 text-text-body">{value}</p>
     </div>
   )
 }
 
 function DetailBlock({ label, value }) {
   return (
-    <div className="rounded-lg border border-[#404040] bg-[#1a1a1a] px-3 py-2.5">
-      <p className="text-xs font-semibold uppercase tracking-wide text-[#a3a3a3]">{label}</p>
-      <p className="mt-1 whitespace-pre-wrap text-sm leading-5 text-[#e5e5e5]">{value}</p>
+    <div className="rounded-lg border border-border-default-v2 bg-surface-inset px-3 py-2.5">
+      <p className="text-xs font-semibold uppercase tracking-wide text-text-muted-v2">{label}</p>
+      <p className="mt-1 whitespace-pre-wrap text-sm leading-5 text-text-body">{value}</p>
     </div>
   )
 }
@@ -1326,7 +1326,7 @@ function IconButton({ label, name, onClick }) {
   return (
     <button
       aria-label={label}
-      className="grid size-9 place-items-center rounded-lg border border-[#404040] bg-[#1a1a1a] text-[#a3a3a3] transition hover:bg-[#2a2a2a] hover:text-[#e5e5e5]"
+      className="grid size-9 place-items-center rounded-lg border border-border-default-v2 bg-surface-inset text-text-muted-v2 transition hover:bg-surface-card-hover hover:text-text-body"
       onClick={onClick}
       title={label}
       type="button"
@@ -1339,7 +1339,7 @@ function IconButton({ label, name, onClick }) {
 function PageButton({ children, disabled, onClick }) {
   return (
     <button
-      className="grid size-8 place-items-center rounded-lg border border-[#404040] bg-[#1a1a1a] text-[#e5e5e5] transition hover:bg-[#333333] disabled:cursor-not-allowed disabled:opacity-30"
+      className="grid size-8 place-items-center rounded-lg border border-border-default-v2 bg-surface-inset text-text-body transition hover:bg-surface-card-hover disabled:cursor-not-allowed disabled:opacity-30"
       disabled={disabled}
       onClick={onClick}
       type="button"

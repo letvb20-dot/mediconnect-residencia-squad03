@@ -1,20 +1,20 @@
 const buttonVariants = {
   primary:
-    'border-[#3b82f6] bg-[#3b82f6] text-white hover:bg-blue-600 focus-visible:outline-[#3b82f6]',
+    'border-transparent bg-gradient-to-b from-[#4f93f7] to-[#3b82f6] text-white shadow-[0_2px_8px_rgba(59,130,246,0.3)] hover:shadow-[0_4px_12px_rgba(59,130,246,0.4)] hover:brightness-110 focus-visible:outline-[#3b82f6]',
   secondary:
-    'border-gray-200 bg-white text-gray-700 hover:bg-[#f4f7fb] focus-visible:outline-gray-500',
+    'border-border-default-v2 bg-surface-card text-text-body hover:bg-surface-card-hover focus-visible:outline-border-strong',
   ghost:
-    'border-transparent bg-transparent text-gray-600 hover:bg-[#f4f7fb] focus-visible:outline-gray-500',
+    'border-transparent bg-transparent text-text-muted-v2 hover:bg-surface-card-hover hover:text-text-body focus-visible:outline-border-strong',
   danger:
     'border-rose-600 bg-rose-600 text-white hover:bg-rose-700 focus-visible:outline-rose-600',
 }
 
-export const appCardClass = 'rounded-2xl border border-[#404040] bg-[#262626] shadow-sm'
+export const appCardClass = 'rounded-2xl border border-border-default-v2 bg-surface-card shadow-card transition-shadow hover:shadow-card-hover'
 export const appInputClass =
-  'h-10 w-full rounded-lg border border-[#404040] bg-[#1a1a1a] px-3 text-sm text-[#e5e5e5] outline-none transition placeholder:text-[#a3a3a3] focus:border-[#3b82f6] focus:ring-1 focus:ring-[#3b82f6]'
+  'h-11 w-full rounded-xl border border-border-default-v2 bg-surface-inset px-3 text-sm text-text-body outline-none transition placeholder:text-text-muted-v2 focus:border-accent-primary focus:ring-2 focus:ring-[#3b82f6]/20'
 export const appTextareaClass =
-  'min-h-28 w-full rounded-lg border border-[#404040] bg-[#1a1a1a] px-3 py-2 text-sm leading-6 text-[#e5e5e5] outline-none transition placeholder:text-[#a3a3a3] focus:border-[#3b82f6] focus:ring-1 focus:ring-[#3b82f6]'
-export const appLabelClass = 'mb-1.5 block text-xs font-medium text-[#e5e5e5]'
+  'min-h-28 w-full rounded-xl border border-border-default-v2 bg-surface-inset px-3 py-2 text-sm leading-6 text-text-body outline-none transition placeholder:text-text-muted-v2 focus:border-accent-primary focus:ring-2 focus:ring-[#3b82f6]/20'
+export const appLabelClass = 'mb-1.5 block text-xs font-medium text-text-heading'
 
 export function Button({
   children,
@@ -36,7 +36,7 @@ export function Button({
 
 export function Card({ children, className = '' }) {
   return (
-    <section className={`rounded-lg border border-gray-200 bg-white shadow-sm ${className}`}>
+    <section className={`rounded-2xl border border-border-default-v2 bg-surface-card shadow-card transition-shadow hover:shadow-card-hover ${className}`}>
       {children}
     </section>
   )
@@ -47,15 +47,15 @@ export function PageHeader({ actions, description, eyebrow, title }) {
     <header className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
       <div className="max-w-3xl">
         {eyebrow ? (
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#3b82f6]">
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-accent-primary">
             {eyebrow}
           </p>
         ) : null}
-        <h1 className="mt-1 text-3xl font-bold tracking-tight text-[#e5e5e5] md:text-4xl">
+        <h1 className="mt-1 text-3xl font-bold tracking-tight text-text-heading md:text-4xl">
           {title}
         </h1>
         {description ? (
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-[#a3a3a3] md:text-base">
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-text-muted-v2 md:text-base">
             {description}
           </p>
         ) : null}

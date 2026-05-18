@@ -2,6 +2,8 @@ import { apiConfig, getAuthenticatedHeaders, getPublicHeaders } from '../config/
 import { cleanPersonName, formatBrazilianPhone, formatCpf, isValidPersonName, onlyDigits } from '../utils/brFormatters.js'
 import { getResponseError } from './repositoryUtils.js'
 
+const PATIENT_ATTACHMENT_BUCKETS = ['patient-attachments', 'attachments', 'avatars']
+
 export const patientRepository = {
   // GET /rest/v1/patients
   // Filtros documentados: select, limit, offset, order, full_name, cpf
@@ -102,30 +104,25 @@ export const patientRepository = {
   },
 
   // PATCH /rest/v1/patients?id=eq.{id}
-  // Body documentado: full_name?, phone_mobile?, email?
+  // Primeiro salva o nucleo documentado e, em seguida, tenta grupos estendidos.
+  // Se a API ainda nao tiver alguma coluna opcional, o grupo e ignorado sem
+  // impedir que os campos principais sejam persistidos.
   async update(patientId, data) {
     validatePatientPayload(data)
     const body = buildUpdatePatientBody(data)
-    const attempts = buildUpdateAttempts(body)
-    let lastError = null
+    const groups = buildUpdateGroups(body)
+    let representation = []
 
-    if (!attempts.length) return []
+    if (!groups.core.length && !groups.optional.length) return []
 
-    for (const attempt of attempts) {
-      const response = await fetch(`${apiConfig.restUrl}/patients?id=eq.${encodeURIComponent(patientId)}`, {
-        method: 'PATCH',
-        headers: getAuthenticatedHeaders({ Prefer: 'return=representation' }),
-        body: JSON.stringify(attempt),
-      })
+    representation = await patchRequiredPatientGroup(patientId, groups.core)
 
-      if (response.ok) {
-        return response.json()
-      }
-
-      lastError = new Error(await getResponseError(response, 'Erro ao atualizar paciente.'))
+    for (const attempt of groups.optional) {
+      const nextRepresentation = await patchPatient(patientId, attempt, { required: false })
+      if (nextRepresentation) representation = nextRepresentation
     }
 
-    throw lastError || new Error('Erro ao atualizar paciente.')
+    return representation
   },
 
   // POST /storage/v1/object/avatars/{path}
@@ -167,24 +164,32 @@ export const patientRepository = {
 
     const safeName = sanitizeFileName(file.name || `anexo-${Date.now()}`)
     const objectPath = `patients/${patientId}/attachments/${Date.now()}-${safeName}`
-    const response = await fetch(`${apiConfig.storageUrl}/object/avatars/${objectPath}`, {
-      method: 'POST',
-      headers: getAuthenticatedHeaders({
-        'Content-Type': file.type || 'application/octet-stream',
-        'x-upsert': 'true',
-      }),
-      body: file,
-    })
+    let lastError = null
 
-    if (!response.ok) {
-      throw new Error(await getResponseError(response, 'Falha ao enviar anexo do paciente.'))
+    for (const bucket of PATIENT_ATTACHMENT_BUCKETS) {
+      const response = await fetch(`${apiConfig.storageUrl}/object/${bucket}/${objectPath}`, {
+        method: 'POST',
+        headers: getAuthenticatedHeaders({
+          'Content-Type': file.type || 'application/octet-stream',
+          'x-upsert': 'true',
+        }),
+        body: file,
+      })
+
+      if (response.ok) {
+        return {
+          bucket,
+          name: file.name || safeName,
+          path: objectPath,
+          url: getPublicStorageUrl(bucket, objectPath),
+        }
+      }
+
+      lastError = await getResponseError(response, 'Falha ao enviar anexo do paciente.')
+      if ([401, 403, 413].includes(response.status)) break
     }
 
-    return {
-      name: file.name || safeName,
-      path: objectPath,
-      url: getPublicAvatarUrl(objectPath),
-    }
+    throw new Error(lastError || 'Falha ao enviar anexo do paciente.')
   },
 
   // DELETE /rest/v1/patients?id=eq.{id}
@@ -214,64 +219,69 @@ async function getPatientById(patientId) {
 }
 
 function mapPatientToDirectory(patient, appointments = []) {
-  const appointmentSummary = summarizeAppointments(patient.id, appointments)
-  const address = getAddressObject(patient)
-  const city = getFirstValue(patient, ['city', 'cidade', 'address_city', 'municipio', 'municipality', 'address_municipality'], getFirstValue(address, ['city', 'cidade', 'municipio', 'municipality']))
-  const state = getFirstValue(patient, ['state', 'uf', 'address_state', 'address_uf', 'estado'], getFirstValue(address, ['state', 'uf', 'estado']))
-  const insurance = getFirstValue(patient, ['insurance', 'convenio', 'health_insurance', 'insurance_name'])
-  const name = cleanPersonName(patient.name, patient.full_name, patient.nome)
-  const cpf = formatCpf(patient.cpf || patient.document || patient.documento)
+  const sources = getPatientSources(patient)
+  const value = (keys, fallback = '') => getFirstValueFromSources(sources, keys, fallback)
+  const patientId = value(['id', 'patient_id', 'patientId', 'paciente_id']) || patient.id
+  const appointmentSummary = summarizeAppointments(patientId, appointments)
+  const city = value(['city', 'cidade', 'address_city', 'municipio', 'municipality', 'address_municipality'])
+  const state = value(['state', 'uf', 'address_state', 'address_uf', 'estado'])
+  const insurance = value(['insurance', 'convenio', 'health_insurance', 'insurance_name', 'convenio_nome'])
+  const name = cleanPersonName(value(['name']), value(['full_name']), value(['nome']))
+  const cpf = formatCpf(value(['cpf', 'document', 'documento', 'document_number']))
+  const birthDate = value(['birthDate', 'birth_date', 'data_nascimento', 'date_of_birth', 'dataNascimento'])
 
   return {
     ...patient,
+    id: patientId,
     name: name || 'Paciente sem nome',
     cpf,
     document: cpf || patient.document || patient.documento || '',
-    socialName: patient.socialName || patient.social_name || patient.nome_social || '',
-    rg: patient.rg || '',
-    otherDocuments: patient.otherDocuments || patient.other_documents || patient.document_type || patient.tipo_documento || patient.outros_documentos || '',
-    documentNumber: patient.documentNumber || patient.document_number || patient.numero_documento || '',
-    sex: patient.sex || patient.sexo || patient.gender || '',
+    socialName: value(['socialName', 'social_name', 'nome_social']),
+    rg: value(['rg']),
+    otherDocuments: value(['otherDocuments', 'other_documents', 'document_type', 'tipo_documento', 'outros_documentos']),
+    documentNumber: value(['documentNumber', 'document_number', 'numero_documento', 'documento_numero']),
+    sex: value(['sex', 'sexo', 'gender']),
     race: patient.race || patient.raca || patient.raça || '',
-    naturality: patient.naturality || patient.naturalidade || '',
-    nationality: patient.nationality || patient.nacionalidade || '',
+    naturality: value(['naturality', 'naturalidade']),
+    nationality: value(['nationality', 'nacionalidade']),
     profession: patient.profession || patient.profissao || patient.profissão || '',
-    motherProfession: patient.motherProfession || patient.mother_profession || patient.profissao_mae || '',
-    fatherProfession: patient.fatherProfession || patient.father_profession || patient.profissao_pai || '',
-    responsibleName: patient.responsibleName || patient.responsible_name || patient.guardian_name || patient.nome_responsavel || '',
-    responsibleCpf: formatCpf(patient.responsibleCpf || patient.responsible_cpf || patient.guardian_cpf || patient.cpf_responsavel || ''),
-    spouseName: patient.spouseName || patient.spouse_name || patient.nome_conjuge || patient.nome_esposo || '',
-    phone: formatBrazilianPhone(patient.phone || patient.phone_mobile || patient.telefone || ''),
+    motherProfession: value(['motherProfession', 'mother_profession', 'profissao_mae']),
+    fatherProfession: value(['fatherProfession', 'father_profession', 'profissao_pai']),
+    responsibleName: value(['responsibleName', 'responsible_name', 'guardian_name', 'nome_responsavel']),
+    responsibleCpf: formatCpf(value(['responsibleCpf', 'responsible_cpf', 'guardian_cpf', 'cpf_responsavel'])),
+    spouseName: value(['spouseName', 'spouse_name', 'nome_conjuge', 'nome_esposo']),
+    phone: formatBrazilianPhone(value(['phone', 'phone_mobile', 'telefone', 'celular'])),
     avatarUrl: normalizeAvatarUrl(patient.avatarUrl || patient.avatar_url || patient.avatar_path),
-    detailId: patient.id,
+    detailId: patientId,
     insurance: normalizeInsurance(insurance),
     city,
     state,
     vip: Boolean(patient.vip),
-    birthDate: patient.birthDate || patient.birth_date || '',
-    motherName: patient.motherName || patient.mother_name || patient.nome_mae || '',
-    fatherName: patient.fatherName || patient.father_name || patient.nome_pai || '',
-    ethnicity: patient.ethnicity || patient.etnia || '',
-    maritalStatus: patient.maritalStatus || patient.marital_status || patient.estado_civil || '',
-    phoneLandline: formatBrazilianPhone(patient.phoneLandline || patient.phone_landline || patient.phone1 || patient.tel1 || patient.telefone1 || ''),
-    phoneSecondary: formatBrazilianPhone(patient.phoneSecondary || patient.phone_secondary || patient.phone2 || patient.tel2 || patient.telefone2 || patient.phone_home || ''),
-    zipCode: patient.zipCode || patient.zip_code || patient.cep || '',
-    addressStreet: patient.addressStreet || patient.address_street || patient.street || patient.logradouro || address?.street || address?.logradouro || '',
-    addressNumber: patient.addressNumber || patient.address_number || patient.numero || '',
-    addressComplement: patient.addressComplement || patient.address_complement || patient.complemento || '',
-    plan: patient.plan || patient.plano || patient.insurance_plan || '',
-    bloodType: patient.bloodType || patient.blood_type || patient.tipo_sanguineo || '',
-    weight: patient.weight || patient.peso || '',
-    height: patient.height || patient.altura || '',
-    bmi: patient.bmi || patient.imc || '',
-    allergies: patient.allergies || patient.alergias || '',
-    insuranceNumber: patient.insuranceNumber || patient.insurance_number || patient.numero_matricula || '',
-    insuranceCardValidUntil: patient.insuranceCardValidUntil || patient.insurance_card_valid_until || patient.validade_carteira || '',
-    insuranceIndefiniteValidity: Boolean(patient.insuranceIndefiniteValidity || patient.insurance_indefinite_validity || patient.validade_indeterminada),
-    cns: patient.cns || patient.sus_card || patient.cartao_sus || '',
-    lgpdOptIn: Boolean(patient.lgpdOptIn ?? patient.lgpd_opt_in ?? patient.accepts_messages ?? patient.opt_in_messages ?? patient.receber_mensagens ?? true),
-    attachments: normalizeAttachments(patient.attachments || patient.anexos || patient.documents || patient.documentos),
-    notesText: patient.notesText || patient.notes_text || patient.observations || patient.observacoes || '',
+    birthDate,
+    age: resolvePatientAge(patient, birthDate),
+    motherName: value(['motherName', 'mother_name', 'nome_mae']),
+    fatherName: value(['fatherName', 'father_name', 'nome_pai']),
+    ethnicity: value(['ethnicity', 'etnia']),
+    maritalStatus: value(['maritalStatus', 'marital_status', 'estado_civil']),
+    phoneLandline: formatBrazilianPhone(value(['phoneLandline', 'phone_landline', 'phone1', 'tel1', 'telefone1'])),
+    phoneSecondary: formatBrazilianPhone(value(['phoneSecondary', 'phone_secondary', 'phone2', 'tel2', 'telefone2', 'phone_home'])),
+    zipCode: value(['zipCode', 'zip_code', 'cep', 'postal_code']),
+    addressStreet: value(['addressStreet', 'address_street', 'street', 'logradouro']),
+    addressNumber: value(['addressNumber', 'address_number', 'number', 'numero']),
+    addressComplement: value(['addressComplement', 'address_complement', 'complement', 'complemento']),
+    plan: value(['plan', 'plano', 'insurance_plan']),
+    bloodType: value(['bloodType', 'blood_type', 'tipo_sanguineo']),
+    weight: value(['weight', 'peso', 'weight_kg']),
+    height: value(['height', 'altura', 'height_m']),
+    bmi: value(['bmi', 'imc']),
+    allergies: value(['allergies', 'alergias']),
+    insuranceNumber: value(['insuranceNumber', 'insurance_number', 'numero_matricula', 'member_number']),
+    insuranceCardValidUntil: value(['insuranceCardValidUntil', 'insurance_card_valid_until', 'validade_carteira', 'insurance_valid_until']),
+    insuranceIndefiniteValidity: Boolean(value(['insuranceIndefiniteValidity', 'insurance_indefinite_validity', 'validade_indeterminada'], false)),
+    cns: value(['cns', 'sus_card', 'cartao_sus']),
+    lgpdOptIn: Boolean(value(['lgpdOptIn', 'lgpd_opt_in', 'accepts_messages', 'opt_in_messages', 'receber_mensagens'], true)),
+    attachments: normalizeAttachments(value(['attachments', 'anexos', 'documents', 'documentos'], [])),
+    notesText: value(['notesText', 'notes_text', 'observations', 'observacoes', 'notes']),
     lastVisitIso: patient.lastVisitIso || patient.last_visit_iso || appointmentSummary.lastVisitIso || null,
     lastVisit: patient.lastVisit || patient.last_visit || appointmentSummary.lastVisit || '',
     nextVisit: patient.nextVisit || patient.next_visit || appointmentSummary.nextVisit || '',
@@ -280,21 +290,23 @@ function mapPatientToDirectory(patient, appointments = []) {
 
 function mapPatientToDetail(patient, appointments = []) {
   const directory = mapPatientToDirectory(patient, appointments)
+  const sources = getPatientSources(patient)
+  const value = (keys, fallback = '') => getFirstValueFromSources(sources, keys, fallback)
 
   return {
     ...directory,
-    age: patient.age || patient.idade || calculateAge(patient.birth_date),
+    age: resolvePatientAge(patient, directory.birthDate),
     document: directory.cpf || 'CPF não informado',
     plan: directory.plan || directory.insurance,
     condition: normalizeCondition(patient.condition || patient.condicao || 'Sem condição principal'),
-    status: patient.status || 'Acompanhamento',
-    risk: patient.risk || patient.risco || 'Baixo',
-    email: patient.email || '',
+    status: value(['status', 'situacao'], 'Acompanhamento'),
+    risk: value(['risk', 'risco'], 'Baixo'),
+    email: value(['email']),
     avatarUrl: directory.avatarUrl,
     address: formatAddress(directory) || formatObjectAddress(patient.address) || patient.endereco || 'Endereço não informado',
-    team: patient.team || patient.equipe || [],
-    notes: normalizeNotes(patient.notes || patient.observacoes || directory.notesText),
-    exams: patient.exams || patient.exames || [],
+    team: value(['team', 'equipe'], []),
+    notes: normalizeNotes(value(['notes', 'observacoes'], directory.notesText)),
+    exams: value(['exams', 'exames'], []),
   }
 }
 
@@ -376,10 +388,42 @@ function getAddressObject(patient) {
   return {}
 }
 
+function getPatientSources(patient) {
+  const address = getAddressObject(patient)
+  return [
+    patient,
+    patient?.profile,
+    patient?.patient,
+    patient?.patient_data,
+    patient?.dados,
+    patient?.personal_data,
+    patient?.demographics,
+    patient?.contact,
+    patient?.contato,
+    address,
+    patient?.address_data,
+    patient?.endereco,
+    patient?.medical,
+    patient?.medical_info,
+    patient?.health,
+    patient?.insurance_data,
+    patient?.insurance_info,
+  ].filter((source) => source && typeof source === 'object')
+}
+
+function getFirstValueFromSources(sources, keys, fallback = '') {
+  for (const source of sources) {
+    const value = getFirstValue(source, keys, undefined)
+    if (value !== undefined && value !== null && value !== '') return value
+  }
+
+  return fallback
+}
+
 function getFirstValue(source, keys, fallback = '') {
   if (!source) return fallback
   for (const key of keys) {
-    if (source[key]) return source[key]
+    if (source[key] !== undefined && source[key] !== null && source[key] !== '') return source[key]
   }
   return fallback
 }
@@ -436,7 +480,11 @@ function normalizeAvatarUrl(value) {
 }
 
 function getPublicAvatarUrl(path) {
-  return `${apiConfig.storageUrl}/object/public/avatars/${String(path || '').replace(/^\/+/, '')}`
+  return getPublicStorageUrl('avatars', path)
+}
+
+function getPublicStorageUrl(bucket, path) {
+  return `${apiConfig.storageUrl}/object/public/${bucket}/${String(path || '').replace(/^\/+/, '')}`
 }
 
 // =============================================================================
@@ -507,28 +555,162 @@ function buildUpdatePatientBody(data) {
     full_name: cleanPersonName(data.name, data.full_name) || undefined,
     phone_mobile: data.phone || data.phone_mobile ? onlyDigits(data.phone || data.phone_mobile) : undefined,
     email: data.email?.trim() || undefined,
+    social_name: cleanText(data.socialName || data.social_name),
+    cpf: onlyDigits(data.cpf),
+    rg: cleanText(data.rg),
+    document_type: cleanText(data.otherDocuments || data.documentType || data.document_type),
+    document_number: cleanText(data.documentNumber || data.document_number),
+    birth_date: data.birthDate || data.birth_date || undefined,
+    sex: normalizePatientSex(data.sex || data.sexo),
+    race: normalizePatientRace(data.race || data.raca),
+    ethnicity: cleanText(data.ethnicity || data.etnia),
+    nationality: cleanText(data.nationality || data.nacionalidade),
+    naturality: cleanText(data.naturality || data.naturalidade),
+    profession: cleanText(data.profession || data.profissao),
+    marital_status: cleanText(data.maritalStatus || data.marital_status),
+    mother_name: cleanPersonName(data.motherName, data.mother_name),
+    mother_profession: cleanText(data.motherProfession || data.mother_profession),
+    father_name: cleanPersonName(data.fatherName, data.father_name),
+    father_profession: cleanText(data.fatherProfession || data.father_profession),
+    guardian_name: cleanPersonName(data.responsibleName, data.guardian_name, data.responsible_name),
+    guardian_cpf: onlyDigits(data.responsibleCpf || data.guardian_cpf || data.responsible_cpf),
+    spouse_name: cleanPersonName(data.spouseName, data.spouse_name),
+    phone1: onlyDigits(data.phoneLandline || data.phone1),
+    phone2: onlyDigits(data.phoneSecondary || data.phone2),
+    cep: onlyDigits(data.zipCode || data.cep),
+    street: cleanText(data.addressStreet || data.street),
+    number: cleanText(data.addressNumber || data.number),
+    complement: cleanText(data.addressComplement || data.complement),
+    neighborhood: cleanText(data.neighborhood || data.bairro),
+    city: cleanText(data.city || data.cidade),
+    state: normalizeState(data.state || data.uf),
+    insurance: cleanText(data.insurance || data.convenio),
+    health_insurance: cleanText(data.insurance || data.convenio),
+    plan: cleanText(data.plan || data.plano),
+    insurance_plan: cleanText(data.plan || data.plano),
+    insurance_number: cleanText(data.insuranceNumber || data.insurance_number || data.numero_matricula),
+    insurance_card_valid_until: data.insuranceCardValidUntil || data.insurance_card_valid_until || undefined,
+    insurance_indefinite_validity: data.insuranceIndefiniteValidity ?? data.insurance_indefinite_validity,
+    blood_type: cleanText(data.bloodType || data.blood_type),
+    weight_kg: normalizeDecimal(data.weight || data.weight_kg),
+    height_m: normalizeHeight(data.height || data.height_m),
+    bmi: normalizeDecimal(data.bmi),
+    allergies: cleanText(data.allergies || data.alergias),
+    condition: cleanText(data.condition || data.condicao),
+    cns: cleanText(data.cns || data.sus_card || data.cartao_sus),
+    lgpd_opt_in: data.lgpdOptIn ?? data.lgpd_opt_in,
+    vip: data.vip === undefined ? undefined : Boolean(data.vip),
+    notes: cleanText(data.notesText || data.notes_text || data.notes),
+    attachments: Array.isArray(data.attachments) && data.attachments.length ? data.attachments : undefined,
   })
 }
 
-function buildUpdateAttempts(body) {
-  const attempts = [
-    body,
-    { full_name: body.full_name, phone_mobile: body.phone_mobile },
-    { full_name: body.full_name, email: body.email },
-    { full_name: body.full_name },
-    { phone_mobile: body.phone_mobile },
-    { email: body.email },
-  ].map((attempt) => cleanPayload(attempt))
+function buildUpdateGroups(body) {
+  return {
+    core: uniquePayloads([
+      pickPayload(body, ['full_name', 'phone_mobile', 'email']),
+      pickPayload(body, ['full_name', 'phone_mobile']),
+      pickPayload(body, ['full_name', 'email']),
+      pickPayload(body, ['full_name']),
+      pickPayload(body, ['phone_mobile']),
+      pickPayload(body, ['email']),
+    ]),
+    optional: uniquePayloads([
+      pickPayload(body, [
+        'cpf',
+        'social_name',
+        'rg',
+        'document_type',
+        'document_number',
+        'birth_date',
+        'sex',
+        'race',
+        'ethnicity',
+        'nationality',
+        'naturality',
+        'profession',
+        'marital_status',
+        'mother_name',
+        'mother_profession',
+        'father_name',
+        'father_profession',
+        'guardian_name',
+        'guardian_cpf',
+        'spouse_name',
+      ]),
+      pickPayload(body, ['phone1', 'phone2', 'cep', 'street', 'number', 'complement', 'neighborhood', 'city', 'state']),
+      pickPayload(body, ['blood_type', 'weight_kg', 'height_m', 'bmi', 'allergies', 'condition', 'cns']),
+      pickPayload(body, ['insurance', 'plan', 'insurance_number', 'insurance_card_valid_until', 'insurance_indefinite_validity']),
+      pickPayload(body, ['health_insurance', 'insurance_plan']),
+      pickPayload(body, ['lgpd_opt_in', 'vip', 'notes', 'attachments']),
+    ]),
+  }
+}
 
+function pickPayload(source, fields) {
+  return cleanPayload(Object.fromEntries(fields.map((field) => [field, source[field]])))
+}
+
+function uniquePayloads(payloads) {
   const seen = new Set()
-  return attempts.filter((attempt) => {
-    const entries = Object.entries(attempt)
+
+  return payloads.filter((payload) => {
+    const entries = Object.entries(payload)
     if (!entries.length) return false
 
-    const key = JSON.stringify(attempt)
+    const key = JSON.stringify(payload)
     if (seen.has(key)) return false
     seen.add(key)
     return true
+  })
+}
+
+async function patchPatient(patientId, payload, { required }) {
+  const response = await fetch(`${apiConfig.restUrl}/patients?id=eq.${encodeURIComponent(patientId)}`, {
+    method: 'PATCH',
+    headers: getAuthenticatedHeaders({ Prefer: 'return=representation' }),
+    body: JSON.stringify(payload),
+  })
+
+  if (response.ok) {
+    return response.json()
+  }
+
+  const text = await response.text().catch(() => '')
+
+  if (!required && isUnsupportedOptionalPatch(response.status, text)) {
+    return null
+  }
+
+  throw new Error(await getResponseError(cloneTextResponse(response, text), 'Erro ao atualizar paciente.'))
+}
+
+async function patchRequiredPatientGroup(patientId, attempts) {
+  let lastSkipped = null
+
+  for (const attempt of attempts) {
+    const result = await patchPatient(patientId, attempt, { required: false })
+    if (result) return result
+    lastSkipped = attempt
+  }
+
+  if (lastSkipped) {
+    throw new Error('Erro ao atualizar paciente. A API recusou os campos principais do paciente.')
+  }
+
+  return []
+}
+
+function isUnsupportedOptionalPatch(status, text) {
+  if (![400, 404, 406].includes(status)) return false
+  return /column|schema cache|relationship|not found|does not exist|pgrst/i.test(String(text || ''))
+}
+
+function cloneTextResponse(response, text) {
+  return new Response(text, {
+    headers: response.headers,
+    status: response.status,
+    statusText: response.statusText,
   })
 }
 
@@ -583,10 +765,10 @@ async function updatePatientAvatarUrl(patientId, avatarUrl) {
 }
 
 function calculateAge(birthDate) {
-  if (!birthDate) return 0
+  if (!birthDate) return null
 
-  const birth = new Date(birthDate)
-  if (Number.isNaN(birth.getTime())) return 0
+  const birth = parseBirthDate(birthDate)
+  if (Number.isNaN(birth.getTime())) return null
 
   const today = new Date()
   let age = today.getFullYear() - birth.getFullYear()
@@ -597,6 +779,25 @@ function calculateAge(birthDate) {
   }
 
   return age
+}
+
+function parseBirthDate(value) {
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value || ''))
+  if (dateOnly) {
+    return new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+  }
+
+  return new Date(value)
+}
+
+function resolvePatientAge(patient, birthDate) {
+  const rawAge = patient.age ?? patient.idade
+  if (rawAge !== undefined && rawAge !== null && String(rawAge).trim() !== '') {
+    const age = Number(rawAge)
+    if (Number.isFinite(age) && age >= 0) return age
+  }
+
+  return calculateAge(birthDate)
 }
 
 function getDefaultRedirectUrl(path) {

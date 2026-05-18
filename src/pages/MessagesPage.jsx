@@ -124,12 +124,12 @@ const emptyCampaign = {
   recurrence: 'none',
 }
 
-const cardClass = 'rounded-2xl border border-[#404040] bg-[#262626] shadow-sm'
+const cardClass = 'rounded-2xl border border-border-default-v2 bg-surface-card shadow-sm'
 const inputClass =
-  'h-10 w-full rounded-sm border border-[#404040] bg-[#171717] px-3 text-sm text-[#e5e5e5] outline-none transition placeholder:text-[#a3a3a3] focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20'
+  'h-10 w-full rounded-sm border border-border-default-v2 bg-surface-page px-3 text-sm text-text-heading outline-none transition placeholder:text-text-muted-v2 focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20'
 const textareaClass =
-  'min-h-28 w-full resize-y rounded-sm border border-[#404040] bg-[#171717] px-3 py-2 text-sm leading-6 text-[#e5e5e5] outline-none transition placeholder:text-[#a3a3a3] focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20'
-const labelClass = 'text-xs font-semibold uppercase tracking-[0.08em] text-[#a3a3a3]'
+  'min-h-28 w-full resize-y rounded-sm border border-border-default-v2 bg-surface-page px-3 py-2 text-sm leading-6 text-text-heading outline-none transition placeholder:text-text-muted-v2 focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20'
+const labelClass = 'text-xs font-semibold uppercase tracking-[0.08em] text-text-muted-v2'
 
 export function MessagesPage({ role }) {
   const normalizedRole = normalizeRole(role)
@@ -456,13 +456,13 @@ export function MessagesPage({ role }) {
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <h1 className="text-[32px] font-bold leading-8 tracking-[-0.02em] text-[#f5f5f5]">Comunicação</h1>
+          <h1 className="text-[32px] font-bold leading-8 tracking-[-0.02em] text-text-heading">Comunicação</h1>
         </div>
 
         <div className="flex flex-wrap gap-3">
           {!isSecretary ? (
             <button
-              className="inline-flex h-12 items-center gap-2 rounded-sm border border-[#404040] bg-[#262626] px-4 text-sm font-semibold text-[#e5e5e5] transition hover:bg-[#303030]"
+              className="inline-flex h-12 items-center gap-2 rounded-sm border border-border-default-v2 bg-surface-card px-4 text-sm font-semibold text-text-heading transition hover:bg-surface-card-hover"
               onClick={() => openCampaignModal()}
               type="button"
             >
@@ -482,7 +482,7 @@ export function MessagesPage({ role }) {
       </div>
 
       {loading ? (
-        <p className={`${cardClass} p-8 text-center text-sm text-[#a3a3a3]`}>Carregando comunicacao...</p>
+        <p className={`${cardClass} p-8 text-center text-sm text-text-muted-v2`}>Carregando comunicacao...</p>
       ) : null}
 
       {error ? (
@@ -498,7 +498,7 @@ export function MessagesPage({ role }) {
         <StatCard label="Falhas" value={stats.failed} valueClassName="text-red-400" />
       </div>
 
-      <div className="flex gap-4 border-b border-[#404040]">
+      <div className="flex gap-4 border-b border-border-default-v2">
         {[
           ['historico', 'Historico'],
           ...(!isSecretary ? [['templates', 'Templates'], ['campanha', 'Campanhas'], ['gerenciamento', 'Gerenciamento']] : []),
@@ -507,7 +507,7 @@ export function MessagesPage({ role }) {
             className={`border-b-2 px-2 pb-3 text-sm font-semibold transition ${
               activeTab === key
                 ? 'border-[#3b82f6] text-[#3b82f6]'
-                : 'border-transparent text-[#b8b8b8] hover:text-[#e5e5e5]'
+                : 'border-transparent text-text-body hover:text-text-heading'
             }`}
             key={key}
             onClick={() => setActiveTab(key)}
@@ -614,7 +614,7 @@ function HistoryTab({ allowedChannelKeys, channelFilter, messages, search, setCh
         <label className="relative flex-1">
           <span className="sr-only">Buscar comunicacao</span>
           <CommIcon
-            className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-[#a3a3a3]"
+            className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-text-muted-v2"
             name="search"
           />
           <input
@@ -635,7 +635,7 @@ function HistoryTab({ allowedChannelKeys, channelFilter, messages, search, setCh
               className={`h-12 rounded-sm border px-4 text-xs font-semibold transition ${
                 channelFilter === key
                   ? 'border-[#3b82f6] bg-[#3b82f6] text-white'
-                  : 'border-[#404040] bg-[#171717] text-[#b8b8b8] hover:text-[#e5e5e5]'
+                  : 'border-border-default-v2 bg-surface-page text-text-body hover:text-text-heading'
               }`}
               key={key}
               onClick={() => setChannelFilter(key)}
@@ -647,9 +647,9 @@ function HistoryTab({ allowedChannelKeys, channelFilter, messages, search, setCh
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-sm border border-[#404040]">
+      <div className="overflow-x-auto rounded-sm border border-border-default-v2">
         <table className="w-full min-w-[920px] text-left text-sm">
-          <thead className="bg-[#171717] text-xs font-semibold uppercase tracking-[0.02em] text-[#b8b8b8]">
+          <thead className="bg-surface-page text-xs font-semibold uppercase tracking-[0.02em] text-text-body">
             <tr>
               <th className="px-5 py-4">Paciente</th>
               <th className="px-5 py-4">Canal</th>
@@ -659,7 +659,7 @@ function HistoryTab({ allowedChannelKeys, channelFilter, messages, search, setCh
               <th className="px-5 py-4">Resposta</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#404040] bg-[#262626]">
+          <tbody className="divide-y divide-border-default-v2 bg-surface-card">
             {messages.map((message) => (
               <MessageRow key={message.id} message={message} />
             ))}
@@ -668,7 +668,7 @@ function HistoryTab({ allowedChannelKeys, channelFilter, messages, search, setCh
       </div>
 
       {messages.length === 0 ? (
-        <div className="rounded-b-sm border-x border-b border-[#404040] bg-[#171717] px-4 py-8 text-center text-sm text-[#a3a3a3]">
+        <div className="rounded-b-sm border-x border-b border-border-default-v2 bg-surface-page px-4 py-8 text-center text-sm text-text-muted-v2">
           Nenhuma comunicacao encontrada com os filtros atuais.
         </div>
       ) : null}
@@ -680,7 +680,7 @@ function TemplatesTab({ onEdit, onUse, templates }) {
   return (
     <section className="space-y-4 rounded-2xl p-4" aria-label="Templates de comunicacao">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <p className="text-sm leading-6 text-[#a3a3a3]">
+        <p className="text-sm leading-6 text-text-muted-v2">
           Modelos prontos para contatos recorrentes da clinica. Personalize qualquer template antes de usar.
         </p>
         <button
@@ -707,8 +707,8 @@ function CampaignsTab({ campaignHistory, eligibleCount, onCreate, onResend, opte
     <section className={`${cardClass} space-y-6 p-6`} aria-label="Campanhas">
       <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
         <div>
-          <h2 className="text-lg font-bold text-[#f5f5f5]">Campanhas</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-[#a3a3a3]">
+          <h2 className="text-lg font-bold text-text-heading">Campanhas</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-text-muted-v2">
             Uma campanha é uma comunicação enviada para um grupo de pacientes elegíveis, usando o canal, mensagem e
             recorrencia definidos pela equipe.
           </p>
@@ -722,14 +722,14 @@ function CampaignsTab({ campaignHistory, eligibleCount, onCreate, onResend, opte
           </button>
         </div>
 
-        <div className="rounded-xl border border-[#404040] bg-[#171717] p-4">
+        <div className="rounded-xl border border-border-default-v2 bg-surface-page p-4">
           <div className="mb-3 flex items-center gap-2">
             <span className="rounded bg-indigo-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-indigo-400">
               LGPD
             </span>
-            <span className="text-sm font-bold text-[#f5f5f5]">Elegibilidade</span>
+            <span className="text-sm font-bold text-text-heading">Elegibilidade</span>
           </div>
-          <p className="text-xs leading-6 text-[#a3a3a3]">
+          <p className="text-xs leading-6 text-text-muted-v2">
             Pacientes com opt-out marcado no perfil não aparecem para seleção em mensagens ou campanhas.
           </p>
           <div className="mt-4 grid grid-cols-2 gap-3">
@@ -748,7 +748,7 @@ function ManagementTab({ campaignHistory, customTemplates, eligibleCount, onEdit
   return (
     <section className="grid gap-6 lg:grid-cols-3" aria-label="Gerenciamento de comunicacao">
       <article className={`${cardClass} p-5`}>
-        <h2 className="text-sm font-bold text-[#f5f5f5]">Pacientes</h2>
+        <h2 className="text-sm font-bold text-text-heading">Pacientes</h2>
         <div className="mt-4 grid gap-3">
           <MiniCount label="Total na API" value={totalPatients} />
           <MiniCount label="Elegíveis" value={eligibleCount} />
@@ -758,7 +758,7 @@ function ManagementTab({ campaignHistory, customTemplates, eligibleCount, onEdit
 
       <article className={`${cardClass} p-5 lg:col-span-2`}>
         <div className="flex items-center justify-between gap-4">
-          <h2 className="text-sm font-bold text-[#f5f5f5]">Templates personalizados</h2>
+          <h2 className="text-sm font-bold text-text-heading">Templates personalizados</h2>
           <button className="h-9 rounded-sm bg-[#3b82f6] px-3 text-xs font-semibold text-white" onClick={() => onEditTemplate()} type="button">
             Novo template
           </button>
@@ -766,16 +766,16 @@ function ManagementTab({ campaignHistory, customTemplates, eligibleCount, onEdit
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           {customTemplates.length ? customTemplates.map((template) => (
             <button
-              className="rounded-lg border border-[#404040] bg-[#171717] p-3 text-left transition hover:border-[#3b82f6]"
+              className="rounded-lg border border-border-default-v2 bg-surface-page p-3 text-left transition hover:border-[#3b82f6]"
               key={template.id}
               onClick={() => onEditTemplate(template)}
               type="button"
             >
-              <span className="block text-sm font-semibold text-[#f5f5f5]">{template.name}</span>
-              <span className="mt-1 block text-xs text-[#a3a3a3]">{template.category} - {channels[template.channel]?.label}</span>
+              <span className="block text-sm font-semibold text-text-heading">{template.name}</span>
+              <span className="mt-1 block text-xs text-text-muted-v2">{template.category} - {channels[template.channel]?.label}</span>
             </button>
           )) : (
-            <p className="rounded-lg border border-dashed border-[#404040] p-4 text-sm text-[#a3a3a3] md:col-span-2">
+            <p className="rounded-lg border border-dashed border-border-default-v2 p-4 text-sm text-text-muted-v2 md:col-span-2">
               Nenhum template personalizado salvo ainda.
             </p>
           )}
@@ -783,7 +783,7 @@ function ManagementTab({ campaignHistory, customTemplates, eligibleCount, onEdit
       </article>
 
       <article className={`${cardClass} p-5 lg:col-span-3`}>
-        <h2 className="text-sm font-bold text-[#f5f5f5]">Campanhas salvas</h2>
+        <h2 className="text-sm font-bold text-text-heading">Campanhas salvas</h2>
         <CampaignHistory campaigns={campaignHistory} compact onResend={onResendCampaign} />
       </article>
     </section>
@@ -793,7 +793,7 @@ function ManagementTab({ campaignHistory, customTemplates, eligibleCount, onEdit
 function CampaignHistory({ campaigns, compact = false, onResend }) {
   if (!campaigns.length) {
     return (
-      <div className="rounded-xl border border-dashed border-[#404040] bg-[#171717] p-6 text-center text-sm text-[#a3a3a3]">
+      <div className="rounded-xl border border-dashed border-border-default-v2 bg-surface-page p-6 text-center text-sm text-text-muted-v2">
         Nenhuma campanha disparada ainda.
       </div>
     )
@@ -802,28 +802,28 @@ function CampaignHistory({ campaigns, compact = false, onResend }) {
   return (
     <div className={`grid gap-3 ${compact ? 'mt-4 md:grid-cols-2 xl:grid-cols-3' : ''}`}>
       {campaigns.map((campaign) => (
-        <article className="rounded-xl border border-[#404040] bg-[#171717] p-4" key={campaign.id}>
+        <article className="rounded-xl border border-border-default-v2 bg-surface-page p-4" key={campaign.id}>
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h3 className="text-sm font-bold text-[#f5f5f5]">{campaign.name}</h3>
-              <p className="mt-1 text-xs text-[#a3a3a3]">
+              <h3 className="text-sm font-bold text-text-heading">{campaign.name}</h3>
+              <p className="mt-1 text-xs text-text-muted-v2">
                 {channels[campaign.channel]?.label} - {campaign.sentAt}
               </p>
             </div>
-            <span className="rounded bg-[#303030] px-2 py-1 text-[10px] font-semibold text-[#a3a3a3]">
+            <span className="rounded bg-surface-card-hover px-2 py-1 text-[10px] font-semibold text-text-muted-v2">
               {campaign.recurrenceLabel}
             </span>
           </div>
-          <p className="mt-3 line-clamp-2 text-xs leading-5 text-[#a3a3a3]">{campaign.content}</p>
+          <p className="mt-3 line-clamp-2 text-xs leading-5 text-text-muted-v2">{campaign.content}</p>
           <p className="mt-3 text-xs font-semibold text-[#51a2ff]">
             {campaign.total} pacientes - {campaign.failed} falhas
           </p>
           {campaign.nextRunAt ? (
-            <p className="mt-1 text-xs text-[#a3a3a3]">Proxima execucao: {formatDateTime(campaign.nextRunAt)}</p>
+            <p className="mt-1 text-xs text-text-muted-v2">Proxima execucao: {formatDateTime(campaign.nextRunAt)}</p>
           ) : null}
-          <p className="mt-1 truncate text-xs text-[#737373]">{campaign.patients.join(', ')}</p>
+          <p className="mt-1 truncate text-xs text-text-muted-v2">{campaign.patients.join(', ')}</p>
           <button
-            className="mt-4 h-9 rounded-sm border border-[#404040] px-3 text-xs font-semibold text-[#e5e5e5] transition hover:border-[#3b82f6] hover:text-[#3b82f6]"
+            className="mt-4 h-9 rounded-sm border border-border-default-v2 px-3 text-xs font-semibold text-text-heading transition hover:border-[#3b82f6] hover:text-[#3b82f6]"
             onClick={() => onResend(campaign)}
             type="button"
           >
@@ -835,10 +835,10 @@ function CampaignHistory({ campaigns, compact = false, onResend }) {
   )
 }
 
-function StatCard({ label, value, valueClassName = 'text-[#f5f5f5]' }) {
+function StatCard({ label, value, valueClassName = 'text-text-heading' }) {
   return (
     <div className={`${cardClass} p-5`}>
-      <p className="text-sm text-[#b8b8b8]">{label}</p>
+      <p className="text-sm text-text-body">{label}</p>
       <p className={`mt-2 text-3xl font-bold leading-none ${valueClassName}`}>{value}</p>
     </div>
   )
@@ -847,8 +847,8 @@ function StatCard({ label, value, valueClassName = 'text-[#f5f5f5]' }) {
 function MiniCount({ label, value }) {
   return (
     <div className="rounded-lg bg-[#202020] px-3 py-2">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#737373]">{label}</p>
-      <p className="mt-1 text-lg font-bold text-[#f5f5f5]">{value}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-text-muted-v2">{label}</p>
+      <p className="mt-1 text-lg font-bold text-text-heading">{value}</p>
     </div>
   )
 }
@@ -858,23 +858,23 @@ function MessageRow({ message }) {
   const status = statusConfig[message.status] || statusConfig.pendente
 
   return (
-    <tr className="transition hover:bg-[#303030]">
-      <td className="px-5 py-4 font-semibold text-[#f5f5f5]">{message.patient}</td>
+    <tr className="transition hover:bg-surface-card-hover">
+      <td className="px-5 py-4 font-semibold text-text-heading">{message.patient}</td>
       <td className="px-5 py-4">
         <span className={`inline-flex items-center gap-1.5 rounded px-2 py-1 text-[10px] font-bold ${channel.className}`}>
           <CommIcon className="size-3.5" name={channel.icon} />
           {channel.label}
         </span>
       </td>
-      <td className="px-5 py-4 text-[#b8b8b8]">{message.template}</td>
-      <td className="px-5 py-4 text-[#b8b8b8]">{message.sentAt}</td>
+      <td className="px-5 py-4 text-text-body">{message.template}</td>
+      <td className="px-5 py-4 text-text-body">{message.sentAt}</td>
       <td className="px-5 py-4">
         <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${status.className}`}>
           <CommIcon className="size-3.5" name={status.icon} />
           {status.label}
         </span>
       </td>
-      <td className="px-5 py-4 text-[#b8b8b8]">{message.response || '-'}</td>
+      <td className="px-5 py-4 text-text-body">{message.response || '-'}</td>
     </tr>
   )
 }
@@ -889,15 +889,15 @@ function TemplateCard({ onEdit, onUse, template }) {
           <CommIcon className="size-3.5" name={channel.icon} />
           {channel.label}
         </span>
-        <span className="rounded bg-[#303030] px-2 py-0.5 text-[10px] font-semibold text-[#a3a3a3]">
+        <span className="rounded bg-surface-card-hover px-2 py-0.5 text-[10px] font-semibold text-text-muted-v2">
           {template.category}
         </span>
       </div>
-      <h3 className="text-sm font-bold text-[#f5f5f5]">{template.name}</h3>
-      <p className="mt-2 min-h-[72px] text-xs leading-6 text-[#a3a3a3]">{template.content}</p>
+      <h3 className="text-sm font-bold text-text-heading">{template.name}</h3>
+      <p className="mt-2 min-h-[72px] text-xs leading-6 text-text-muted-v2">{template.content}</p>
       <div className="mt-4 flex gap-2">
         <button
-          className="h-9 flex-1 rounded-sm border border-[#404040] bg-[#171717] text-xs font-semibold text-[#e5e5e5] transition hover:bg-[#303030]"
+          className="h-9 flex-1 rounded-sm border border-border-default-v2 bg-surface-page text-xs font-semibold text-text-heading transition hover:bg-surface-card-hover"
           onClick={() => onEdit(template)}
           type="button"
         >
@@ -1012,8 +1012,8 @@ function MessageComposer({ allowedChannelKeys, draft, onChange, onClose, onSubmi
           />
         </DarkField>
 
-        <div className="flex justify-end gap-3 border-t border-[#404040] pt-4">
-          <button className="h-10 rounded-sm border border-[#404040] px-4 text-sm font-semibold text-[#e5e5e5]" onClick={onClose} type="button">
+        <div className="flex justify-end gap-3 border-t border-border-default-v2 pt-4">
+          <button className="h-10 rounded-sm border border-border-default-v2 px-4 text-sm font-semibold text-text-heading" onClick={onClose} type="button">
             Cancelar
           </button>
           <button
@@ -1113,16 +1113,16 @@ function CampaignComposer({ allowedChannelKeys, draft, onChange, onClose, onSubm
                 value={patientSearch}
               />
               <button
-                className="h-10 shrink-0 rounded-sm border border-[#404040] px-3 text-xs font-semibold text-[#e5e5e5]"
+                className="h-10 shrink-0 rounded-sm border border-border-default-v2 px-3 text-xs font-semibold text-text-heading"
                 onClick={() => update('patientIds', patients.map((patient) => patient.id))}
                 type="button"
               >
                 Todos
               </button>
             </div>
-            <div className="max-h-56 overflow-y-auto rounded-md border border-[#404040] bg-[#1f1f1f]">
+            <div className="max-h-56 overflow-y-auto rounded-md border border-border-default-v2 bg-surface-inset">
               {filteredPatients.length ? filteredPatients.map((patient) => (
-                <label className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm text-[#e5e5e5] hover:bg-[#303030]" key={patient.id}>
+                <label className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm text-text-heading hover:bg-surface-card-hover" key={patient.id}>
                   <input
                     checked={draft.patientIds.includes(patient.id)}
                     className="size-4 accent-[#3b82f6]"
@@ -1131,13 +1131,13 @@ function CampaignComposer({ allowedChannelKeys, draft, onChange, onClose, onSubm
                   />
                   <span className="min-w-0">
                     <span className="block truncate font-semibold">{patient.name}</span>
-                    <span className="block truncate text-xs text-[#737373]">
+                    <span className="block truncate text-xs text-text-muted-v2">
                       {[patient.document, patient.phone, patient.email].filter(Boolean).join(' | ') || 'Sem contato informado'}
                     </span>
                   </span>
                 </label>
               )) : (
-                <p className="px-3 py-4 text-center text-xs text-[#737373]">Nenhum paciente elegível encontrado.</p>
+                <p className="px-3 py-4 text-center text-xs text-text-muted-v2">Nenhum paciente elegível encontrado.</p>
               )}
             </div>
           </div>
@@ -1152,8 +1152,8 @@ function CampaignComposer({ allowedChannelKeys, draft, onChange, onClose, onSubm
           />
         </DarkField>
 
-        <div className="flex justify-end gap-3 border-t border-[#404040] pt-4">
-          <button className="h-10 rounded-sm border border-[#404040] px-4 text-sm font-semibold text-[#e5e5e5]" onClick={onClose} type="button">
+        <div className="flex justify-end gap-3 border-t border-border-default-v2 pt-4">
+          <button className="h-10 rounded-sm border border-border-default-v2 px-4 text-sm font-semibold text-text-heading" onClick={onClose} type="button">
             Cancelar
           </button>
           <button
@@ -1195,8 +1195,8 @@ function TemplateEditor({ allowedChannelKeys, draft, onChange, onClose, onSubmit
         <DarkField label="Conteudo">
           <textarea className={textareaClass} onChange={(event) => update('content', sanitizePlainText(event.target.value))} value={draft.content} />
         </DarkField>
-        <div className="flex justify-end gap-3 border-t border-[#404040] pt-4">
-          <button className="h-10 rounded-sm border border-[#404040] px-4 text-sm font-semibold text-[#e5e5e5]" onClick={onClose} type="button">
+        <div className="flex justify-end gap-3 border-t border-border-default-v2 pt-4">
+          <button className="h-10 rounded-sm border border-border-default-v2 px-4 text-sm font-semibold text-text-heading" onClick={onClose} type="button">
             Cancelar
           </button>
           <button
@@ -1215,17 +1215,17 @@ function TemplateEditor({ allowedChannelKeys, draft, onChange, onClose, onSubmit
 function ModalFrame({ branded = false, children, onClose, title }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className={`message-modal-shell flex max-h-[94vh] w-full ${branded ? 'max-w-6xl' : 'max-w-2xl'} flex-col overflow-hidden rounded-xl border border-[#404040] bg-[#242424] shadow-2xl`}>
-        <div className="flex items-center justify-between border-b border-[#404040] px-5 py-4">
+      <div className={`message-modal-shell flex max-h-[94vh] w-full ${branded ? 'max-w-6xl' : 'max-w-2xl'} flex-col overflow-hidden rounded-xl border border-border-default-v2 bg-surface-card shadow-elevated`}>
+        <div className="flex items-center justify-between border-b border-border-default-v2 px-5 py-4">
           <div className="flex items-center gap-3">
             {branded ? (
               <span className="grid size-9 place-items-center rounded-sm bg-[#3b82f6] text-white">
                 <StethoscopeIcon className="size-5" />
               </span>
             ) : null}
-            <h2 className="text-lg font-bold text-[#f5f5f5]">{title}</h2>
+            <h2 className="text-lg font-bold text-text-heading">{title}</h2>
           </div>
-          <button className="grid size-9 place-items-center rounded-sm text-[#a3a3a3] hover:bg-[#303030]" onClick={onClose} type="button">
+          <button className="grid size-9 place-items-center rounded-sm text-text-muted-v2 hover:bg-surface-card-hover" onClick={onClose} type="button">
             <CommIcon className="size-5" name="x" />
           </button>
         </div>

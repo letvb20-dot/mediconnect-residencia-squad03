@@ -7,8 +7,8 @@ import { userRepository } from '../repositories/userRepository.js'
 import { sanitizeFieldValue } from '../utils/inputSanitizers.js'
 
 const darkInput =
-  'h-10 w-full rounded-lg border border-[#404040] bg-[#1a1a1a] px-3 text-sm text-[#e5e5e5] outline-none transition placeholder:text-[#737373] focus:border-[#3b82f6] focus:ring-1 focus:ring-[#3b82f6]'
-const darkLabel = 'mb-1.5 block text-xs font-medium text-[#e5e5e5]'
+  'h-10 w-full rounded-lg border border-border-default-v2 bg-surface-inset px-3 text-sm text-text-heading outline-none transition placeholder:text-text-muted-v2 focus:border-[#3b82f6] focus:ring-1 focus:ring-[#3b82f6]'
+const darkLabel = 'mb-1.5 block text-xs font-medium text-text-heading'
 const authMethodOptions = [
   {
     value: 'magic_link',
@@ -214,9 +214,9 @@ export function UsersPage({ embedded = false, embeddedHeaderOnly = false, hideHe
 
   if (!canManageUsers) {
     return (
-      <div className="mx-auto max-w-3xl rounded-2xl border border-[#404040] bg-[#262626] p-8 text-center text-[#e5e5e5]">
+      <div className="mx-auto max-w-3xl rounded-2xl border border-border-default-v2 bg-surface-card p-8 text-center text-text-heading">
         <h1 className="text-xl font-bold">Acesso não permitido</h1>
-        <p className="mt-2 text-sm text-[#a3a3a3]">Somente Administrador e Gestão podem gerenciar usuários.</p>
+        <p className="mt-2 text-sm text-text-muted-v2">Somente Administrador e Gestão podem gerenciar usuários.</p>
       </div>
     )
   }
@@ -224,23 +224,23 @@ export function UsersPage({ embedded = false, embeddedHeaderOnly = false, hideHe
   if (embeddedHeaderOnly) {
     return (
       <div>
-        <h1 className="text-lg font-bold tracking-tight text-[#e5e5e5]">Usuários do Sistema</h1>
-        <p className="mt-1 text-sm text-[#a3a3a3]">Gerencie os usuários e seus perfis de acesso</p>
+        <h1 className="text-lg font-bold tracking-tight text-text-heading">Usuários do Sistema</h1>
+        <p className="mt-1 text-sm text-text-muted-v2">Gerencie os usuários e seus perfis de acesso</p>
       </div>
     )
   }
 
   return (
-    <div className={`${embedded ? 'w-full space-y-4' : 'mx-auto max-w-7xl space-y-6'} text-[#e5e5e5]`}>
+    <div className={`${embedded ? 'w-full space-y-4' : 'mx-auto max-w-7xl space-y-6'} text-text-heading`}>
       {!hideHeader ? <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <h1 className={`${embedded ? 'text-lg' : 'text-2xl'} font-bold tracking-tight text-[#e5e5e5]`}>Usuários do Sistema</h1>
-          <p className="mt-1 text-sm text-[#a3a3a3]">Gerencie os usuários e seus perfis de acesso</p>
+          <h1 className={`${embedded ? 'text-lg' : 'text-2xl'} font-bold tracking-tight text-text-heading`}>Usuários do Sistema</h1>
+          <p className="mt-1 text-sm text-text-muted-v2">Gerencie os usuários e seus perfis de acesso</p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
           {embedded && navigate ? (
             <button
-              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-[#404040] bg-[#303030] px-4 text-sm font-medium text-[#e5e5e5] shadow-sm transition hover:bg-[#3a3a3a] sm:w-auto"
+              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-border-default-v2 bg-surface-card-hover px-4 text-sm font-medium text-text-heading shadow-sm transition hover:bg-surface-elevated sm:w-auto"
               onClick={() => navigate('/usuarios')}
               type="button"
             >
@@ -258,20 +258,20 @@ export function UsersPage({ embedded = false, embeddedHeaderOnly = false, hideHe
       </div> : null}
 
       {loading ? (
-        <p className="py-10 text-center text-sm text-[#a3a3a3]">Carregando usuários...</p>
+        <p className="py-10 text-center text-sm text-text-muted-v2">Carregando usuários...</p>
       ) : error ? (
         <p className="py-10 text-center text-sm text-red-400">Erro ao carregar usuários: {error}</p>
       ) : (
-        <div className="rounded-2xl border border-[#404040] bg-[#262626] shadow-sm">
-          <div className="flex flex-col gap-3 border-b border-[#404040] px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="rounded-2xl border border-border-default-v2 bg-surface-card shadow-sm">
+          <div className="flex flex-col gap-3 border-b border-border-default-v2 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm font-semibold text-[#e5e5e5]">Filtros</p>
-              <p className="mt-1 text-xs text-[#a3a3a3]">
+              <p className="text-sm font-semibold text-text-heading">Filtros</p>
+              <p className="mt-1 text-xs text-text-muted-v2">
                 {filteredUsers.length} de {users.length} usuários exibidos
               </p>
             </div>
             <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(11rem,0.6fr)]">
-            <label className="grid gap-1.5 text-xs font-semibold text-[#a3a3a3]">
+            <label className="grid gap-1.5 text-xs font-semibold text-text-muted-v2">
               <span>Pesquisa</span>
               <input
                 className={darkInput}
@@ -281,7 +281,7 @@ export function UsersPage({ embedded = false, embeddedHeaderOnly = false, hideHe
                 value={search}
               />
             </label>
-            <label className="grid gap-1.5 text-xs font-semibold text-[#a3a3a3]">
+            <label className="grid gap-1.5 text-xs font-semibold text-text-muted-v2">
               <span>Perfil</span>
               <select
                 className={darkInput}
@@ -300,7 +300,7 @@ export function UsersPage({ embedded = false, embeddedHeaderOnly = false, hideHe
           </div>
           <div className="overflow-x-auto">
             <table className="w-full whitespace-nowrap text-left text-sm">
-              <thead className="bg-[#171717] text-xs font-semibold uppercase text-[#a3a3a3]">
+              <thead className="bg-surface-page text-xs font-semibold uppercase text-text-muted-v2">
                 <tr>
                   <th className="px-6 py-4">Nome</th>
                   <th className="px-6 py-4">Email</th>
@@ -309,22 +309,22 @@ export function UsersPage({ embedded = false, embeddedHeaderOnly = false, hideHe
                   <th className="px-6 py-4 text-right">Ações</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#404040]">
+              <tbody className="divide-y divide-border-default-v2">
                 {filteredUsers.length ? (
                   visibleUsers.map((user) => {
                     const userRole = getNormalizedUserRole(user)
                     const userStatus = getUserStatus(user)
                     return (
-                      <tr className="cursor-pointer transition hover:bg-[#303030]" key={user.id} onClick={() => setSelectedUser(user)}>
+                      <tr className="cursor-pointer transition hover:bg-surface-card-hover" key={user.id} onClick={() => setSelectedUser(user)}>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
-                            <span className="grid size-8 place-items-center rounded-full bg-[#333333] text-xs font-bold text-[#3b82f6]">
+                            <span className="grid size-8 place-items-center rounded-full bg-accent-muted text-xs font-bold text-accent-primary">
                               {(user.full_name || user.email || '?').charAt(0).toUpperCase()}
                             </span>
-                            <span className="font-medium text-[#e5e5e5]">{user.full_name || '—'}</span>
+                            <span className="font-medium text-text-heading">{user.full_name || '—'}</span>
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-[#a3a3a3]">{user.email}</td>
+                        <td className="px-6 py-4 text-text-muted-v2">{user.email}</td>
                         <td className="px-6 py-4">
                           <RoleBadge role={userRole} />
                         </td>
@@ -351,7 +351,7 @@ export function UsersPage({ embedded = false, embeddedHeaderOnly = false, hideHe
                   })
                 ) : (
                   <tr>
-                    <td className="px-6 py-10 text-center text-[#a3a3a3]" colSpan={5}>
+                    <td className="px-6 py-10 text-center text-text-muted-v2" colSpan={5}>
                       {users.length ? 'Nenhum usuário encontrado para o perfil selecionado.' : 'Nenhum usuário encontrado.'}
                     </td>
                   </tr>
@@ -360,11 +360,11 @@ export function UsersPage({ embedded = false, embeddedHeaderOnly = false, hideHe
             </table>
           </div>
           {filteredUsers.length > pageSize ? (
-            <div className="flex items-center justify-between gap-3 border-t border-[#404040] px-6 py-4 text-xs text-[#a3a3a3]">
+            <div className="flex items-center justify-between gap-3 border-t border-border-default-v2 px-6 py-4 text-xs text-text-muted-v2">
               <span>Página {currentUserPage} de {totalUserPages}</span>
               <div className="flex gap-2">
                 <button
-                  className="h-8 rounded border border-[#404040] bg-[#303030] px-3 font-semibold text-[#e5e5e5] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="h-8 rounded border border-border-default-v2 bg-surface-card-hover px-3 font-semibold text-text-heading disabled:cursor-not-allowed disabled:opacity-50"
                   disabled={currentUserPage <= 1}
                   onClick={() => setUserPage((page) => Math.max(1, page - 1))}
                   type="button"
@@ -372,7 +372,7 @@ export function UsersPage({ embedded = false, embeddedHeaderOnly = false, hideHe
                   Anterior
                 </button>
                 <button
-                  className="h-8 rounded border border-[#404040] bg-[#303030] px-3 font-semibold text-[#e5e5e5] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="h-8 rounded border border-border-default-v2 bg-surface-card-hover px-3 font-semibold text-text-heading disabled:cursor-not-allowed disabled:opacity-50"
                   disabled={currentUserPage >= totalUserPages}
                   onClick={() => setUserPage((page) => Math.min(totalUserPages, page + 1))}
                   type="button"
@@ -397,23 +397,23 @@ export function UsersPage({ embedded = false, embeddedHeaderOnly = false, hideHe
       {modalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setModalOpen(false)}>
           <div
-            className="user-modal-shell flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-[#404040] bg-[#242424] shadow-2xl"
+            className="user-modal-shell flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-border-default-v2 bg-surface-card shadow-elevated"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-[#404040] px-6 py-4">
+            <div className="flex items-center justify-between border-b border-border-default-v2 px-6 py-4">
               <div className="flex items-center gap-3">
                 <span className="grid size-9 place-items-center rounded-sm bg-[#3b82f6] text-white">
                   <StethoscopeIcon className="size-5" />
                 </span>
                 <div>
-                  <h2 className="text-lg font-bold text-[#e5e5e5]">{editingUserId ? 'Editar Usuário' : 'Novo Usuário'}</h2>
-                  <p className="mt-1 text-xs text-[#a3a3a3]">
+                  <h2 className="text-lg font-bold text-text-heading">{editingUserId ? 'Editar Usuário' : 'Novo Usuário'}</h2>
+                  <p className="mt-1 text-xs text-text-muted-v2">
                     {editingUserId ? 'Atualize os dados e permissões do usuário.' : isPasswordCreation ? 'Crie o acesso inicial com email e senha.' : 'Um Magic Link sera enviado para o email cadastrado.'}
                   </p>
                 </div>
               </div>
               <button
-                className="rounded p-1 text-[#a3a3a3] transition hover:bg-[#333333]"
+                className="rounded p-1 text-text-muted-v2 transition hover:bg-surface-card-hover"
                 onClick={() => setModalOpen(false)}
                 type="button"
               >
@@ -432,8 +432,8 @@ export function UsersPage({ embedded = false, embeddedHeaderOnly = false, hideHe
                       <label
                         className={`cursor-pointer rounded-lg border p-3 transition ${
                           selected
-                            ? 'border-[#3b82f6] bg-[#3b82f6]/15 text-[#e5e5e5]'
-                            : 'border-[#404040] bg-[#1a1a1a] text-[#a3a3a3] hover:border-[#525252] hover:text-[#e5e5e5]'
+                            ? 'border-[#3b82f6] bg-[#3b82f6]/15 text-text-heading'
+                            : 'border-border-default-v2 bg-surface-inset text-text-muted-v2 hover:border-border-strong hover:text-text-heading'
                         }`}
                         key={option.value}
                       >
@@ -448,7 +448,7 @@ export function UsersPage({ embedded = false, embeddedHeaderOnly = false, hideHe
                           />
                           <span>
                             <span className="block text-sm font-semibold">{option.label}</span>
-                            <span className="mt-1 block text-xs text-[#a3a3a3]">{option.description}</span>
+                            <span className="mt-1 block text-xs text-text-muted-v2">{option.description}</span>
                           </span>
                         </span>
                       </label>
@@ -599,23 +599,9 @@ export function UsersPage({ embedded = false, embeddedHeaderOnly = false, hideHe
                 </div>
               ) : null}
 
-              {!editingUserId ? (
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-[#e5e5e5]">
-                <input
-                  checked={form.create_patient_record}
-                  className="size-4 accent-[#3b82f6]"
-                  name="create_patient_record"
-                  onChange={handleFormChange}
-                  type="checkbox"
-                />
-                Criar também um registro de paciente
-              </label>
-
-              ) : null}
-
-              <div className="flex justify-end gap-3 border-t border-[#404040] pt-4">
+              <div className="flex justify-end gap-3 border-t border-border-default-v2 pt-4">
                 <button
-                  className="rounded-lg border border-[#404040] bg-[#262626] px-4 py-2 text-sm font-medium text-[#e5e5e5] transition hover:bg-[#333333]"
+                  className="rounded-lg border border-border-default-v2 bg-surface-inset px-4 py-2 text-sm font-medium text-text-heading transition hover:bg-surface-card-hover"
                   disabled={saving}
                   onClick={() => setModalOpen(false)}
                   type="button"
@@ -659,27 +645,27 @@ function UserDetailModal({ onClose, onDelete, onEdit, user }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
-        className="user-modal-shell w-full max-w-3xl rounded-xl border border-[#404040] bg-[#242424] shadow-2xl"
+        className="user-modal-shell w-full max-w-3xl rounded-xl border border-border-default-v2 bg-surface-card shadow-elevated"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-[#404040] px-6 py-4">
+        <div className="flex items-center justify-between border-b border-border-default-v2 px-6 py-4">
           <div>
-            <h2 className="text-lg font-bold text-[#e5e5e5]">Detalhes do usuário</h2>
-            <p className="mt-1 text-xs text-[#a3a3a3]">{user.email}</p>
+            <h2 className="text-lg font-bold text-text-heading">Detalhes do usuário</h2>
+            <p className="mt-1 text-xs text-text-muted-v2">{user.email}</p>
           </div>
-          <button className="rounded p-1 text-[#a3a3a3] transition hover:bg-[#333333]" onClick={onClose} type="button">
+          <button className="rounded p-1 text-text-muted-v2 transition hover:bg-surface-card-hover" onClick={onClose} type="button">
             ✕
           </button>
         </div>
         <div className="grid gap-4 p-6 md:grid-cols-2">
           {details.map(([label, value]) => (
-            <div className="rounded-xl border border-[#404040] bg-[#1a1a1a] p-4" key={label}>
-              <p className="text-xs font-semibold uppercase tracking-wide text-[#a3a3a3]">{label}</p>
-              <p className="mt-2 text-sm font-semibold text-[#e5e5e5]">{value}</p>
+            <div className="rounded-xl border border-border-default-v2 bg-surface-inset p-4" key={label}>
+              <p className="text-xs font-semibold uppercase tracking-wide text-text-muted-v2">{label}</p>
+              <p className="mt-2 text-sm font-semibold text-text-heading">{value}</p>
             </div>
           ))}
         </div>
-        <div className="flex flex-wrap justify-end gap-3 border-t border-[#404040] px-6 py-4">
+        <div className="flex flex-wrap justify-end gap-3 border-t border-border-default-v2 px-6 py-4">
           <button
             className="mr-auto rounded-lg border border-[#ef4444]/30 bg-[#ef4444]/10 px-4 py-2 text-sm font-semibold text-[#ef4444] transition hover:bg-[#ef4444]/20"
             onClick={() => onDelete(user)}
@@ -688,7 +674,7 @@ function UserDetailModal({ onClose, onDelete, onEdit, user }) {
             Deletar
           </button>
           <button
-            className="rounded-lg border border-[#404040] bg-[#262626] px-4 py-2 text-sm font-semibold text-[#e5e5e5] transition hover:bg-[#333333]"
+            className="rounded-lg border border-border-default-v2 bg-surface-inset px-4 py-2 text-sm font-semibold text-text-heading transition hover:bg-surface-card-hover"
             onClick={onClose}
             type="button"
           >
@@ -713,7 +699,7 @@ function RoleBadge({ role }) {
     gestor: 'bg-blue-500/20 text-blue-400',
     medico: 'bg-emerald-500/20 text-emerald-400',
     secretaria: 'bg-amber-500/20 text-amber-400',
-    paciente: 'bg-[#303030] text-[#a3a3a3]',
+    paciente: 'bg-surface-card-hover text-text-muted-v2',
   }
 
   return (

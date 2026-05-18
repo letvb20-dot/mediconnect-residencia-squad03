@@ -39,6 +39,12 @@ export function maskCep(value) {
   return digits.replace(/(\d{5})(\d)/, '$1-$2')
 }
 
+export function maskHeight(value) {
+  const digits = limitDigits(value, 3)
+  if (digits.length <= 1) return digits
+  return `${digits.slice(0, 1)},${digits.slice(1)}`
+}
+
 export function maskRg(value) {
   const digits = limitDigits(value, 9)
   return digits

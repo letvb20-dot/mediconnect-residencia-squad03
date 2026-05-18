@@ -21,19 +21,19 @@ export function AgendaDailyView({
   const slots = mergeSlotsWithAppointmentTimes(generateSlots(DAY_START, DAY_END, SLOT_MINUTES), occupiedAppointments)
 
   return (
-    <div className="agenda-calendar-shell rounded-2xl border border-[#404040] bg-[#262626] p-5">
-      <div className="agenda-calendar-header flex flex-col gap-3 border-b border-[#404040] pb-4 md:flex-row md:items-end md:justify-between">
+    <div className="agenda-calendar-shell rounded-2xl border border-border-default-v2 bg-surface-card p-5">
+      <div className="agenda-calendar-header flex flex-col gap-3 border-b border-border-subtle pb-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <span className="text-xs font-semibold uppercase tracking-[0.16em] text-[#737373]">
+          <span className="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted-v2">
             Grade de horários do dia
           </span>
-          <h3 className="mt-2 text-xl font-bold text-[#e5e5e5]">
+          <h3 className="mt-2 text-xl font-bold text-text-heading">
             {format(baseDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}
           </h3>
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <span className="agenda-legend-pill rounded-full border border-[#404040] bg-[#1f1f1f] px-3 py-1 text-xs font-semibold text-[#a3a3a3]">
+          <span className="agenda-legend-pill rounded-full border border-border-default-v2 bg-surface-inset px-3 py-1 text-xs font-semibold text-text-muted-v2">
             {dailyAppointments.length} {dailyAppointments.length === 1 ? 'agendamento' : 'agendamentos'}
           </span>
           <span className="agenda-legend-pill agenda-legend-free rounded-full border border-emerald-700/40 bg-emerald-950/30 px-3 py-1 text-xs font-semibold text-emerald-200 shadow-sm">
@@ -43,7 +43,7 @@ export function AgendaDailyView({
             Agendado
           </span>
           {isToday(baseDate) && (
-            <span className="rounded-full border border-[#3b82f6]/30 bg-[#3b82f6]/10 px-3 py-1 text-xs font-semibold text-[#93c5fd]">
+            <span className="rounded-full border border-accent-primary/30 bg-accent-primary/10 px-3 py-1 text-xs font-semibold text-blue-200">
               Hoje
             </span>
           )}
@@ -67,10 +67,10 @@ export function AgendaDailyView({
             <article
               className={`agenda-slot ${isBooked ? getDailyToneClass(primaryAppointment) : isPast ? 'agenda-slot-blocked' : 'agenda-slot-free'} grid gap-3 rounded-xl border px-4 py-3 shadow-[0_8px_18px_rgba(0,0,0,0.16)] md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center ${
                 isBooked
-                  ? 'border-[var(--border-default)] bg-[var(--surface-elevated)] text-[var(--text-primary)]'
+                  ? 'border-border-default-v2 bg-surface-elevated text-text-heading'
                   : isPast
-                    ? 'border-[var(--border-default)] bg-[#1f1f1f] text-[var(--text-muted)]'
-                    : 'border-[var(--border-default)] bg-[var(--surface-elevated)] text-[var(--text-primary)]'
+                    ? 'border-border-default-v2 bg-surface-inset text-text-muted-v2'
+                    : 'border-border-default-v2 bg-surface-elevated text-text-heading'
               }`}
               key={time}
             >

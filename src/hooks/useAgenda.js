@@ -8,6 +8,7 @@ import { patientRepository } from '../repositories/patientRepository.js'
 import { professionalRepository } from '../repositories/professionalRepository.js'
 import { profileRepository } from '../repositories/profileRepository.js'
 import { userRepository } from '../repositories/userRepository.js'
+import { visitRepository } from '../repositories/visitRepository.js'
 import { formatLocalDateInput, parseLocalDate, sortAppointmentsByTime } from '../utils/agendaDate.js'
 import { resolveCurrentPatient } from '../utils/patientIdentity.js'
 
@@ -121,13 +122,18 @@ export function useAgenda() {
           currentProfile,
           professionalsData || [],
         )
+        const appointmentsWithDisplayNames = resolveAppointmentDisplayNames(
+          appointmentsWithCreatorNames,
+          patientsData || [],
+          professionalsData || [],
+        )
 
         setLocalAppointments(
           currentScope === 'doctor' && resolvedProfessional
-            ? filterAppointmentsByProfessional(appointmentsWithCreatorNames, resolvedProfessional.id)
+            ? filterAppointmentsByProfessional(appointmentsWithDisplayNames, resolvedProfessional.id)
             : currentScope === 'patient' && resolvedPatient
-              ? filterAppointmentsByPatient(appointmentsWithCreatorNames, resolvedPatient.id)
-            : sortAppointmentsByTime(appointmentsWithCreatorNames),
+              ? filterAppointmentsByPatient(appointmentsWithDisplayNames, resolvedPatient.id)
+            : sortAppointmentsByTime(appointmentsWithDisplayNames),
         )
       } catch (loadError) {
         if (!active) return
@@ -147,7 +153,7 @@ export function useAgenda() {
   }, [])
 
   useEffect(() => {
-    if (!modalOpen || editingAppointment) return
+    if (!modalOpen) return
 
     const targetProfessionalId = agendaScope === 'doctor'
       ? currentProfessional?.id
@@ -178,17 +184,18 @@ export function useAgenda() {
           appointments: localAppointments,
           date: formatLocalDateInput(baseDate),
           doctorId: targetProfessionalId,
+          ignoredAppointmentId: editingAppointment?.id,
         })
         setAvailableSlots(activeSlots)
 
         if (activeSlots.length) {
           setForm((current) =>
-            activeSlots.some((slot) => slot.time === current.time)
+            current.time
               ? current
               : { ...current, time: activeSlots[0].time },
           )
         } else {
-          setForm((current) => current.time ? { ...current, time: '' } : current)
+          setForm((current) => current)
         }
       } catch (loadError) {
         if (!active) return
@@ -341,7 +348,7 @@ export function useAgenda() {
         agendaScope === 'doctor'
           ? currentProfessional?.id || ''
           : current.professionalId || professionals[0]?.id || '',
-      time: time ?? current.time ?? initialForm.time,
+      time: time ?? initialForm.time,
     }))
     setModalOpen(true)
   }
@@ -406,18 +413,28 @@ export function useAgenda() {
       return
     }
 
-    if (!isDoctorSlotAvailable(payload, localAppointments)) {
-      alert('Este médico já possui outro agendamento nesse horário.')
-      return
-    }
-
-    if (!availableSlots.some((slot) => slot.time === normalizeTime(payload.time))) {
-      alert('Selecione um horário disponível para o médico escolhido.')
-      return
-    }
-
     if (await patientHasAppointmentOnDate(payload)) {
       alert('Este paciente já possui um agendamento neste dia.')
+      return
+    }
+
+    if (slotsLoading) {
+      alert('Aguarde o cálculo de horários disponíveis antes de salvar.')
+      return
+    }
+
+    const conflictingAppointment = findConflictingAppointment(payload, localAppointments)
+    const slotAvailable = availableSlots.some((slot) => slot.time === normalizeTime(payload.time))
+
+    if (conflictingAppointment || !slotAvailable) {
+      const queued = visitRepository.enqueue(payload, { conflictingAppointment, patients, professionals })
+      notifyAppointmentAction(
+        'Paciente na fila de consultas',
+        `${getPatientName(payload.patientId, patients)} entrou na fila para ${formatAppointmentDate(payload.date)} às ${normalizeTime(payload.time)}.`,
+        payload,
+      )
+      alert(`Horário indisponível. ${queued.patient} foi adicionado(a) à fila de consultas e será agendado(a) automaticamente se houver cancelamento nesse horário.`)
+      closeAppointmentModal()
       return
     }
 
@@ -485,16 +502,49 @@ export function useAgenda() {
 
     try {
       const cancelled = await appointmentRepository.cancel(editingAppointment.id, payload)
+      const queuedAppointment = visitRepository.findNextForSlot(payload)
+      let promotedAppointment = null
+      let promotedPayload = null
+      let promotionErrorMessage = ''
+
+      if (queuedAppointment) {
+        promotedPayload = buildAppointmentPayloadFromQueueItem(queuedAppointment, payload)
+        try {
+          promotedAppointment = await appointmentRepository.create(promotedPayload)
+          visitRepository.markScheduled(queuedAppointment.id, promotedAppointment)
+        } catch (promotionError) {
+          console.error(promotionError)
+          promotedPayload = null
+          promotionErrorMessage = promotionError.message || 'Não foi possível chamar o próximo paciente da fila.'
+        }
+      }
+
       setLocalAppointments((current) =>
         sortAppointmentsByTime(
-          current.map((appointment) =>
-            appointment.id === editingAppointment.id
-              ? enrichAppointment(cancelled, payload, patients, professionals)
-              : appointment,
-          ),
+          [
+            ...current.map((appointment) =>
+              appointment.id === editingAppointment.id
+                ? enrichAppointment(cancelled, payload, patients, professionals)
+                : appointment,
+            ),
+            promotedAppointment
+              ? enrichAppointment(promotedAppointment, promotedPayload, patients, professionals)
+              : null,
+          ].filter(Boolean),
         ),
       )
       notifyAppointmentAction('Consulta cancelada', `Consulta de ${getPatientName(payload.patientId, patients)} foi cancelada. Status atualizado para Cancelado.`, payload, cancelled)
+      if (promotedAppointment && promotedPayload) {
+        notifyAppointmentAction(
+          'Paciente chamado da fila',
+          `${getPatientName(promotedPayload.patientId, patients)} foi agendado para ${formatAppointmentDate(promotedPayload.date)} às ${promotedPayload.time}.`,
+          promotedPayload,
+          promotedAppointment,
+        )
+      }
+      if (promotionErrorMessage) {
+        alert(`O cancelamento foi salvo, mas não foi possível agendar automaticamente o próximo paciente da fila. ${promotionErrorMessage}`)
+      }
       closeAppointmentModal()
     } catch (cancelError) {
       alert(cancelError.message || 'Erro ao cancelar agendamento.')
@@ -535,6 +585,25 @@ export function useAgenda() {
       createdBy: editingAppointment?.createdBy || viewerProfile?.id || '',
       createdByName: editingAppointment?.createdByName || viewerProfile?.name || viewerProfile?.email || '',
       ...overrides,
+    }
+  }
+
+  function buildAppointmentPayloadFromQueueItem(queueItem, cancelledSlotPayload) {
+    return {
+      patientId: queueItem.patientId,
+      date: queueItem.date || cancelledSlotPayload.date,
+      time: queueItem.time || cancelledSlotPayload.time,
+      type: queueItem.type || 'Retorno',
+      mode: queueItem.mode || 'Teleconsulta',
+      durationMinutes: queueItem.durationMinutes || cancelledSlotPayload.durationMinutes || 30,
+      status: 'Agendado',
+      highPriority: Boolean(queueItem.highPriority),
+      priority: queueItem.priority || (queueItem.highPriority ? 'Alta' : 'Média'),
+      notes: queueItem.notes || '',
+      room: queueItem.room || (queueItem.mode === 'Teleconsulta' ? 'Virtual' : 'Consultório 1'),
+      professionalId: queueItem.professionalId || cancelledSlotPayload.professionalId,
+      createdBy: queueItem.createdBy || viewerProfile?.id || '',
+      createdByName: queueItem.createdByName || viewerProfile?.name || viewerProfile?.email || '',
     }
   }
 
@@ -627,7 +696,7 @@ function filterAppointmentsByPatient(appointments, patientId) {
   )
 }
 
-function filterBookableAvailableSlots(slots, { appointments, date, doctorId }) {
+export function filterBookableAvailableSlots(slots, { appointments, date, doctorId, ignoredAppointmentId = null }) {
   const allowedTimes = new Set(generateTimesInclusive(BOOKING_DAY_START, BOOKING_DAY_END, BOOKING_SLOT_MINUTES))
 
   return slots
@@ -635,7 +704,7 @@ function filterBookableAvailableSlots(slots, { appointments, date, doctorId }) {
     .filter((slot) =>
       slot.available &&
       allowedTimes.has(slot.time) &&
-      isDoctorSlotAvailable({ date, professionalId: doctorId, time: slot.time }, appointments),
+      isDoctorSlotAvailable({ date, professionalId: doctorId, time: slot.time }, appointments, ignoredAppointmentId),
     )
 }
 
@@ -644,6 +713,33 @@ function resolveAppointmentCreatorNames(appointments, users, viewerProfile, prof
     ...appointment,
     createdByName: appointment.createdByName || resolveCreatorName(appointment.createdBy, users, viewerProfile, professionals),
   }))
+}
+
+function resolveAppointmentDisplayNames(appointments, patients, professionals) {
+  return appointments.map((appointment) => {
+    const patient = patients.find((item) =>
+      [
+        item.id,
+        item.patient_id,
+        item.patientId,
+        item.detailId,
+      ].map(normalizeValue).includes(normalizeValue(appointment.patientId)),
+    )
+    const professional = professionals.find((item) =>
+      [
+        item.id,
+        item.userId,
+        item.user_id,
+        item.auth_user_id,
+      ].map(normalizeValue).includes(normalizeValue(appointment.professionalId)),
+    )
+
+    return {
+      ...appointment,
+      patient: patient?.name || patient?.full_name || patient?.nome || appointment.patient,
+      professional: professional?.name || professional?.full_name || professional?.nome || appointment.professional,
+    }
+  })
 }
 
 function resolveCreatorName(createdBy, users, viewerProfile, professionals) {
@@ -697,17 +793,21 @@ function hasPatientAppointmentOnDate(appointments, patientId, date, ignoredAppoi
 }
 
 function isDoctorSlotAvailable(payload, appointments, ignoredAppointmentId = null) {
+  return !findConflictingAppointment(payload, appointments, ignoredAppointmentId)
+}
+
+function findConflictingAppointment(payload, appointments, ignoredAppointmentId = null) {
   const targetDoctorId = normalizeValue(payload.professionalId)
   const targetTime = normalizeTime(payload.time)
-  if (!targetDoctorId || !payload.date || !targetTime) return false
+  if (!targetDoctorId || !payload.date || !targetTime) return null
 
-  return !appointments.some((appointment) => {
+  return appointments.find((appointment) => {
     if (ignoredAppointmentId && String(appointment.id) === String(ignoredAppointmentId)) return false
     if (normalizeValue(appointment.professionalId) !== targetDoctorId) return false
     if (appointment.date !== payload.date) return false
     if (normalizeTime(appointment.time) !== targetTime) return false
     return !['cancelada', 'cancelado', 'cancelled'].includes(normalizeStatus(appointment.status))
-  })
+  }) || null
 }
 
 function isBookableTimeSlot(time) {

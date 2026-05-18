@@ -21,15 +21,15 @@ export function FeatureCallout({ className = '', description, status = 'partial'
         <FeatureBadge status={status} />
         {title ? <p className={`text-sm font-semibold ${current.title}`}>{title}</p> : null}
       </div>
-      {description ? <p className="mt-2 text-sm leading-6 text-[#d4d4d4]">{description}</p> : null}
+      {description ? <p className="mt-2 text-sm leading-6 text-text-body">{description}</p> : null}
     </div>
   )
 }
 
 export function FeatureLegend() {
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[#404040] bg-[#202020] px-3 py-2">
-      <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Legenda</span>
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border-default-v2 bg-surface-card-hover px-3 py-2">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted-v2">Legenda</span>
       <FeatureBadge status="live" />
       <FeatureBadge status="partial" />
       <FeatureBadge status="wip" />

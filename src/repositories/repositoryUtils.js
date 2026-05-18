@@ -67,6 +67,8 @@ export function translateErrorMessage(message, fallbackMessage = 'Erro inesperad
   const normalized = rawMessage.toLowerCase()
 
   if (!rawMessage) return fallbackMessage
+  const technicalTranslation = translateTechnicalMessage(rawMessage)
+  if (technicalTranslation) return technicalTranslation
   if (isPortugueseMessage(rawMessage)) return rawMessage
 
   const translations = [
@@ -160,6 +162,14 @@ export function translateErrorMessage(message, fallbackMessage = 'Erro inesperad
   }
 
   return isLikelyEnglishMessage(rawMessage) ? fallbackMessage : rawMessage
+}
+
+function translateTechnicalMessage(message) {
+  if (/patients_cpf_key|duplicate key value violates unique constraint ["']?patients_cpf_key["']?|unique constraint ["']?patients_cpf_key["']?/i.test(message)) {
+    return 'Já existe um paciente cadastrado com este CPF.'
+  }
+
+  return ''
 }
 
 function getErrorMessage(error, text) {

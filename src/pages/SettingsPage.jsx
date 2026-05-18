@@ -7,9 +7,9 @@ import { Switch } from '../components/ui/switch.jsx'
 
 import { useAccessibility } from '../contexts/accessibilityContext.js'
 
-const cardClass = 'rounded-2xl border border-[#404040] bg-[#262626] shadow-sm'
+const cardClass = 'rounded-2xl border border-border-default-v2 bg-surface-card shadow-card'
 const inputClass =
-  'h-10 rounded-sm border border-[#404040] bg-[#171717] px-3 text-sm text-[#e5e5e5] outline-none transition focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20'
+  'h-10 rounded-xl border border-border-default-v2 bg-surface-inset px-3 text-sm text-text-body outline-none transition focus:border-accent-primary focus:ring-2 focus:ring-accent-primary/20'
 
 export function SettingsPage() {
   const sections = settingsRepository.getSections()
@@ -18,8 +18,8 @@ export function SettingsPage() {
   return (
     <div className="mx-auto max-w-5xl">
       <header className="mb-8">
-        <h1 className="text-[32px] font-bold leading-8 tracking-[-0.02em] text-[#f5f5f5]">Configurações</h1>
-        <p className="mt-1 text-sm text-[#b8b8b8]">Gerencie preferências, segurança e integrações do MediConnect</p>
+        <h1 className="text-[32px] font-bold leading-8 tracking-[-0.02em] text-text-heading">Configurações</h1>
+        <p className="mt-1 text-sm text-text-muted-v2">Gerencie preferências, segurança e integrações do MediConnect</p>
       </header>
 
       <div className="flex flex-col gap-6 lg:flex-row">
@@ -29,8 +29,8 @@ export function SettingsPage() {
               <button
                 className={`flex items-center gap-3 rounded-xl px-3 py-3 text-left transition ${
                   activeSection === item.id
-                    ? 'bg-[#3b82f6]/10 text-[#3b82f6]'
-                    : 'text-[#a3a3a3] hover:bg-[#303030] hover:text-[#e5e5e5]'
+                    ? 'bg-accent-primary/10 text-accent-primary'
+                    : 'text-text-muted-v2 hover:bg-surface-card-hover hover:text-text-body'
                 }`}
                 key={item.id}
                 onClick={() => setActiveSection(item.id)}
@@ -70,7 +70,7 @@ function AppearanceSection() {
   return (
     <SectionFrame description="Personalize a interface do MediConnect." title="Aparência e Acessibilidade">
       <div className="mb-8">
-        <p className="mb-4 text-sm font-semibold text-[#e5e5e5]">Tema da interface</p>
+        <p className="mb-4 text-sm font-semibold text-text-body">Tema da interface</p>
         <div className="grid max-w-xl gap-4 sm:grid-cols-2">
           {[
             { id: 'dark', label: 'Escuro', preview: 'bg-[#0a0a0a]' },
@@ -80,32 +80,32 @@ function AppearanceSection() {
               className={`rounded-2xl border-2 p-4 text-left transition ${
                 theme === item.id
                   ? item.id === 'dark'
-                    ? 'border-[#737373] bg-[#171717] shadow-md shadow-black/30'
-                    : 'border-[#3b82f6] bg-[#3b82f6]/5 shadow-md shadow-[#3b82f6]/20'
-                  : 'border-[#404040] bg-[#262626] hover:border-[#737373]'
+                    ? 'border-border-strong bg-surface-inset shadow-md shadow-black/30'
+                    : 'border-accent-primary bg-accent-primary/5 shadow-md shadow-accent-primary/20'
+                  : 'border-border-default-v2 bg-surface-card hover:border-border-strong'
               }`}
               key={item.id}
               onClick={() => handleThemeChange(item.id)}
               type="button"
             >
-              <span className={`settings-theme-preview ${item.id === 'dark' ? 'settings-theme-preview-dark' : 'settings-theme-preview-light'} mb-3 flex h-20 flex-col gap-1.5 overflow-hidden rounded-xl border border-[#404040] p-2 ${item.preview}`}>
-                <span className={`settings-theme-preview-bar h-2.5 rounded ${item.id === 'dark' ? 'bg-[#262626]' : 'bg-white'}`} />
+              <span className={`settings-theme-preview ${item.id === 'dark' ? 'settings-theme-preview-dark' : 'settings-theme-preview-light'} mb-3 flex h-20 flex-col gap-1.5 overflow-hidden rounded-xl border border-border-default-v2 p-2 ${item.preview}`}>
+                <span className={`settings-theme-preview-bar h-2.5 rounded ${item.id === 'dark' ? 'bg-surface-card' : 'bg-white'}`} />
                 <span className="flex flex-1 gap-1">
-                  <span className={`settings-theme-preview-side w-8 rounded ${item.id === 'dark' ? 'bg-[#171717]' : 'bg-white'}`} />
+                  <span className={`settings-theme-preview-side w-8 rounded ${item.id === 'dark' ? 'bg-surface-inset' : 'bg-white'}`} />
                   <span className="flex flex-1 flex-col justify-center gap-1">
-                    <span className={`settings-theme-preview-line h-1.5 w-3/4 rounded-full ${item.id === 'dark' ? 'bg-[#525252]' : 'bg-[#dde8f7]'}`} />
-                    <span className={`settings-theme-preview-line h-1.5 w-1/2 rounded-full ${item.id === 'dark' ? 'bg-[#404040]' : 'bg-[#dde8f7]'}`} />
+                    <span className={`settings-theme-preview-line h-1.5 w-3/4 rounded-full ${item.id === 'dark' ? 'bg-border-strong' : 'bg-[#dde8f7]'}`} />
+                    <span className={`settings-theme-preview-line h-1.5 w-1/2 rounded-full ${item.id === 'dark' ? 'bg-surface-card-hover' : 'bg-[#dde8f7]'}`} />
                   </span>
                 </span>
               </span>
               <span className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-[#e5e5e5]">{item.label}</span>
-                {theme === item.id ? <span className="grid size-5 place-items-center rounded-full bg-[#3b82f6] text-[11px] text-white">✓</span> : null}
+                <span className="text-sm font-semibold text-text-body">{item.label}</span>
+                {theme === item.id ? <span className="grid size-5 place-items-center rounded-full bg-accent-primary text-[11px] text-white">✓</span> : null}
               </span>
             </button>
           ))}
         </div>
-        <p className="mt-3 text-xs text-[#a3a3a3]">A preferência de tema é salva localmente.</p>
+        <p className="mt-3 text-xs text-text-muted-v2">A preferência de tema é salva localmente.</p>
       </div>
 
       <SettingsGroup>
@@ -150,11 +150,11 @@ function SkeletonToggleRow() {
   return (
     <div className="flex items-center justify-between gap-6 border-b border-[var(--border-default)] py-4 last:border-0">
       <div className="min-w-0 flex-1 pr-4 space-y-2">
-        <div className="h-4 w-32 animate-pulse rounded bg-[#303030]"></div>
-        <div className="h-3 w-64 animate-pulse rounded bg-[#303030]"></div>
+        <div className="h-4 w-32 animate-pulse rounded bg-surface-card-hover"></div>
+        <div className="h-3 w-64 animate-pulse rounded bg-surface-card-hover"></div>
       </div>
       <div className="shrink-0">
-        <div className="h-6 w-11 animate-pulse rounded-full bg-[#303030]"></div>
+        <div className="h-6 w-11 animate-pulse rounded-full bg-surface-card-hover"></div>
       </div>
     </div>
   )
@@ -278,12 +278,12 @@ function AccountSection() {
     <SectionFrame description="Atalhos de conta do usuário logado." title="Conta & Perfil">
       <SettingsGroup>
         <SettingRow description="Nome, telefone, foto e unidade padrão" label="Dados do perfil">
-          <a className="h-9 rounded-sm border border-[#404040] bg-[#303030] px-3 py-2 text-sm font-semibold text-[#e5e5e5]" href="/perfil">
+          <a className="h-9 rounded-sm border border-border-default-v2 bg-surface-card-hover px-3 py-2 text-sm font-semibold text-text-body" href="/perfil">
             Abrir perfil
           </a>
         </SettingRow>
         <SettingRow description="Preferências locais desta sessão" label="Preferências">
-          <span className="text-sm text-[#a3a3a3]">Ativas</span>
+          <span className="text-sm text-text-muted-v2">Ativas</span>
         </SettingRow>
       </SettingsGroup>
     </SectionFrame>
@@ -300,9 +300,9 @@ function IntegrationsSection() {
           ['SMS', 'Lembretes transacionais'],
           ['Armazenamento', 'Avatares e documentos'],
         ].map(([title, description]) => (
-          <div className="rounded-xl border border-[#404040] bg-[#171717] p-4" key={title}>
-            <p className="text-sm font-semibold text-[#f5f5f5]">{title}</p>
-            <p className="mt-1 text-xs leading-5 text-[#a3a3a3]">{description}</p>
+          <div className="rounded-xl border border-border-default-v2 bg-surface-inset p-4" key={title}>
+            <p className="text-sm font-semibold text-text-heading">{title}</p>
+            <p className="mt-1 text-xs leading-5 text-text-muted-v2">{description}</p>
             <span className="mt-3 inline-flex rounded bg-emerald-500/20 px-2 py-1 text-xs font-bold text-emerald-400">Disponível</span>
           </div>
         ))}
@@ -322,7 +322,7 @@ function PrivacySection() {
         <SettingsIcon className="mt-0.5 size-5 shrink-0 text-amber-400" name="alert" />
         <div>
           <p className="text-sm font-semibold text-amber-400">Conformidade LGPD ativa</p>
-          <p className="mt-1 text-xs leading-5 text-[#a3a3a3]">Dados de pacientes são tratados com finalidade legítima e armazenados com segurança.</p>
+          <p className="mt-1 text-xs leading-5 text-text-muted-v2">Dados de pacientes são tratados com finalidade legítima e armazenados com segurança.</p>
         </div>
       </div>
 
@@ -349,7 +349,7 @@ function PrivacySection() {
           </select>
         </SettingRow>
         <SettingRow description="Gerar relatório completo para atender solicitação de titular" label="Exportar dados do paciente">
-          <button className="h-9 rounded-sm border border-[#404040] bg-[#303030] px-3 text-sm font-semibold text-[#e5e5e5]" type="button">Exportar</button>
+          <button className="h-9 rounded-sm border border-border-default-v2 bg-surface-card-hover px-3 text-sm font-semibold text-text-body" type="button">Exportar</button>
         </SettingRow>
       </Subsection>
     </SectionFrame>
@@ -366,13 +366,13 @@ function DataSection() {
             ['Prontuários (PDF)', 'Registros médicos do período'],
             ['Relatório geral (PDF)', 'Dashboard executivo completo'],
           ].map(([label, desc]) => (
-            <button className="flex items-center gap-3 rounded-xl border border-[#404040] bg-[#171717] p-4 text-left transition hover:border-[#3b82f6]/40" key={label} type="button">
-              <span className="grid size-9 place-items-center rounded-lg bg-[#3b82f6]/10 text-[#3b82f6]">
+            <button className="flex items-center gap-3 rounded-xl border border-border-default-v2 bg-surface-inset p-4 text-left transition hover:border-accent-primary/40" key={label} type="button">
+              <span className="grid size-9 place-items-center rounded-lg bg-accent-primary/10 text-accent-primary">
                 <SettingsIcon className="size-4" name="download" />
               </span>
               <span>
-                <span className="block text-sm font-semibold text-[#f5f5f5]">{label}</span>
-                <span className="block text-xs text-[#a3a3a3]">{desc}</span>
+                <span className="block text-sm font-semibold text-text-heading">{label}</span>
+                <span className="block text-xs text-text-muted-v2">{desc}</span>
               </span>
             </button>
           ))}
@@ -391,7 +391,7 @@ function DataSection() {
           </select>
         </SettingRow>
         <SettingRow description="30/03/2026 às 00:15" label="Último backup">
-          <button className="h-9 rounded-sm border border-[#404040] bg-[#303030] px-3 text-sm font-semibold text-[#e5e5e5]" type="button">Baixar</button>
+          <button className="h-9 rounded-sm border border-border-default-v2 bg-surface-card-hover px-3 text-sm font-semibold text-text-body" type="button">Baixar</button>
         </SettingRow>
       </Subsection>
     </SectionFrame>
@@ -402,8 +402,8 @@ function SectionFrame({ children, description, title }) {
   return (
     <div>
       <div className="mb-6">
-        <h2 className="text-lg font-bold text-[#f5f5f5]">{title}</h2>
-        <p className="mt-1 text-sm text-[#a3a3a3]">{description}</p>
+        <h2 className="text-lg font-bold text-text-heading">{title}</h2>
+        <p className="mt-1 text-sm text-text-muted-v2">{description}</p>
       </div>
       <div className="space-y-6">{children}</div>
     </div>
@@ -413,7 +413,7 @@ function SectionFrame({ children, description, title }) {
 function Subsection({ children, title }) {
   return (
     <div>
-      <p className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#a3a3a3]">{title}</p>
+      <p className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-text-muted-v2">{title}</p>
       <SettingsGroup>{children}</SettingsGroup>
     </div>
   )
@@ -447,7 +447,7 @@ function ToggleSwitch({ checked, onChange }) {
   return (
     <button
       aria-checked={checked}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${checked ? 'bg-[#3b82f6]' : 'bg-[#303030]'}`}
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${checked ? 'bg-accent-primary' : 'bg-surface-card-hover'}`}
       onClick={() => onChange(!checked)}
       role="switch"
       type="button"

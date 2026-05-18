@@ -4,13 +4,14 @@ import { hasCapability } from '../config/permissions.js'
 import { patientRepository } from '../repositories/patientRepository.js'
 import { translateErrorMessage } from '../repositories/repositoryUtils.js'
 import { isValidPersonName } from '../utils/brFormatters.js'
-import { sanitizeFieldValue } from '../utils/inputSanitizers.js'
+import { maskHeight, sanitizeFieldValue } from '../utils/inputSanitizers.js'
 const ITEMS_PER_PAGE = 25
 
 const darkInput =
-  'h-10 w-full rounded-lg border border-[#404040] bg-[#1a1a1a] px-3 text-sm text-[#e5e5e5] outline-none transition placeholder:text-[#737373] focus:border-[#3b82f6] focus:ring-1 focus:ring-[#3b82f6]'
-const darkLabel = 'mb-1.5 block text-xs font-medium text-[#e5e5e5]'
-const darkCard = 'rounded-2xl border border-[#404040] bg-[#262626] p-6 shadow-sm'
+  'h-10 w-full rounded-lg border border-border-default-v2 bg-surface-inset px-3 text-sm text-text-heading outline-none transition placeholder:text-text-muted-v2 focus:border-[#3b82f6] focus:ring-1 focus:ring-[#3b82f6]'
+const darkLabel = 'mb-1.5 block text-xs font-medium text-text-heading'
+const darkCard = 'rounded-2xl border border-border-default-v2 bg-surface-card p-6 shadow-sm'
+const MAX_PATIENT_ATTACHMENT_SIZE = 10 * 1024 * 1024
 
 const patientTabs = [
   { label: 'Resumo', value: 'resumo' },
@@ -86,6 +87,9 @@ export function PatientsPage({ navigate, role }) {
   const canHardDeletePatients = hasCapability(role, 'hardDeletePatients')
 
   const filteredPatients = useMemo(() => {
+    const minAge = normalizeAgeFilter(ageMin)
+    const maxAge = normalizeAgeFilter(ageMax)
+
     return rows.filter((patient) => {
       const haystack = [
         patient.name,
@@ -126,13 +130,17 @@ export function PatientsPage({ navigate, role }) {
         return false
       }
 
-      const patientAge = Number(patient.age) || 0
-      if (ageMin && patientAge < Number(ageMin)) {
-        return false
-      }
+      if (minAge !== null || maxAge !== null) {
+        const patientAge = resolvePatientFilterAge(patient)
+        if (patientAge === null) return false
 
-      if (ageMax && patientAge > Number(ageMax)) {
-        return false
+        if (minAge !== null && patientAge < minAge) {
+          return false
+        }
+
+        if (maxAge !== null && patientAge > maxAge) {
+          return false
+        }
       }
 
       if (lastVisitSince && (!patient.lastVisitIso || patient.lastVisitIso < lastVisitSince)) {
@@ -185,10 +193,14 @@ export function PatientsPage({ navigate, role }) {
         ? await patientRepository.uploadAvatar(patientId, patient.avatarFile)
         : null
       const uploadedAttachments = await uploadPatientAttachments(patientId, patient.attachmentFiles)
+      const nextAttachments = [...(patient.attachments || []), ...uploadedAttachments]
+      if (uploadedAttachments.length) {
+        await patientRepository.update(patientId, { attachments: nextAttachments }).catch(() => null)
+      }
       const newRow = {
         ...patient,
         attachmentFiles: undefined,
-        attachments: [...(patient.attachments || []), ...uploadedAttachments],
+        attachments: nextAttachments,
         avatarFile: undefined,
         avatarUrl: avatarResult?.avatarUrl || patient.avatarUrl,
         id: patientId,
@@ -203,10 +215,14 @@ export function PatientsPage({ navigate, role }) {
         ? await patientRepository.uploadAvatar(patient.id, patient.avatarFile)
         : null
       const uploadedAttachments = await uploadPatientAttachments(patient.id, patient.attachmentFiles)
+      const nextAttachments = [...(patient.attachments || []), ...uploadedAttachments]
+      if (uploadedAttachments.length) {
+        await patientRepository.update(patient.id, { attachments: nextAttachments }).catch(() => null)
+      }
       const nextPatient = {
         ...patient,
         attachmentFiles: undefined,
-        attachments: [...(patient.attachments || []), ...uploadedAttachments],
+        attachments: nextAttachments,
         avatarFile: undefined,
         avatarUrl: avatarResult?.avatarUrl || patient.avatarUrl,
       }
@@ -229,15 +245,25 @@ export function PatientsPage({ navigate, role }) {
 async function uploadPatientAttachments(patientId, files = []) {
   if (!files?.length) return []
 
-  const uploads = await Promise.all(
+  const results = await Promise.allSettled(
     files.map((file) => patientRepository.uploadAttachment(patientId, file)),
   )
+  const failedUploads = results
+    .filter((result) => result.status === 'rejected')
+    .map((result) => translateErrorMessage(result.reason?.message, 'Falha ao enviar anexo do paciente.'))
 
-  return uploads.map((upload) => ({
-    name: upload.name,
-    path: upload.path,
-    url: upload.url,
-  }))
+  if (failedUploads.length) {
+    window.alert(`Paciente salvo, mas ${failedUploads.length} anexo(s) nÃ£o puderam ser enviados. ${failedUploads[0]}`)
+  }
+
+  return results
+    .filter((result) => result.status === 'fulfilled')
+    .map((result) => result.value)
+    .map((upload) => ({
+      name: upload.name,
+      path: upload.path,
+      url: upload.url,
+    }))
 }
 
   async function deletePatient(patient) {
@@ -267,7 +293,7 @@ async function uploadPatientAttachments(patientId, files = []) {
   }
 
   if (loading) {
-    return <p className="p-8 text-center text-[#a3a3a3]">Carregando pacientes...</p>
+    return <p className="p-8 text-center text-text-muted-v2">Carregando pacientes...</p>
   }
 
   if (error) {
@@ -290,18 +316,18 @@ async function uploadPatientAttachments(patientId, files = []) {
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 text-[#e5e5e5]">
+    <div className="mx-auto max-w-7xl space-y-6 text-text-heading">
       <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <h1 className="text-[32px] font-bold leading-8 tracking-[-0.02em] text-[#e5e5e5]">Pacientes</h1>
-          <p className="mt-1 text-sm text-[#a3a3a3]">Gerencie as informações de seus pacientes</p>
+          <h1 className="text-[32px] font-bold leading-8 tracking-[-0.02em] text-text-heading">Pacientes</h1>
+          <p className="mt-1 text-sm text-text-muted-v2">Gerencie as informações de seus pacientes</p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
           <button
             className={`inline-flex h-10 items-center justify-center gap-2 rounded-lg border px-4 text-sm font-medium shadow-sm transition ${
               hasAdvancedFilters
                 ? 'border-[#3b82f6] bg-[#3b82f6]/10 text-[#3b82f6]'
-                : 'border-[#404040] bg-[#303030] text-[#e5e5e5] hover:bg-[#333333]'
+                : 'border-border-default-v2 bg-surface-card-hover text-text-heading hover:bg-surface-card-hover'
             }`}
             onClick={() => setAdvancedOpen(true)}
             type="button"
@@ -322,14 +348,14 @@ async function uploadPatientAttachments(patientId, files = []) {
         </div>
       </div>
 
-      <section className="rounded-2xl border border-[#404040] bg-[#262626] px-6 py-8 shadow-sm xl:py-14">
+      <section className="rounded-2xl border border-border-default-v2 bg-surface-card px-6 py-8 shadow-sm xl:py-14">
         <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
           <div className="relative md:col-span-2">
             <span className="absolute inset-y-0 left-0 flex items-center pl-3">
-              <PatientIcon className="size-4 text-[#a3a3a3]" name="search" />
+              <PatientIcon className="size-4 text-text-muted-v2" name="search" />
             </span>
             <input
-              className="h-11 w-full rounded-lg border border-[#404040] bg-[#303030] py-2.5 pl-10 pr-4 text-sm text-[#e5e5e5] outline-none transition placeholder:text-[#a3a3a3] focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20"
+              className="h-11 w-full rounded-lg border border-border-default-v2 bg-surface-card-hover py-2.5 pl-10 pr-4 text-sm text-text-heading outline-none transition placeholder:text-text-muted-v2 focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20"
               onChange={(event) => {
                 setSearch(event.target.value)
                 setPage(1)
@@ -364,7 +390,7 @@ async function uploadPatientAttachments(patientId, files = []) {
 
         {hasAdvancedFilters ? (
           <div className="mb-4 flex flex-wrap items-center gap-2">
-            <span className="text-xs text-[#a3a3a3]">Filtros ativos:</span>
+            <span className="text-xs text-text-muted-v2">Filtros ativos:</span>
             {city ? <FilterChip label={`Cidade: ${city}`} onClear={() => setCity('')} /> : null}
             {state ? <FilterChip label={`Estado: ${state}`} onClear={() => setState('')} /> : null}
             {ageMin ? <FilterChip label={`Idade min: ${ageMin}`} onClear={() => setAgeMin('')} /> : null}
@@ -378,9 +404,9 @@ async function uploadPatientAttachments(patientId, files = []) {
           </div>
         ) : null}
 
-        <div className="overflow-x-auto rounded-lg border border-[#404040]">
+        <div className="overflow-x-auto rounded-lg border border-border-default-v2">
           <table className="w-full min-w-full table-fixed text-left text-sm">
-            <thead className="bg-[#171717] text-xs font-semibold uppercase text-[#a3a3a3]">
+            <thead className="bg-surface-page text-xs font-semibold uppercase text-text-muted-v2">
               <tr>
                 <th className="w-[24%] px-6 py-4">Nome</th>
                 <th className="w-[14%] px-6 py-4">Telefone</th>
@@ -388,41 +414,41 @@ async function uploadPatientAttachments(patientId, files = []) {
                 <th className="w-[8%] px-6 py-4">Estado</th>
                 <th className="w-[16%] px-6 py-4">Ultimo atendimento</th>
                 <th className="w-[18%] px-6 py-4">Proximo atendimento</th>
-                <th className="sticky right-0 w-[8.5rem] bg-[#171717] px-6 py-4 text-right">Ações</th>
+                <th className="sticky right-0 w-[8.5rem] bg-surface-page px-6 py-4 text-right">Ações</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#404040] bg-[#262626]">
+            <tbody className="divide-y divide-border-default-v2 bg-surface-card">
               {paginatedPatients.length ? (
                 paginatedPatients.map((patient) => (
-                  <tr className="transition hover:bg-[#303030]" key={patient.id}>
+                  <tr className="transition hover:bg-surface-card-hover" key={patient.id}>
                     <td className="px-6 py-4 align-top">
                       <button className="flex items-center gap-3 text-left" onClick={() => openDetail(patient)} type="button">
                         {patient.avatarUrl ? (
                           <img alt="" className="size-8 shrink-0 rounded-full border border-[#3b82f6]/30 object-cover" src={patient.avatarUrl} />
                         ) : (
-                          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[#333333] text-xs font-bold text-[#3b82f6]">
+                          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-surface-card-hover text-xs font-bold text-[#3b82f6]">
                             {patient.name.charAt(0)}
                           </span>
                         )}
                         <span className="min-w-0">
-                          <span className="block whitespace-normal break-words font-medium text-[#e5e5e5] transition hover:text-[#3b82f6]">
+                          <span className="block whitespace-normal break-words font-medium text-text-heading transition hover:text-[#3b82f6]">
                             {patient.name}
                           </span>
-                          <span className="mt-0.5 block whitespace-normal break-words text-xs text-[#a3a3a3]">
+                          <span className="mt-0.5 block whitespace-normal break-words text-xs text-text-muted-v2">
                             {patient.insurance || missingValue('Convênio')} {patient.vip ? ' | VIP' : ''}
                           </span>
                         </span>
                       </button>
                     </td>
-                    <td className="px-6 py-4 align-top whitespace-normal break-words text-[#a3a3a3]">{patient.phone || missingValue('Telefone')}</td>
-                    <td className="px-6 py-4 align-top whitespace-normal break-words text-[#a3a3a3]">{patient.city || missingValue('Cidade')}</td>
-                    <td className="px-6 py-4 align-top text-[#a3a3a3]">{patient.state || missingValue('Estado')}</td>
-                    <td className="px-6 py-4 align-top whitespace-normal break-words text-[#a3a3a3]">{patient.lastVisit || 'Ainda não houve atendimento'}</td>
-                    <td className="px-6 py-4 align-top whitespace-normal break-words text-[#a3a3a3]">{patient.nextVisit || 'Nenhum atendimento agendado'}</td>
-                    <td className="sticky right-0 bg-[#262626] px-4 py-4 text-right shadow-[-10px_0_12px_-12px_rgba(0,0,0,0.75)]">
+                    <td className="px-6 py-4 align-top whitespace-normal break-words text-text-muted-v2">{patient.phone || missingValue('Telefone')}</td>
+                    <td className="px-6 py-4 align-top whitespace-normal break-words text-text-muted-v2">{patient.city || missingValue('Cidade')}</td>
+                    <td className="px-6 py-4 align-top text-text-muted-v2">{patient.state || missingValue('Estado')}</td>
+                    <td className="px-6 py-4 align-top whitespace-normal break-words text-text-muted-v2">{patient.lastVisit || 'Ainda não houve atendimento'}</td>
+                    <td className="px-6 py-4 align-top whitespace-normal break-words text-text-muted-v2">{patient.nextVisit || 'Nenhum atendimento agendado'}</td>
+                    <td className="sticky right-0 bg-surface-card px-4 py-4 text-right shadow-[-10px_0_12px_-12px_rgba(0,0,0,0.75)]">
                       <button
                         aria-label={`Ações de ${patient.name}`}
-                        className="rounded p-1 text-[#a3a3a3] transition hover:bg-[#333333] hover:text-[#e5e5e5]"
+                        className="rounded p-1 text-text-muted-v2 transition hover:bg-surface-card-hover hover:text-text-heading"
                         onClick={(event) => {
                           event.stopPropagation()
                           setOpenMenuId(openMenuId === patient.id ? null : patient.id)
@@ -439,7 +465,7 @@ async function uploadPatientAttachments(patientId, files = []) {
                             onClick={() => setOpenMenuId(null)}
                             type="button"
                           />
-                          <div className="fixed right-8 z-50 w-48 rounded-md border border-[#404040] bg-[#262626] p-1 text-left shadow-lg">
+                          <div className="fixed right-8 z-50 w-48 rounded-md border border-border-default-v2 bg-surface-card p-1 text-left shadow-lg">
                             <ActionItem icon="file" label="Ver detalhes" onClick={() => openDetail(patient)} />
                             {canEditPatients ? <ActionItem icon="edit" label="Editar" onClick={() => openForm(patient.id)} /> : null}
                             <ActionItem
@@ -461,7 +487,7 @@ async function uploadPatientAttachments(patientId, files = []) {
                 ))
               ) : (
                 <tr>
-                  <td className="px-6 py-10 text-center text-[#a3a3a3]" colSpan={7}>
+                  <td className="px-6 py-10 text-center text-text-muted-v2" colSpan={7}>
                     Nenhum paciente encontrado.
                   </td>
                 </tr>
@@ -470,8 +496,8 @@ async function uploadPatientAttachments(patientId, files = []) {
           </table>
         </div>
 
-        <div className="mt-4 flex flex-col gap-4 border-t border-[#404040] pt-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs text-[#a3a3a3]">
+        <div className="mt-4 flex flex-col gap-4 border-t border-border-default-v2 pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-text-muted-v2">
             Mostrando {filteredPatients.length ? startIndex + 1 : 0}-
             {Math.min(startIndex + ITEMS_PER_PAGE, filteredPatients.length)} de {filteredPatients.length} pacientes
           </p>
@@ -484,7 +510,7 @@ async function uploadPatientAttachments(patientId, files = []) {
                 className={`grid size-8 place-items-center rounded-lg text-xs font-medium transition ${
                   pageNumber === currentPage
                     ? 'bg-[#3b82f6] text-white'
-                    : 'border border-[#404040] bg-[#1a1a1a] text-[#a3a3a3] hover:bg-[#333333]'
+                    : 'border border-border-default-v2 bg-surface-inset text-text-muted-v2 hover:bg-surface-card-hover'
                 }`}
                 key={pageNumber}
                 onClick={() => setPage(pageNumber)}
@@ -523,6 +549,30 @@ async function uploadPatientAttachments(patientId, files = []) {
       ) : null}
     </div>
   )
+}
+
+async function uploadPatientAttachments(patientId, files = []) {
+  if (!files?.length) return []
+
+  const results = await Promise.allSettled(
+    files.map((file) => patientRepository.uploadAttachment(patientId, file)),
+  )
+  const failedUploads = results
+    .filter((result) => result.status === 'rejected')
+    .map((result) => translateErrorMessage(result.reason?.message, 'Falha ao enviar anexo do paciente.'))
+
+  if (failedUploads.length) {
+    window.alert(`Paciente salvo, mas ${failedUploads.length} anexo(s) nao puderam ser enviados. ${failedUploads[0]}`)
+  }
+
+  return results
+    .filter((result) => result.status === 'fulfilled')
+    .map((result) => result.value)
+    .map((upload) => ({
+      name: upload.name,
+      path: upload.path,
+      url: upload.url,
+    }))
 }
 
 function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
@@ -565,7 +615,7 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
     age: patient?.age || '',
     bloodType: patient?.bloodType || patient?.blood_type || '',
     weight: patient?.weight || patient?.peso || '',
-    height: patient?.height || patient?.altura || '',
+    height: formatHeightField(patient?.height || patient?.altura || ''),
     bmi: patient?.bmi || patient?.imc || '',
     allergies: patient?.allergies || patient?.alergias || '',
     condition: patient?.condition || '',
@@ -598,8 +648,10 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
       ? checked
       : type === 'date'
         ? value
-        : ['weight', 'height'].includes(name)
-          ? value.replace(/[^\d,.]/g, '').slice(0, 6)
+        : name === 'height'
+          ? maskHeight(value)
+          : name === 'weight'
+            ? value.replace(/[^\d,.]/g, '').slice(0, 6)
           : sanitizeFieldValue(name, value)
 
     setFormData((currentData) => {
@@ -627,7 +679,16 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
     const files = Array.from(event.target.files || [])
     if (!files.length) return
 
-    setAttachmentFiles((current) => [...current, ...files])
+    const validFiles = files.filter((file) => file.size <= MAX_PATIENT_ATTACHMENT_SIZE)
+    const rejectedFiles = files.filter((file) => file.size > MAX_PATIENT_ATTACHMENT_SIZE)
+
+    if (rejectedFiles.length) {
+      window.alert(`Anexo muito grande. Envie arquivos de até ${formatFileSize(MAX_PATIENT_ATTACHMENT_SIZE)}.`)
+    }
+
+    if (validFiles.length) {
+      setAttachmentFiles((current) => [...current, ...validFiles])
+    }
     event.target.value = ''
   }
 
@@ -698,26 +759,26 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
   }
 
   return (
-    <div className="relative pb-20 text-[#e5e5e5]">
-      <div className="mb-6 flex flex-col items-start justify-between gap-4 border-b border-[#404040] pb-6 md:flex-row">
+    <div className="relative pb-20 text-text-heading">
+      <div className="mb-6 flex flex-col items-start justify-between gap-4 border-b border-border-default-v2 pb-6 md:flex-row">
         <div className="flex items-start gap-4">
           <button
-            className="mt-1 grid size-10 place-items-center rounded-lg border border-[#404040] bg-[#262626] text-[#e5e5e5] transition hover:bg-[#333333]"
+            className="mt-1 grid size-10 place-items-center rounded-lg border border-border-default-v2 bg-surface-card text-text-heading transition hover:bg-surface-card-hover"
             onClick={onCancel}
             type="button"
           >
             <PatientIcon className="size-5" name="arrow-left" />
           </button>
           <div>
-            <h1 className="text-[32px] font-bold leading-8 tracking-[-0.02em] text-[#e5e5e5]">Paciente</h1>
-            <p className="mt-1 text-sm text-[#a3a3a3]">Gerencie as informações de seus pacientes</p>
+            <h1 className="text-[32px] font-bold leading-8 tracking-[-0.02em] text-text-heading">Paciente</h1>
+            <p className="mt-1 text-sm text-text-muted-v2">Gerencie as informações de seus pacientes</p>
           </div>
         </div>
       </div>
 
       <form className="space-y-6" onSubmit={handleSubmit}>
           <section className={darkCard}>
-            <h2 className="mb-6 text-lg font-semibold text-[#e5e5e5]">Dados do Paciente</h2>
+            <h2 className="mb-6 text-lg font-semibold text-text-heading">Dados do Paciente</h2>
             <div className="mb-8 flex flex-col items-start gap-4 md:flex-row">
               {avatarPreview ? (
                 <img alt="" className="size-20 shrink-0 rounded-full border border-[#3b82f6]/30 object-cover" src={avatarPreview} />
@@ -727,7 +788,7 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
                 </div>
               )}
               <button
-                className="mt-2 rounded-lg border border-[#404040] bg-[#1a1a1a] px-4 py-1.5 text-sm font-medium text-[#e5e5e5] transition hover:bg-[#333333]"
+                className="mt-2 rounded-lg border border-border-default-v2 bg-surface-inset px-4 py-1.5 text-sm font-medium text-text-heading transition hover:bg-surface-card-hover"
                 onClick={() => fileInputRef.current?.click()}
                 type="button"
               >
@@ -741,11 +802,11 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
                 type="file"
               />
               {avatarFile ? (
-                <div className="flex items-center gap-2 rounded-md border border-[#404040] bg-[#262626] px-3 py-2 text-xs text-[#a3a3a3]">
+                <div className="flex items-center gap-2 rounded-md border border-border-default-v2 bg-surface-card px-3 py-2 text-xs text-text-muted-v2">
                   <span className="max-w-56 truncate">{avatarFile.name}</span>
                   <button
                     aria-label={`Remover ${avatarFile.name}`}
-                    className="grid size-5 place-items-center rounded-sm text-[#e5e5e5] transition hover:bg-[#404040]"
+                    className="grid size-5 place-items-center rounded-sm text-text-heading transition hover:bg-surface-card-hover"
                     onClick={removeAvatarFile}
                     type="button"
                   >
@@ -865,15 +926,15 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
               ) : null}
               <div className="md:col-span-12">
                 <button
-                  className="flex w-full items-center justify-between rounded-lg border border-[#404040] bg-[#1a1a1a] p-4 text-left text-sm font-medium text-[#e5e5e5] transition hover:bg-[#333333]"
+                  className="flex w-full items-center justify-between rounded-lg border border-border-default-v2 bg-surface-inset p-4 text-left text-sm font-medium text-text-heading transition hover:bg-surface-card-hover"
                   onClick={() => setAttachmentsOpen((open) => !open)}
                   type="button"
                 >
                   <span className="flex items-center gap-2">
-                    <PatientIcon className="size-4 text-[#a3a3a3]" name="paperclip" />
+                    <PatientIcon className="size-4 text-text-muted-v2" name="paperclip" />
                     Anexos do paciente
                   </span>
-                  <PatientIcon className="size-4 text-[#a3a3a3]" name={attachmentsOpen ? 'chevron-up' : 'chevron-down'} />
+                  <PatientIcon className="size-4 text-text-muted-v2" name={attachmentsOpen ? 'chevron-up' : 'chevron-down'} />
                 </button>
                 {attachmentsOpen ? (
                   <UploadDropzone
@@ -889,7 +950,7 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
           </section>
 
           <section className={darkCard}>
-            <h2 className="mb-6 text-lg font-semibold text-[#e5e5e5]">Informações Médicas</h2>
+            <h2 className="mb-6 text-lg font-semibold text-text-heading">Informações Médicas</h2>
             <div className="grid grid-cols-1 gap-x-6 gap-y-6 md:grid-cols-12">
               <DarkField className="md:col-span-6" label="Condição principal">
                 <input className={darkInput} name="condition" onChange={handleChange} value={formData.condition} />
@@ -909,7 +970,7 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
                 <input className={darkInput} inputMode="decimal" name="weight" onChange={handleChange} value={formData.weight} />
               </DarkField>
               <DarkField className="md:col-span-3" label="Altura (m)">
-                <input className={darkInput} inputMode="decimal" name="height" onChange={handleChange} placeholder="1,70" value={formData.height} />
+                <input className={darkInput} inputMode="numeric" maxLength={4} name="height" onChange={handleChange} placeholder="1,70" value={formData.height} />
               </DarkField>
               <DarkField className="md:col-span-3" label="IMC">
                 <input className={darkInput} readOnly value={calculatedBmi} />
@@ -921,7 +982,7 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
           </section>
 
           <section className={darkCard}>
-            <h2 className="mb-6 text-lg font-semibold text-[#e5e5e5]">Contato</h2>
+            <h2 className="mb-6 text-lg font-semibold text-text-heading">Contato</h2>
             <div className="grid grid-cols-1 gap-x-6 gap-y-6 md:grid-cols-12">
               <DarkField className="md:col-span-3" label={requiredLabel('E-mail')}>
                 <input className={darkInput} name="email" onChange={handleChange} required={isNewPatient} type="email" value={formData.email} />
@@ -939,7 +1000,7 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
           </section>
 
           <section className={darkCard}>
-            <h2 className="mb-6 text-lg font-semibold text-[#e5e5e5]">Endereço</h2>
+            <h2 className="mb-6 text-lg font-semibold text-text-heading">Endereço</h2>
             <div className="grid grid-cols-1 gap-x-6 gap-y-6 md:grid-cols-12">
               <DarkField className="md:col-span-3" label={requiredLabel('CEP')}>
                 <input className={darkInput} maxLength={9} name="zipCode" onChange={handleChange} placeholder="_____-___" required={isNewPatient} value={formData.zipCode} />
@@ -970,7 +1031,7 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
           </section>
 
           <section className={darkCard}>
-            <h2 className="mb-6 text-lg font-semibold text-[#e5e5e5]">Convênio</h2>
+            <h2 className="mb-6 text-lg font-semibold text-text-heading">Convênio</h2>
             <div className="grid grid-cols-1 gap-x-6 gap-y-6 md:grid-cols-12">
               <DarkField className="md:col-span-6" label="Convênio">
                 <select className={darkInput} name="insurance" onChange={handleChange} value={formData.insurance}>
@@ -998,11 +1059,11 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
                   value={formData.insuranceCardValidUntil}
                 />
               </DarkField>
-              <label className="flex h-10 items-center gap-2 self-end text-sm text-[#e5e5e5] md:col-span-4">
+              <label className="flex h-10 items-center gap-2 self-end text-sm text-text-heading md:col-span-4">
                 <input className="size-4 accent-[#3b82f6]" checked={formData.insuranceIndefiniteValidity} name="insuranceIndefiniteValidity" onChange={handleChange} type="checkbox" />
                 Validade indeterminada
               </label>
-              <label className="flex w-fit cursor-pointer items-center gap-2 text-sm text-[#e5e5e5] md:col-span-12">
+              <label className="flex w-fit cursor-pointer items-center gap-2 text-sm text-text-heading md:col-span-12">
                 <input className="size-4 accent-[#3b82f6]" checked={formData.vip} name="vip" onChange={handleChange} type="checkbox" />
                 Paciente VIP
               </label>
@@ -1010,7 +1071,7 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
           </section>
 
           <section className={darkCard}>
-            <h2 className="mb-6 text-lg font-semibold text-[#e5e5e5]">Informações do SUS</h2>
+            <h2 className="mb-6 text-lg font-semibold text-text-heading">Informações do SUS</h2>
             <div className="grid grid-cols-1 gap-x-6 gap-y-6 md:grid-cols-12">
               <DarkField className="md:col-span-6" label="CNS">
                 <input className={darkInput} maxLength={15} name="cns" onChange={handleChange} value={formData.cns} />
@@ -1019,11 +1080,11 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
           </section>
 
           <section className={darkCard}>
-            <h2 className="mb-6 text-lg font-semibold text-[#e5e5e5]">Observações</h2>
+            <h2 className="mb-6 text-lg font-semibold text-text-heading">Observações</h2>
             <DarkField label="Observações gerais">
               <textarea className={`${darkInput} min-h-32 py-2`} name="notesText" onChange={handleChange} value={formData.notesText} />
             </DarkField>
-            <label className="mt-4 flex min-h-12 items-center justify-between gap-4 rounded-lg border border-[#404040] bg-[#1a1a1a] px-4 text-sm font-medium text-[#e5e5e5]">
+            <label className="mt-4 flex min-h-12 items-center justify-between gap-4 rounded-lg border border-border-default-v2 bg-surface-inset px-4 text-sm font-medium text-text-heading">
               <span>Autoriza o recebimento de mensagens conforme LGPD</span>
               <input className="size-4 accent-[#3b82f6]" checked={Boolean(formData.lgpdOptIn)} name="lgpdOptIn" onChange={handleChange} type="checkbox" />
             </label>
@@ -1031,7 +1092,7 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
 
           <div className="flex justify-end gap-3 pt-4">
             <button
-              className="rounded-lg border border-[#404040] bg-[#262626] px-5 py-2.5 text-sm font-medium text-[#e5e5e5] transition hover:bg-[#333333]"
+              className="rounded-lg border border-border-default-v2 bg-surface-card px-5 py-2.5 text-sm font-medium text-text-heading transition hover:bg-surface-card-hover"
               disabled={saving}
               onClick={onCancel}
               type="button"
@@ -1070,9 +1131,16 @@ export function PatientDetailPage({ navigate, patient, role }) {
       const avatarResult = updatedPatient.avatarFile
         ? await patientRepository.uploadAvatar(updatedPatient.id, updatedPatient.avatarFile)
         : null
+      const uploadedAttachments = await uploadPatientAttachments(updatedPatient.id, updatedPatient.attachmentFiles)
+      const nextAttachments = [...(updatedPatient.attachments || []), ...uploadedAttachments]
+      if (uploadedAttachments.length) {
+        await patientRepository.update(updatedPatient.id, { attachments: nextAttachments }).catch(() => null)
+      }
       setLocalPatient((current) => ({
         ...current,
         ...updatedPatient,
+        attachmentFiles: undefined,
+        attachments: nextAttachments,
         avatarFile: undefined,
         avatarUrl: avatarResult?.avatarUrl || updatedPatient.avatarUrl,
       }))
@@ -1116,7 +1184,7 @@ export function PatientDetailPage({ navigate, patient, role }) {
       <header className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div className="flex items-start gap-4">
           <button
-            className="mt-1 grid size-10 place-items-center rounded-sm border border-[#404040] bg-[#262626] text-[#e5e5e5] transition hover:bg-[#303030]"
+            className="mt-1 grid size-10 place-items-center rounded-sm border border-border-default-v2 bg-surface-card text-text-heading transition hover:bg-surface-card-hover"
             onClick={() => navigate('/pacientes')}
             type="button"
           >
@@ -1124,8 +1192,8 @@ export function PatientDetailPage({ navigate, patient, role }) {
           </button>
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#3b82f6]">Dados do Paciente</p>
-            <h1 className="mt-1 text-[32px] font-bold leading-8 tracking-[-0.02em] text-[#f5f5f5]">{localPatient.name}</h1>
-            <p className="mt-1 text-sm text-[#b8b8b8]">
+            <h1 className="mt-1 text-[32px] font-bold leading-8 tracking-[-0.02em] text-text-heading">{localPatient.name}</h1>
+            <p className="mt-1 text-sm text-text-body">
               {localPatient.condition} • {localPatient.status} • {localPatient.document}
             </p>
           </div>
@@ -1134,7 +1202,7 @@ export function PatientDetailPage({ navigate, patient, role }) {
         <div className="flex flex-wrap gap-3">
           {canEditPatients ? (
             <button
-              className="h-10 rounded-sm border border-[#404040] bg-[#262626] px-4 text-sm font-semibold text-[#e5e5e5] transition hover:bg-[#303030]"
+              className="h-10 rounded-sm border border-border-default-v2 bg-surface-card px-4 text-sm font-semibold text-text-heading transition hover:bg-surface-card-hover"
               onClick={() => setEditing(true)}
               type="button"
             >
@@ -1142,7 +1210,7 @@ export function PatientDetailPage({ navigate, patient, role }) {
             </button>
           ) : null}
           <button
-            className="h-10 rounded-sm border border-[#404040] bg-[#262626] px-4 text-sm font-semibold text-[#e5e5e5] transition hover:bg-[#303030]"
+            className="h-10 rounded-sm border border-border-default-v2 bg-surface-card px-4 text-sm font-semibold text-text-heading transition hover:bg-surface-card-hover"
             onClick={() => setMessageShortcutOpen(true)}
             type="button"
           >
@@ -1166,13 +1234,13 @@ export function PatientDetailPage({ navigate, patient, role }) {
       </section>
 
       <section className={darkCard}>
-        <div className="flex gap-4 border-b border-[#404040]">
+        <div className="flex gap-4 border-b border-border-default-v2">
           {patientTabs.map((tab) => (
             <button
               className={`border-b-2 px-2 pb-3 text-sm font-semibold transition ${
                 activeTab === tab.value
                   ? 'border-[#3b82f6] text-[#3b82f6]'
-                  : 'border-transparent text-[#b8b8b8] hover:text-[#e5e5e5]'
+                  : 'border-transparent text-text-body hover:text-text-heading'
               }`}
               key={tab.value}
               onClick={() => setActiveTab(tab.value)}
@@ -1289,17 +1357,17 @@ function PatientSummary({ patient }) {
           title="Informações do SUS"
         />
       </div>
-      <div className="rounded-xl border border-[#404040] bg-[#171717] p-4">
-        <div className="mb-5 border-b border-[#404040] pb-5">
-          <h3 className="font-bold text-[#f5f5f5]">Foto do paciente</h3>
+      <div className="rounded-xl border border-border-default-v2 bg-surface-page p-4">
+        <div className="mb-5 border-b border-border-default-v2 pb-5">
+          <h3 className="font-bold text-text-heading">Foto do paciente</h3>
           <div className="mt-4 flex items-center gap-4">
             <PatientAvatar className="size-24" patient={patient} />
-            <p className="text-sm leading-5 text-[#a3a3a3]">
+            <p className="text-sm leading-5 text-text-muted-v2">
               {patient.avatarUrl ? 'Imagem cadastrada no perfil do paciente.' : 'Nenhuma foto cadastrada.'}
             </p>
           </div>
         </div>
-        <h3 className="font-bold text-[#f5f5f5]">Contato e equipe</h3>
+        <h3 className="font-bold text-text-heading">Contato e equipe</h3>
         <dl className="mt-4 grid gap-3 text-sm">
           <InfoRow label="Celular" value={patient.phone} />
           <InfoRow label="TEL1" value={patient.phoneLandline} />
@@ -1326,7 +1394,7 @@ function PatientAvatar({ className = 'mt-1 size-12', patient }) {
   }
 
   return (
-    <span className={`${className} grid shrink-0 place-items-center rounded-full border border-[#404040] bg-[#262626] text-lg font-bold text-[#a3a3a3]`}>
+    <span className={`${className} grid shrink-0 place-items-center rounded-full border border-border-default-v2 bg-surface-card text-lg font-bold text-text-muted-v2`}>
       {getPatientInitials(patient.name)}
     </span>
   )
@@ -1418,10 +1486,10 @@ function PatientAppointmentShortcutModal({ onClose, patient }) {
 function ShortcutModal({ children, onClose, title }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="w-full max-w-xl rounded-2xl border border-[#404040] bg-[#262626] shadow-2xl">
-        <div className="flex items-center justify-between border-b border-[#404040] px-5 py-4">
-          <h2 className="text-lg font-bold text-[#f5f5f5]">{title}</h2>
-          <button className="grid size-9 place-items-center rounded-sm text-[#a3a3a3] hover:bg-[#303030]" onClick={onClose} type="button">
+      <div className="w-full max-w-xl rounded-2xl border border-border-default-v2 bg-surface-card shadow-2xl">
+        <div className="flex items-center justify-between border-b border-border-default-v2 px-5 py-4">
+          <h2 className="text-lg font-bold text-text-heading">{title}</h2>
+          <button className="grid size-9 place-items-center rounded-sm text-text-muted-v2 hover:bg-surface-card-hover" onClick={onClose} type="button">
             <PatientIcon className="size-5" name="x" />
           </button>
         </div>
@@ -1433,8 +1501,8 @@ function ShortcutModal({ children, onClose, title }) {
 
 function ShortcutActions({ disabled, onClose, submitLabel }) {
   return (
-    <div className="flex justify-end gap-3 border-t border-[#404040] pt-4">
-      <button className="h-10 rounded-sm border border-[#404040] px-4 text-sm font-semibold text-[#e5e5e5]" onClick={onClose} type="button">
+    <div className="flex justify-end gap-3 border-t border-border-default-v2 pt-4">
+      <button className="h-10 rounded-sm border border-border-default-v2 px-4 text-sm font-semibold text-text-heading" onClick={onClose} type="button">
         Cancelar
       </button>
       <button
@@ -1450,8 +1518,8 @@ function ShortcutActions({ disabled, onClose, submitLabel }) {
 
 function PatientInfoSection({ items, title }) {
   return (
-    <section className="rounded-xl border border-[#404040] bg-[#171717] p-4">
-      <h3 className="font-bold text-[#f5f5f5]">{title}</h3>
+    <section className="rounded-xl border border-border-default-v2 bg-surface-page p-4">
+      <h3 className="font-bold text-text-heading">{title}</h3>
       <dl className="mt-4 grid gap-3 text-sm md:grid-cols-2">
         {items.map(([label, value]) => (
           <InfoRow key={label} label={label} value={value || 'Não informado'} />
@@ -1472,15 +1540,15 @@ function PatientVisits({ navigate, patient }) {
           ? { date: patient.lastVisit, status: 'Finalizada', description: 'Consulta registrada no histórico do paciente.' }
           : null,
       ].filter(Boolean).map((visit) => (
-        <div className="rounded-xl border border-[#404040] bg-[#171717] p-4" key={`${visit.date}-${visit.status}`}>
+        <div className="rounded-xl border border-border-default-v2 bg-surface-page p-4" key={`${visit.date}-${visit.status}`}>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="font-semibold text-[#f5f5f5]">{visit.date}</p>
-              <p className="mt-1 text-sm text-[#a3a3a3]">{visit.description}</p>
+              <p className="font-semibold text-text-heading">{visit.date}</p>
+              <p className="mt-1 text-sm text-text-muted-v2">{visit.description}</p>
             </div>
             <span
               className={`rounded px-2 py-1 text-xs font-bold ${
-                visit.status === 'Agendada' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-[#303030] text-[#a3a3a3]'
+                visit.status === 'Agendada' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-surface-card-hover text-text-muted-v2'
               }`}
             >
               {visit.status}
@@ -1489,12 +1557,12 @@ function PatientVisits({ navigate, patient }) {
         </div>
       ))}
       {!patient.nextVisit && !patient.lastVisit ? (
-        <div className="rounded-xl border border-[#404040] bg-[#171717] p-4 text-sm text-[#a3a3a3]">
+        <div className="rounded-xl border border-border-default-v2 bg-surface-page p-4 text-sm text-text-muted-v2">
           Nenhum agendamento encontrado para este paciente.
         </div>
       ) : null}
       <button
-        className="h-10 justify-self-start rounded-sm border border-[#404040] bg-[#303030] px-4 text-sm font-semibold text-[#e5e5e5] transition hover:border-[#3b82f6]"
+        className="h-10 justify-self-start rounded-sm border border-border-default-v2 bg-surface-card-hover px-4 text-sm font-semibold text-text-heading transition hover:border-[#3b82f6]"
         onClick={() => navigate('/consultas')}
         type="button"
       >
@@ -1512,30 +1580,30 @@ function PatientDocuments({ patient }) {
     <div className="grid gap-3 md:grid-cols-3">
       {attachments.map((attachment) => (
         <a
-          className="rounded-xl border border-[#404040] bg-[#171717] p-4 transition hover:border-[#3b82f6]"
+          className="rounded-xl border border-border-default-v2 bg-surface-page p-4 transition hover:border-[#3b82f6]"
           href={attachment.url}
           key={attachment.path || attachment.url || attachment.name}
           rel="noreferrer"
           target="_blank"
         >
-          <p className="font-semibold text-[#f5f5f5]">{attachment.name || 'Anexo do paciente'}</p>
-          <p className="mt-2 text-sm text-[#a3a3a3]">Arquivo enviado para o cadastro.</p>
+          <p className="font-semibold text-text-heading">{attachment.name || 'Anexo do paciente'}</p>
+          <p className="mt-2 text-sm text-text-muted-v2">Arquivo enviado para o cadastro.</p>
           <span className="mt-4 inline-flex rounded bg-emerald-500/20 px-2.5 py-1 text-xs font-bold text-emerald-400">
             Disponível
           </span>
         </a>
       ))}
       {exams.length ? exams.map((exam) => (
-        <div className="rounded-xl border border-[#404040] bg-[#171717] p-4" key={exam}>
-          <p className="font-semibold text-[#f5f5f5]">{exam}</p>
-          <p className="mt-2 text-sm text-[#a3a3a3]">Pendente de revisão.</p>
+        <div className="rounded-xl border border-border-default-v2 bg-surface-page p-4" key={exam}>
+          <p className="font-semibold text-text-heading">{exam}</p>
+          <p className="mt-2 text-sm text-text-muted-v2">Pendente de revisão.</p>
           <span className="mt-4 inline-flex rounded bg-amber-500/20 px-2.5 py-1 text-xs font-bold text-amber-400">
             A revisar
           </span>
         </div>
       )) : null}
       {!attachments.length && !exams.length ? (
-        <div className="rounded-xl border border-[#404040] bg-[#171717] p-4 text-sm text-[#a3a3a3]">
+        <div className="rounded-xl border border-border-default-v2 bg-surface-page p-4 text-sm text-text-muted-v2">
           Nenhum documento encontrado.
         </div>
       ) : null}
@@ -1545,13 +1613,13 @@ function PatientDocuments({ patient }) {
 
 function SummaryTile({ label, tone = null, value }) {
   return (
-    <article className="rounded-2xl border border-[#404040] bg-[#262626] p-4 shadow-sm">
-      <p className="text-sm font-medium text-[#a3a3a3]">{label}</p>
+    <article className="rounded-2xl border border-border-default-v2 bg-surface-card p-4 shadow-sm">
+      <p className="text-sm font-medium text-text-muted-v2">{label}</p>
       <div className="mt-3">
         {tone ? (
           <span className={`rounded px-2.5 py-1 text-xs font-bold ${tone}`}>{value}</span>
         ) : (
-          <p className="text-xl font-bold text-[#f5f5f5]">{value}</p>
+          <p className="text-xl font-bold text-text-heading">{value}</p>
         )}
       </div>
     </article>
@@ -1564,11 +1632,11 @@ function InfoRow({ label, value }) {
 
   return (
     <div>
-      <dt className="flex flex-wrap items-center gap-2 font-semibold text-[#737373]">
+      <dt className="flex flex-wrap items-center gap-2 font-semibold text-text-muted-v2">
         <span>{label}</span>
         {minorOnly ? <span className="rounded-sm bg-[#3b82f6]/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#51a2ff]">Menor de idade</span> : null}
       </dt>
-      <dd className="mt-1 break-words text-[#e5e5e5]">{displayValue || missingValue(label)}</dd>
+      <dd className="mt-1 break-words text-text-heading">{displayValue || missingValue(label)}</dd>
     </div>
   )
 }
@@ -1611,14 +1679,32 @@ function normalizeFilterValue(value) {
     .toLowerCase()
 }
 
+function normalizeAgeFilter(value) {
+  if (value === '' || value === null || value === undefined) return null
+
+  const age = Number(value)
+  return Number.isFinite(age) && age >= 0 ? age : null
+}
+
+function resolvePatientFilterAge(patient) {
+  const rawAge = patient?.age ?? patient?.idade
+  if (rawAge !== undefined && rawAge !== null && String(rawAge).trim() !== '') {
+    const age = Number(rawAge)
+    if (Number.isFinite(age) && age >= 0) return age
+  }
+
+  const ageFromBirthDate = calculateAgeFromBirthDate(patient?.birthDate || patient?.birth_date)
+  return Number.isFinite(ageFromBirthDate) && ageFromBirthDate >= 0 ? ageFromBirthDate : null
+}
+
 function PatientSelect({ className = '', icon, label, onChange, options, value }) {
   return (
     <div className={`relative ${className}`}>
       <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-        <PatientIcon className="size-4 text-[#a3a3a3]" name={icon} />
+        <PatientIcon className="size-4 text-text-muted-v2" name={icon} />
       </div>
       <select
-        className="h-11 w-full cursor-pointer appearance-none rounded-lg border border-[#404040] bg-[#303030] py-2.5 pl-10 pr-8 text-sm text-[#a3a3a3] outline-none transition focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20"
+        className="h-11 w-full cursor-pointer appearance-none rounded-lg border border-border-default-v2 bg-surface-card-hover py-2.5 pl-10 pr-8 text-sm text-text-muted-v2 outline-none transition focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20"
         onChange={(event) => onChange(event.target.value)}
         value={value}
       >
@@ -1629,7 +1715,7 @@ function PatientSelect({ className = '', icon, label, onChange, options, value }
           </option>
         ))}
       </select>
-      <PatientIcon className="pointer-events-none absolute right-3 top-3.5 size-4 text-[#a3a3a3]" name="chevron-down" />
+      <PatientIcon className="pointer-events-none absolute right-3 top-3.5 size-4 text-text-muted-v2" name="chevron-down" />
     </div>
   )
 }
@@ -1648,7 +1734,7 @@ function FilterChip({ label, onClear }) {
 function PageButton({ children, disabled, onClick }) {
   return (
     <button
-      className="grid size-8 place-items-center rounded-lg border border-[#404040] bg-[#1a1a1a] text-[#e5e5e5] transition hover:bg-[#333333] disabled:cursor-not-allowed disabled:opacity-30"
+      className="grid size-8 place-items-center rounded-lg border border-border-default-v2 bg-surface-inset text-text-heading transition hover:bg-surface-card-hover disabled:cursor-not-allowed disabled:opacity-30"
       disabled={disabled}
       onClick={onClick}
       type="button"
@@ -1662,7 +1748,7 @@ function ActionItem({ danger = false, icon, label, onClick }) {
   return (
     <button
       className={`flex w-full items-center gap-2 rounded-sm px-3 py-2 text-left text-sm font-medium transition ${
-        danger ? 'text-[#f87171] hover:bg-[#303030]' : 'text-[#e5e5e5] hover:bg-[#303030]'
+        danger ? 'text-[#f87171] hover:bg-surface-card-hover' : 'text-text-heading hover:bg-surface-card-hover'
       }`}
       onClick={onClick}
       type="button"
@@ -1693,19 +1779,19 @@ function DarkField({ children, className = '', label }) {
 function UploadDropzone({ attachmentInputRef, existingAttachments = [], files = [], onFileChange, onRemoveFile }) {
   return (
     <div
-      className="mt-4 cursor-pointer rounded-lg border-2 border-dashed border-[#404040] bg-[#1a1a1a] p-8 text-center transition hover:bg-[#333333]"
+      className="mt-4 cursor-pointer rounded-lg border-2 border-dashed border-border-default-v2 bg-surface-inset p-8 text-center transition hover:bg-surface-card-hover"
       onClick={() => attachmentInputRef.current?.click()}
       role="button"
       tabIndex={0}
     >
-      <PatientIcon className="mx-auto mb-3 size-6 text-[#a3a3a3]" name="upload" />
-      <p className="text-sm font-medium text-[#e5e5e5]">Clique para selecionar arquivos ou arraste-os aqui</p>
-      <p className="mt-1 text-xs text-[#a3a3a3]">Imagens e documentos ate 10MB</p>
+      <PatientIcon className="mx-auto mb-3 size-6 text-text-muted-v2" name="upload" />
+      <p className="text-sm font-medium text-text-heading">Clique para selecionar arquivos ou arraste-os aqui</p>
+      <p className="mt-1 text-xs text-text-muted-v2">Imagens e documentos ate 10MB</p>
       <input className="hidden" multiple onChange={onFileChange} ref={attachmentInputRef} type="file" />
       {files.length || existingAttachments.length ? (
-        <ul className="mt-4 grid gap-2 text-left text-xs text-[#a3a3a3]">
+        <ul className="mt-4 grid gap-2 text-left text-xs text-text-muted-v2">
           {existingAttachments.map((attachment) => (
-            <li className="rounded border border-[#404040] bg-[#262626] px-3 py-2" key={attachment.path || attachment.url || attachment.name}>
+            <li className="rounded border border-border-default-v2 bg-surface-card px-3 py-2" key={attachment.path || attachment.url || attachment.name}>
               {attachment.url ? (
                 <a className="font-semibold text-[#3b82f6]" href={attachment.url} rel="noreferrer" target="_blank">
                   {attachment.name || 'Anexo cadastrado'}
@@ -1716,11 +1802,11 @@ function UploadDropzone({ attachmentInputRef, existingAttachments = [], files = 
             </li>
           ))}
           {files.map((file, index) => (
-            <li className="flex items-center justify-between gap-3 rounded border border-[#404040] bg-[#262626] px-3 py-2" key={`${file.name}-${file.size}-${index}`}>
+            <li className="flex items-center justify-between gap-3 rounded border border-border-default-v2 bg-surface-card px-3 py-2" key={`${file.name}-${file.size}-${index}`}>
               <span className="min-w-0 truncate">{file.name}</span>
               <button
                 aria-label={`Remover ${file.name}`}
-                className="grid size-5 shrink-0 place-items-center rounded-sm text-[#e5e5e5] transition hover:bg-[#404040]"
+                className="grid size-5 shrink-0 place-items-center rounded-sm text-text-heading transition hover:bg-surface-card-hover"
                 onClick={(event) => {
                   event.stopPropagation()
                   onRemoveFile?.(index)
@@ -1756,13 +1842,13 @@ function AdvancedFilterModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-lg rounded-2xl border border-[#404040] bg-[#262626] p-6 shadow-xl"
+        className="w-full max-w-lg rounded-2xl border border-border-default-v2 bg-surface-card p-6 shadow-xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mb-6 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-[#e5e5e5]">Filtro Avancado</h2>
-          <button className="rounded p-1 transition hover:bg-[#333333]" onClick={onClose} type="button">
-            <PatientIcon className="size-5 text-[#a3a3a3]" name="x" />
+          <h2 className="text-lg font-bold text-text-heading">Filtro Avancado</h2>
+          <button className="rounded p-1 transition hover:bg-surface-card-hover" onClick={onClose} type="button">
+            <PatientIcon className="size-5 text-text-muted-v2" name="x" />
           </button>
         </div>
 
@@ -1819,7 +1905,7 @@ function AdvancedFilterModal({
 
         <div className="mt-6 flex justify-end gap-3">
           <button
-            className="rounded-lg border border-[#404040] bg-[#262626] px-4 py-2 text-sm font-medium text-[#e5e5e5] transition hover:bg-[#333333]"
+            className="rounded-lg border border-border-default-v2 bg-surface-card px-4 py-2 text-sm font-medium text-text-heading transition hover:bg-surface-card-hover"
             onClick={onClear}
             type="button"
           >
@@ -2068,6 +2154,20 @@ function calculateBmi(weight, height) {
   return bmi.toFixed(1)
 }
 
+function formatHeightField(value) {
+  if (value === undefined || value === null || value === '') return ''
+  const normalizedNumber = Number(String(value).replace(',', '.'))
+  if (Number.isFinite(normalizedNumber) && normalizedNumber > 0 && normalizedNumber <= 3) {
+    return normalizedNumber.toFixed(2).replace('.', ',')
+  }
+  return maskHeight(value)
+}
+
+function formatFileSize(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 MB'
+  return `${Math.round(bytes / 1024 / 1024)} MB`
+}
+
 function isMinorPatientRecord(patient) {
   const birthDate = patient?.birthDate || patient?.birth_date
   const rawAge = patient?.age ?? patient?.idade
@@ -2085,7 +2185,7 @@ function isMinorPatientRecord(patient) {
 function calculateAgeFromBirthDate(value) {
   if (!value) return NaN
 
-  const birthDate = new Date(value)
+  const birthDate = parseBirthDate(value)
   if (Number.isNaN(birthDate.getTime())) return NaN
 
   const today = new Date()
@@ -2098,6 +2198,15 @@ function calculateAgeFromBirthDate(value) {
   }
 
   return age
+}
+
+function parseBirthDate(value) {
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value || ''))
+  if (dateOnly) {
+    return new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+  }
+
+  return new Date(value)
 }
 
 function isMinorOnlyPatientInfoLabel(label) {

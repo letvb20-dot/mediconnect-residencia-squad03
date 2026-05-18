@@ -3,6 +3,7 @@ import { normalizeRole } from '../config/permissions.js'
 import { getResponseError, normalizeCollection } from './repositoryUtils.js'
 
 const USER_PROFILE_TABLES = ['profiles', 'user_profiles']
+const USER_DOCTOR_TABLES = ['doctors', 'medicos']
 const USER_LIST_KEYS = ['users', 'usuarios', 'data', 'items', 'results']
 
 export const userRepository = {
@@ -22,9 +23,14 @@ export const userRepository = {
       if (response.ok) {
         const data = await response.json().catch(() => null)
         const users = normalizeCollection(data, USER_LIST_KEYS).map(normalizeListedUser)
-        const rolesByUserId = await getUserRolesById().catch(() => new Map())
+        const [rolesByUserId, doctors] = await Promise.all([
+          getUserRolesById().catch(() => new Map()),
+          getDoctorUsers().catch(() => []),
+        ])
 
-        return users.map((user) => mergeUserRoles(user, rolesByUserId))
+        return users
+          .map((user) => mergeUserRoles(user, rolesByUserId))
+          .map((user) => mergeUserDoctor(user, doctors))
       }
 
       // 404/406 -> próxima tabela; outros erros estouram
@@ -110,8 +116,13 @@ export const userRepository = {
       lastResponse = response
 
       if (response.ok) {
-        const data = await response.json().catch(() => null)
-        return normalizeListedUser(normalizeCollection(data)[0] || data || body)
+        const responseData = await response.json().catch(() => null)
+        const updatedUser = normalizeListedUser(normalizeCollection(responseData)[0] || responseData || { ...body, id: userId })
+        const syncedDoctor = await syncDoctorUser({ ...updatedUser, id: userId }, data).catch((error) => {
+          if (isIgnorableDoctorSyncError(error)) return null
+          throw error
+        })
+        return syncedDoctor ? mergeUserDoctor(updatedUser, [syncedDoctor]) : updatedUser
       }
 
       if (![404, 406].includes(response.status)) {
@@ -139,20 +150,138 @@ export const userRepository = {
   },
 }
 
+async function syncDoctorUser(user, formData = {}) {
+  const role = normalizeRole(formData.role || user.role)
+  const hasDoctorFields = ['crm', 'crm_uf', 'crmUf', 'specialty', 'specialidade'].some((field) => formData[field])
+  if (role !== 'medico' && !hasDoctorFields && !user.doctorId) return null
+
+  const payload = buildDoctorSyncBody(user, formData)
+  const attempts = uniquePayloads([
+    payload,
+    pickPayload(payload, ['full_name', 'phone_mobile', 'cpf', 'crm', 'crm_uf', 'specialty']),
+    pickPayload(payload, ['full_name', 'crm', 'crm_uf', 'specialty']),
+    pickPayload(payload, ['full_name']),
+  ])
+  const identifiers = uniqueIdentifiers([
+    ['id', formData.doctorId || user.doctorId || user.doctor_id],
+    ['user_id', user.id || user.user_id || user.auth_user_id || user.profile_id],
+    ['auth_user_id', user.id || user.auth_user_id],
+    ['email', formData.email || user.email],
+    ['cpf', onlyDigits(formData.cpf || user.cpf)],
+  ])
+
+  if (!attempts.length || !identifiers.length) return null
+
+  for (const table of USER_DOCTOR_TABLES) {
+    for (const [field, value] of identifiers) {
+      for (const attempt of attempts) {
+        const response = await fetch(`${apiConfig.restUrl}/${table}?${field}=eq.${encodeURIComponent(value)}`, {
+          method: 'PATCH',
+          headers: getAuthenticatedHeaders({ Prefer: 'return=representation' }),
+          body: JSON.stringify(attempt),
+        }).catch(() => null)
+
+        if (!response) continue
+        if (response.ok) {
+          const data = await response.json().catch(() => null)
+          const row = normalizeCollection(data)[0] || data
+          if (row) return normalizeDoctorUser(row)
+          continue
+        }
+
+        const text = await response.text().catch(() => '')
+        if (isMissingDoctorTable(response.status, text)) break
+        if (isUnsupportedDoctorPatch(response.status, text)) continue
+        throw new Error(await getResponseError(cloneTextResponse(response, text), 'Erro ao atualizar dados do medico.'))
+      }
+    }
+  }
+
+  return null
+}
+
+function buildDoctorSyncBody(user, data) {
+  const fullName = data.full_name?.trim() || user.full_name || user.name
+  const phone = data.phone || data.phone_mobile || user.phone || user.phone_mobile
+  const specialty = data.specialty || data.specialidade || user.specialty || user.specialidade
+
+  return cleanPayload({
+    email: data.email?.trim() || user.email,
+    full_name: fullName,
+    phone_mobile: onlyDigits(phone),
+    cpf: onlyDigits(data.cpf || user.cpf),
+    crm: onlyDigits(data.crm || user.crm),
+    crm_uf: String(data.crm_uf || data.crmUf || user.crm_uf || user.crmUf || '').trim().toUpperCase(),
+    specialty: specialty?.trim(),
+  })
+}
+
+function uniqueIdentifiers(identifiers) {
+  const seen = new Set()
+  return identifiers
+    .map(([field, value]) => [field, String(value || '').trim()])
+    .filter(([, value]) => value)
+    .filter(([field, value]) => {
+      const key = `${field}:${value.toLowerCase()}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+}
+
+function pickPayload(source, fields) {
+  return cleanPayload(Object.fromEntries(fields.map((field) => [field, source[field]])))
+}
+
+function uniquePayloads(payloads) {
+  const seen = new Set()
+
+  return payloads.filter((payload) => {
+    const entries = Object.entries(payload)
+    if (!entries.length) return false
+
+    const key = JSON.stringify(payload)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+function isMissingDoctorTable(status, text) {
+  return [404, 406].includes(status) || /relation .* does not exist|not found|schema cache/i.test(String(text || ''))
+}
+
+function isUnsupportedDoctorPatch(status, text) {
+  return [400, 404, 406].includes(status) && /column|schema cache|does not exist|pgrst/i.test(String(text || ''))
+}
+
+function isIgnorableDoctorSyncError(error) {
+  return /Tabela|doctors|medicos|not found|does not exist|schema cache/i.test(String(error?.message || ''))
+}
+
+function cloneTextResponse(response, text) {
+  return new Response(text, {
+    headers: response.headers,
+    status: response.status,
+    statusText: response.statusText,
+  })
+}
+
 function buildCreateUserBody(data) {
   const role = normalizeRole(data.role) || data.role
   const createPatientRecord = Boolean(data.create_patient_record)
+  const isDoctor = role === 'medico'
   const body = {
     email: data.email?.trim(),
     full_name: data.full_name?.trim(),
     phone: data.phone?.trim(),
     role,
     create_patient_record: createPatientRecord,
-    // cpf / phone_mobile só são obrigatórios quando create_patient_record = true
-    cpf: createPatientRecord ? onlyDigits(data.cpf) : undefined,
-    phone_mobile: createPatientRecord
-      ? onlyDigits(data.phone_mobile || data.phone)
-      : undefined,
+    cpf: onlyDigits(data.cpf),
+    phone_mobile: onlyDigits(data.phone_mobile || data.phone),
+    crm: isDoctor ? onlyDigits(data.crm) : undefined,
+    crm_uf: isDoctor ? String(data.crm_uf || data.crmUf || '').trim().toUpperCase() : undefined,
+    specialty: isDoctor ? data.specialty?.trim() : undefined,
   }
 
   return cleanPayload(body)
@@ -186,6 +315,7 @@ function onlyDigits(value) {
 
 function normalizeListedUser(user) {
   const role = resolveUserRole(user)
+  const metadata = getUserMetadata(user)
   const emailConfirmedAt = firstValue(user, [
     'email_confirmed_at',
     'confirmed_at',
@@ -199,12 +329,17 @@ function normalizeListedUser(user) {
     id: user.id || user.user_id || user.auth_user_id || user.profile_id,
     email: user.email || user.user_email || '',
     full_name: user.full_name || user.name || user.nome || '',
+    phone: firstValueFromSources([user, metadata], ['phone', 'phone_mobile', 'celular', 'telefone']),
+    phone_mobile: firstValueFromSources([user, metadata], ['phone_mobile', 'phone', 'celular', 'telefone']),
+    cpf: formatCpf(firstValueFromSources([user, metadata], ['cpf', 'document', 'documento'])),
     role,
     roles: role ? [role] : [],
     status: resolveUserStatus(user, emailConfirmedAt),
     email_confirmed_at: emailConfirmedAt,
-    crm: user.crm || '',
-    crm_uf: user.crm_uf || user.crmUf || '',
+    doctorId: firstValueFromSources([user, metadata], ['doctor_id', 'doctorId', 'medico_id']),
+    crm: firstValueFromSources([user, metadata], ['crm']),
+    crm_uf: String(firstValueFromSources([user, metadata], ['crm_uf', 'crmUf', 'uf_crm']) || '').toUpperCase(),
+    specialty: firstValueFromSources([user, metadata], ['specialty', 'specialidade', 'especialidade', 'speciality']),
   }
 }
 
@@ -337,12 +472,139 @@ function mergeUserRoles(user, rolesByUserId) {
   }
 }
 
+async function getDoctorUsers() {
+  let lastResponse = null
+
+  for (const table of USER_DOCTOR_TABLES) {
+    const query = new URLSearchParams({ select: '*' })
+    const response = await fetch(`${apiConfig.restUrl}/${table}?${query.toString()}`, {
+      headers: getAuthenticatedHeaders(),
+    }).catch(() => null)
+
+    if (!response) continue
+    lastResponse = response
+
+    if (response.ok) {
+      const data = await response.json().catch(() => null)
+      return normalizeCollection(data, ['doctors', 'medicos', 'data']).map(normalizeDoctorUser)
+    }
+
+    if (![404, 406].includes(response.status)) {
+      throw new Error(await getResponseError(response, 'Erro ao listar mÃ©dicos.'))
+    }
+  }
+
+  if (lastResponse) return []
+  return []
+}
+
+function normalizeDoctorUser(doctor) {
+  const metadata = getUserMetadata(doctor)
+  const specialty = firstValueFromSources([doctor, metadata], ['specialty', 'speciality', 'specialidade', 'especialidade'])
+
+  return {
+    ...doctor,
+    id: firstValueFromSources([doctor, metadata], ['id', 'doctor_id', 'medico_id']),
+    userId: firstValueFromSources([doctor, metadata], ['user_id', 'userId', 'auth_user_id', 'profile_id', 'usuario_id']),
+    email: firstValueFromSources([doctor, metadata], ['email', 'user_email', 'usuario_email']),
+    full_name: firstValueFromSources([doctor, metadata], ['full_name', 'name', 'nome']),
+    phone: firstValueFromSources([doctor, metadata], ['phone', 'phone_mobile', 'celular', 'telefone']),
+    cpf: formatCpf(firstValueFromSources([doctor, metadata], ['cpf', 'document', 'documento'])),
+    crm: firstValueFromSources([doctor, metadata], ['crm']),
+    crm_uf: String(firstValueFromSources([doctor, metadata], ['crm_uf', 'crmUf', 'uf_crm']) || '').toUpperCase(),
+    specialty,
+  }
+}
+
+function mergeUserDoctor(user, doctors) {
+  const userKeys = buildLookupKeys([
+    user.id,
+    user.user_id,
+    user.auth_user_id,
+    user.profile_id,
+    user.doctorId,
+    user.doctor_id,
+    user.email,
+    user.cpf,
+  ])
+  const doctor = doctors.find((item) =>
+    buildLookupKeys([
+      item.id,
+      item.userId,
+      item.user_id,
+      item.auth_user_id,
+      item.profile_id,
+      item.email,
+      item.cpf,
+    ]).some((key) => userKeys.includes(key)),
+  )
+
+  if (!doctor) return user
+
+  return {
+    ...user,
+    role: normalizeRole(user.role) || 'medico',
+    roles: user.roles?.length ? user.roles : ['medico'],
+    doctorId: user.doctorId || doctor.id,
+    cpf: user.cpf || doctor.cpf,
+    phone: user.phone || doctor.phone,
+    phone_mobile: user.phone_mobile || doctor.phone,
+    crm: user.crm || doctor.crm,
+    crm_uf: user.crm_uf || doctor.crm_uf,
+    specialty: user.specialty || doctor.specialty,
+    specialidade: user.specialidade || doctor.specialty,
+  }
+}
+
+function buildLookupKeys(values) {
+  return [...new Set(values.map((value) => normalizeLookupValue(value)).filter(Boolean))]
+}
+
+function normalizeLookupValue(value) {
+  const raw = String(value || '').trim().toLowerCase()
+  if (!raw) return ''
+  const digits = raw.replace(/\D/g, '')
+  return digits.length === 11 ? digits : raw
+}
+
+function firstValueFromSources(sources, keys) {
+  for (const source of sources) {
+    const value = firstValue(source, keys)
+    if (value) return value
+  }
+
+  return ''
+}
+
 function firstValue(source, keys) {
   for (const key of keys) {
     if (source?.[key]) return source[key]
   }
 
   return ''
+}
+
+function getUserMetadata(user) {
+  return {
+    ...(user?.raw_user_meta_data || {}),
+    ...(user?.user_metadata || {}),
+    ...(user?.app_metadata || {}),
+    ...(user?.metadata || {}),
+    ...(user?.profile_metadata || {}),
+    ...(user?.doctor || {}),
+    ...(user?.doctor_data || {}),
+    ...(user?.medico || {}),
+  }
+}
+
+function formatCpf(value) {
+  const digits = onlyDigits(value)
+  if (!digits) return ''
+  if (digits.length !== 11) return String(value || '')
+  return digits
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
 }
 
 function cleanPayload(payload) {

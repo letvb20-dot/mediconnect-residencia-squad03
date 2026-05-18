@@ -9,7 +9,7 @@ const chartPeriods = [
   ['six_months', '6 meses'],
 ]
 
-const cardClass = 'rounded-2xl border border-[#404040] bg-[#262626] shadow-sm'
+const cardClass = 'rounded-2xl border border-border-default-v2 bg-surface-card shadow-card'
 
 export function AnalyticsPage() {
   const [absenteeismPeriod, setAbsenteeismPeriod] = useState('week')
@@ -64,12 +64,12 @@ export function AnalyticsPage() {
     <div className="mx-auto max-w-7xl space-y-6">
       <section className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <h1 className="text-[32px] font-bold leading-8 tracking-[-0.02em] text-[#f5f5f5]">Analytics</h1>
+          <h1 className="text-[32px] font-bold leading-8 tracking-[-0.02em] text-text-heading">Analytics</h1>
         </div>
       </section>
 
       {loading ? (
-        <p className="rounded-2xl border border-[#404040] bg-[#262626] p-8 text-center text-sm text-[#a3a3a3]">
+        <p className="rounded-2xl border border-border-default-v2 bg-surface-card p-8 text-center text-sm text-text-muted-v2">
           Carregando analytics...
         </p>
       ) : null}
@@ -129,14 +129,14 @@ export function AnalyticsPage() {
           <div className="space-y-3 pt-1">
             {topPatients.length ? topPatients.map((patient, index) => (
               <div className="flex items-center gap-3" key={patient.name}>
-                <span className="w-4 text-xs font-bold text-[#a3a3a3]">{index + 1}.</span>
+                <span className="w-4 text-xs font-bold text-text-muted-v2">{index + 1}.</span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-semibold text-[#f5f5f5]">{patient.name}</p>
-                  <p className="mt-0.5 text-[10px] text-[#a3a3a3]">
+                  <p className="truncate text-xs font-semibold text-text-heading">{patient.name}</p>
+                  <p className="mt-0.5 text-[10px] text-text-muted-v2">
                     {patient.visits} visitas
                   </p>
                 </div>
-                <div className="h-1.5 w-16 overflow-hidden rounded-full bg-[#303030]">
+                <div className="h-1.5 w-16 overflow-hidden rounded-full bg-surface-card-hover">
                   <div
                     className="analytics-chart-progress h-full rounded-full bg-[#3b82f6]"
                     style={{ animationDelay: `${index * 80}ms`, width: `${(patient.visits / topPatientMaxVisits) * 100}%` }}
@@ -144,17 +144,17 @@ export function AnalyticsPage() {
                 </div>
               </div>
             )) : (
-              <p className="text-sm text-[#a3a3a3]">Nenhum atendimento encontrado no período.</p>
+              <p className="text-sm text-text-muted-v2">Nenhum atendimento encontrado no período.</p>
             )}
           </div>
         </ChartCard>
       </section> : null}
 
       {!loading && !error ? <section className={`${cardClass} p-6`} aria-label="Performance por médico">
-        <h2 className="mb-4 text-sm font-bold text-[#f5f5f5]">Performance por Médico</h2>
-        <div className="overflow-x-auto rounded-sm border border-[#404040]">
+        <h2 className="mb-4 text-sm font-bold text-text-heading">Performance por Médico</h2>
+        <div className="overflow-x-auto rounded-sm border border-border-default-v2">
           <table className="w-full min-w-[760px] text-left text-sm">
-            <thead className="bg-[#171717] text-xs font-semibold uppercase tracking-[0.02em] text-[#b8b8b8]">
+            <thead className="bg-surface-inset text-xs font-semibold uppercase tracking-[0.02em] text-text-muted-v2">
               <tr>
                 <th className="px-4 py-3">Profissional</th>
                 <th className="px-4 py-3">Consultas</th>
@@ -162,14 +162,14 @@ export function AnalyticsPage() {
                 <th className="px-4 py-3">Taxa No-Show</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#404040] bg-[#262626]">
+            <tbody className="divide-y divide-border-default-v2 bg-surface-card">
               {doctorPerformance.length ? doctorPerformance.map((doctor) => {
                 const noShowRate = doctor.consultas > 0 ? (doctor.noShow / doctor.consultas) * 100 : 0
                 return (
-                  <tr className="transition hover:bg-[#303030]" key={doctor.name}>
-                    <td className="px-4 py-3 font-semibold text-[#f5f5f5]">{doctor.name}</td>
-                    <td className="px-4 py-3 text-[#e5e5e5]">{doctor.consultas}</td>
-                    <td className="px-4 py-3 text-[#b8b8b8]">{doctor.noShow}</td>
+                  <tr className="transition hover:bg-surface-card-hover" key={doctor.name}>
+                    <td className="px-4 py-3 font-semibold text-text-heading">{doctor.name}</td>
+                    <td className="px-4 py-3 text-text-body">{doctor.consultas}</td>
+                    <td className="px-4 py-3 text-text-muted-v2">{doctor.noShow}</td>
                     <td className="px-4 py-3">
                       <span className={`text-xs font-semibold ${rateClass(noShowRate)}`}>{noShowRate.toFixed(1)}%</span>
                     </td>
@@ -177,7 +177,7 @@ export function AnalyticsPage() {
                 )
               }) : (
                 <tr>
-                  <td className="px-4 py-8 text-center text-[#a3a3a3]" colSpan={4}>
+                  <td className="px-4 py-8 text-center text-text-muted-v2" colSpan={4}>
                     Nenhum atendimento encontrado para calcular performance médica.
                   </td>
                 </tr>
@@ -192,13 +192,13 @@ export function AnalyticsPage() {
 
 function KpiCard({ kpi }) {
   return (
-    <article className={`${cardClass} p-5`}>
+    <article className={`${cardClass} border-t-[3px] border-t-accent-primary p-5 transition-all hover:-translate-y-0.5 hover:shadow-card-hover`}>
       <div className="flex items-center justify-between gap-4">
-        <p className="text-xs font-medium text-[#a3a3a3]">{kpi.label}</p>
-        <AnalyticsIcon className="size-4 text-[#a3a3a3]" name={kpi.icon} />
+        <p className="text-xs font-medium text-text-muted-v2">{kpi.label}</p>
+        <AnalyticsIcon className="size-4 text-accent-primary" name={kpi.icon} />
       </div>
-      <p className="mt-2 text-2xl font-bold leading-none text-[#f5f5f5]">{kpi.value}</p>
-      <span className="mt-2 flex items-center gap-1 text-xs font-semibold text-[#a3a3a3]">
+      <p className="mt-2 text-2xl font-bold leading-none text-text-heading">{kpi.value}</p>
+      <span className={`mt-2 flex items-center gap-1 text-xs font-semibold ${kpi.up ? 'text-emerald-400' : 'text-red-400'}`}>
         <AnalyticsIcon className="size-3.5" name={kpi.up ? 'arrow-up' : 'arrow-down'} />
         {kpi.change}
       </span>
@@ -209,9 +209,9 @@ function KpiCard({ kpi }) {
 function MiniMetric({ detail, title, value }) {
   return (
     <article className={`${cardClass} p-4`}>
-      <p className="text-xs font-semibold text-[#a3a3a3]">{title}</p>
-      <p className="mt-2 text-xl font-bold text-[#f5f5f5]">{value}</p>
-      <p className="mt-1 text-xs text-[#a3a3a3]">{detail}</p>
+      <p className="text-xs font-semibold text-text-muted-v2">{title}</p>
+      <p className="mt-2 text-xl font-bold text-text-heading">{value}</p>
+      <p className="mt-1 text-xs text-text-muted-v2">{detail}</p>
     </article>
   )
 }
@@ -221,8 +221,8 @@ function ChartCard({ actions = null, children, description, title }) {
     <article className={`${cardClass} p-6`}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-sm font-bold text-[#f5f5f5]">{title}</h2>
-          <p className="mt-1 text-xs text-[#a3a3a3]">{description}</p>
+          <h2 className="text-sm font-bold text-text-heading">{title}</h2>
+          <p className="mt-1 text-xs text-text-muted-v2">{description}</p>
         </div>
         {actions}
       </div>
@@ -233,11 +233,11 @@ function ChartCard({ actions = null, children, description, title }) {
 
 function PeriodToggle({ onChange, value }) {
   return (
-    <div className="flex shrink-0 overflow-hidden rounded-sm border border-[#404040] bg-[#171717]">
+    <div className="flex shrink-0 overflow-hidden rounded-sm border border-border-default-v2 bg-surface-inset">
       {chartPeriods.map(([key, label]) => (
         <button
           className={`h-8 px-3 text-[11px] font-semibold transition ${
-            value === key ? 'bg-[#3b82f6] text-white' : 'text-[#b8b8b8] hover:bg-[#303030] hover:text-[#e5e5e5]'
+            value === key ? 'bg-[#3b82f6] text-white' : 'text-text-muted-v2 hover:bg-surface-card-hover hover:text-text-body'
           }`}
           key={key}
           onClick={() => {
@@ -324,7 +324,7 @@ function GroupedBarChart({ data }) {
 
 function InsuranceBreakdown({ insuranceData }) {
   if (!insuranceData.length) {
-    return <p className="py-8 text-center text-sm text-[#a3a3a3]">Nenhum convênio encontrado nos pacientes.</p>
+    return <p className="py-8 text-center text-sm text-text-muted-v2">Nenhum convênio encontrado nos pacientes.</p>
   }
 
   const radius = 42
@@ -341,7 +341,7 @@ function InsuranceBreakdown({ insuranceData }) {
     <div>
       <div className="flex justify-center">
         <svg className="h-[160px] w-[160px]" viewBox="0 0 120 120">
-          <circle cx="60" cy="60" fill="none" r={radius} stroke="#303030" strokeWidth="18" />
+          <circle cx="60" cy="60" fill="none" r={radius} stroke="var(--border-subtle)" strokeWidth="18" />
           {segments.map((item, index) => (
             <circle
               className="analytics-chart-donut-segment"
@@ -359,17 +359,17 @@ function InsuranceBreakdown({ insuranceData }) {
               transform="rotate(-90 60 60)"
             />
           ))}
-          <circle cx="60" cy="60" fill="#262626" r="25" />
+          <circle cx="60" cy="60" fill="var(--surface-card)" r="25" />
         </svg>
       </div>
       <div className="mt-2 space-y-1.5">
         {insuranceData.map((item) => (
           <div className="flex items-center justify-between text-xs" key={item.name}>
-            <span className="flex items-center gap-2 text-[#e5e5e5]">
+            <span className="flex items-center gap-2 text-text-body">
               <span className="size-2 rounded-full" style={{ backgroundColor: item.color }} />
               {item.name}
             </span>
-            <span className="text-[#a3a3a3]">{item.value}%</span>
+            <span className="text-text-muted-v2">{item.value}%</span>
           </div>
         ))}
       </div>

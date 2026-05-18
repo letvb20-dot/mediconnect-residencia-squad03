@@ -10,11 +10,11 @@ import { reportRepository } from '../repositories/reportRepository.js'
 import { sanitizePlainText } from '../utils/inputSanitizers.js'
 
 const inputClass =
-  'h-10 w-full rounded-lg border border-[#404040] bg-[#1a1a1a] px-3 text-sm text-[#e5e5e5] outline-none transition placeholder:text-[#a3a3a3] focus:border-[#3b82f6] focus:ring-1 focus:ring-[#3b82f6]'
+  'h-10 w-full rounded-lg border border-border-default-v2 bg-surface-inset px-3 text-sm text-text-heading outline-none transition placeholder:text-text-muted-v2 focus:border-[#3b82f6] focus:ring-1 focus:ring-[#3b82f6]'
 const textareaClass =
-  'min-h-28 w-full rounded-lg border border-[#404040] bg-[#1a1a1a] px-3 py-2 text-sm leading-6 text-[#e5e5e5] outline-none transition placeholder:text-[#a3a3a3] focus:border-[#3b82f6] focus:ring-1 focus:ring-[#3b82f6]'
-const labelClass = 'mb-1 block text-xs font-medium text-[#e5e5e5]'
-const cardClass = 'rounded-2xl border border-[#404040] bg-[#262626] shadow-sm'
+  'min-h-28 w-full rounded-lg border border-border-default-v2 bg-surface-inset px-3 py-2 text-sm leading-6 text-text-heading outline-none transition placeholder:text-text-muted-v2 focus:border-[#3b82f6] focus:ring-1 focus:ring-[#3b82f6]'
+const labelClass = 'mb-1 block text-xs font-medium text-text-heading'
+const cardClass = 'rounded-2xl border border-border-default-v2 bg-surface-card shadow-sm'
 
 const emptyRecord = {
   id: '',
@@ -145,7 +145,7 @@ export function MedicalRecordsPage({ mode = 'list', navigate, recordId }) {
     }
   }
 
-  if (loading) return <p className="p-8 text-center text-sm text-[#a3a3a3]">Carregando prontuários...</p>
+  if (loading) return <p className="p-8 text-center text-sm text-text-muted-v2">Carregando prontuários...</p>
 
   if (mode === 'new' || mode === 'edit') {
     return (
@@ -173,11 +173,11 @@ export function MedicalRecordsPage({ mode = 'list', navigate, recordId }) {
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 text-[#e5e5e5]">
+    <div className="mx-auto max-w-7xl space-y-6 text-text-heading">
       <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#e5e5e5]">Prontuário Médico</h1>
-          <p className="mt-1 text-sm text-[#a3a3a3]">Histórico clínico contínuo, cronológico e multiprofissional.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-text-heading">Prontuário Médico</h1>
+          <p className="mt-1 text-sm text-text-muted-v2">Histórico clínico contínuo, cronológico e multiprofissional.</p>
         </div>
         <button
           className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#3b82f6] px-4 text-sm font-medium text-white transition hover:bg-[#2563eb]"
@@ -191,9 +191,9 @@ export function MedicalRecordsPage({ mode = 'list', navigate, recordId }) {
 
       <section className={`${cardClass} p-4`}>
         <div className="relative">
-          <RecordIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#a3a3a3]" name="search" />
+          <RecordIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-muted-v2" name="search" />
           <input
-            className="h-10 w-full rounded-lg border border-[#404040] bg-[#1a1a1a] py-2 pl-10 pr-3 text-sm text-[#e5e5e5] outline-none transition placeholder:text-[#a3a3a3] focus:border-[#3b82f6] focus:ring-1 focus:ring-[#3b82f6]"
+            className="h-10 w-full rounded-lg border border-border-default-v2 bg-surface-inset py-2 pl-10 pr-3 text-sm text-text-heading outline-none transition placeholder:text-text-muted-v2 focus:border-[#3b82f6] focus:ring-1 focus:ring-[#3b82f6]"
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Buscar por paciente, CID, médico ou resumo..."
             value={search}
@@ -207,7 +207,7 @@ export function MedicalRecordsPage({ mode = 'list', navigate, recordId }) {
         {filteredRecords.length ? (
           filteredRecords.map((record) => <RecordCard key={record.id} navigate={navigate} record={record} />)
         ) : (
-          <div className={`${cardClass} p-8 text-center text-sm text-[#a3a3a3]`}>Nenhum prontuário encontrado na API.</div>
+          <div className={`${cardClass} p-8 text-center text-sm text-text-muted-v2`}>Nenhum prontuário encontrado na API.</div>
         )}
       </div>
     </div>
@@ -226,16 +226,16 @@ function RecordCard({ navigate, record }) {
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-sm font-bold text-[#e5e5e5]">{record.patient}</h2>
+              <h2 className="text-sm font-bold text-text-heading">{record.patient}</h2>
               <span className={`rounded px-2 py-0.5 text-[10px] font-bold ${statusClass}`}>{record.status === 'completo' ? 'Completo' : 'Rascunho'}</span>
             </div>
-            <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-[#a3a3a3]">
+            <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-text-muted-v2">
               <span>{record.date}</span>
               <span>{record.doctor}</span>
               <span>{record.type}</span>
             </div>
-            <p className="mt-2 inline-block rounded bg-[#1a1a1a] px-2 py-1 text-xs text-[#a3a3a3]">{record.cid}</p>
-            <p className="mt-2 text-xs leading-5 text-[#a3a3a3]">{record.summary}</p>
+            <p className="mt-2 inline-block rounded bg-surface-inset px-2 py-1 text-xs text-text-muted-v2">{record.cid}</p>
+            <p className="mt-2 text-xs leading-5 text-text-muted-v2">{record.summary}</p>
           </div>
         </div>
       </div>
@@ -249,14 +249,14 @@ function RecordForm({ draft, onCancel, onChange, onSubmit, patientOptions, savin
   }
 
   return (
-    <form className="mx-auto max-w-6xl space-y-6 text-[#e5e5e5]" onSubmit={onSubmit}>
-      <header className="flex flex-col gap-4 border-b border-[#404040] pb-5 md:flex-row md:items-center md:justify-between">
+    <form className="mx-auto max-w-6xl space-y-6 text-text-heading" onSubmit={onSubmit}>
+      <header className="flex flex-col gap-4 border-b border-border-default-v2 pb-5 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold">{title}</h1>
-          <p className="mt-1 text-sm text-[#a3a3a3]">Preencha o registro clínico com dados legíveis, cronológicos e assinados.</p>
+          <p className="mt-1 text-sm text-text-muted-v2">Preencha o registro clínico com dados legíveis, cronológicos e assinados.</p>
         </div>
         <div className="flex gap-3">
-          <button className="rounded-lg border border-[#404040] bg-[#262626] px-4 py-2 text-sm font-semibold" onClick={onCancel} type="button">Cancelar</button>
+          <button className="rounded-lg border border-border-default-v2 bg-surface-card px-4 py-2 text-sm font-semibold" onClick={onCancel} type="button">Cancelar</button>
           <button className="rounded-lg bg-[#3b82f6] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" disabled={saving} type="submit">
             {saving ? 'Salvando...' : 'Salvar prontuário'}
           </button>
@@ -313,23 +313,23 @@ function RecordForm({ draft, onCancel, onChange, onSubmit, patientOptions, savin
 
 function RecordDetail({ navigate, patient, record, reports }) {
   if (!record?.id) {
-    return <div className={`${cardClass} mx-auto max-w-3xl p-8 text-center text-sm text-[#a3a3a3]`}>Prontuário não encontrado.</div>
+    return <div className={`${cardClass} mx-auto max-w-3xl p-8 text-center text-sm text-text-muted-v2`}>Prontuário não encontrado.</div>
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 text-[#e5e5e5]">
+    <div className="mx-auto max-w-6xl space-y-6 text-text-heading">
       <header className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
           <button className="mb-4 text-sm font-semibold text-[#3b82f6]" onClick={() => navigate('/prontuario')} type="button">Voltar</button>
           <h1 className="text-2xl font-bold">Prontuário de {record.patient}</h1>
-          <p className="mt-1 text-sm text-[#a3a3a3]">{record.date} {record.time ? `às ${record.time}` : ''} | {record.doctor}</p>
-          <p className="mt-1 text-xs text-[#a3a3a3]">Assinatura/carimbo: {record.signedBy || record.doctor || 'Profissional não informado'}</p>
+          <p className="mt-1 text-sm text-text-muted-v2">{record.date} {record.time ? `às ${record.time}` : ''} | {record.doctor}</p>
+          <p className="mt-1 text-xs text-text-muted-v2">Assinatura/carimbo: {record.signedBy || record.doctor || 'Profissional não informado'}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button className="rounded-lg border border-[#404040] bg-[#262626] px-4 py-2 text-sm font-semibold" onClick={() => navigate(`/prontuario/${record.id}/editar`)} type="button">Editar</button>
+          <button className="rounded-lg border border-border-default-v2 bg-surface-card px-4 py-2 text-sm font-semibold" onClick={() => navigate(`/prontuario/${record.id}/editar`)} type="button">Editar</button>
           <button className="rounded-lg bg-[#3b82f6] px-4 py-2 text-sm font-semibold text-white" onClick={() => exportRecord(record, reports)} type="button">Exportar PDF</button>
-          <a className="rounded-lg border border-[#404040] bg-[#262626] px-4 py-2 text-sm font-semibold" href={`mailto:${patient?.email || ''}?subject=Prontuário&body=Segue solicitação de cópia do prontuário.`}>Enviar por e-mail</a>
-          <a className="rounded-lg border border-[#404040] bg-[#262626] px-4 py-2 text-sm font-semibold" href={`https://wa.me/${onlyDigits(patient?.phone)}?text=${encodeURIComponent('Olá, segue a solicitação de cópia do prontuário.')}`} rel="noreferrer" target="_blank">WhatsApp</a>
+          <a className="rounded-lg border border-border-default-v2 bg-surface-card px-4 py-2 text-sm font-semibold" href={`mailto:${patient?.email || ''}?subject=Prontuário&body=Segue solicitação de cópia do prontuário.`}>Enviar por e-mail</a>
+          <a className="rounded-lg border border-border-default-v2 bg-surface-card px-4 py-2 text-sm font-semibold" href={`https://wa.me/${onlyDigits(patient?.phone)}?text=${encodeURIComponent('Olá, segue a solicitação de cópia do prontuário.')}`} rel="noreferrer" target="_blank">WhatsApp</a>
         </div>
       </header>
 
@@ -337,12 +337,12 @@ function RecordDetail({ navigate, patient, record, reports }) {
         <h2 className="text-lg font-bold">Histórico completo de relatórios</h2>
         <div className="mt-4 space-y-3">
           {reports.length ? reports.map((report) => (
-            <article className="rounded-xl border border-[#404040] bg-[#171717] p-4" key={report.id}>
+            <article className="rounded-xl border border-border-default-v2 bg-surface-inset p-4" key={report.id}>
               <p className="text-sm font-semibold">{report.exam || 'Relatório'}</p>
-              <p className="mt-1 text-xs text-[#a3a3a3]">{formatDateTime(report.createdAt)} | {report.requestedBy || report.createdBy || 'Profissional não informado'}</p>
-              <p className="mt-2 text-sm leading-6 text-[#a3a3a3]">{report.diagnosis || report.conclusion || 'Sem resumo textual.'}</p>
+              <p className="mt-1 text-xs text-text-muted-v2">{formatDateTime(report.createdAt)} | {report.requestedBy || report.createdBy || 'Profissional não informado'}</p>
+              <p className="mt-2 text-sm leading-6 text-text-muted-v2">{report.diagnosis || report.conclusion || 'Sem resumo textual.'}</p>
             </article>
-          )) : <p className="text-sm text-[#a3a3a3]">Nenhum relatório vinculado a este paciente foi encontrado.</p>}
+          )) : <p className="text-sm text-text-muted-v2">Nenhum relatório vinculado a este paciente foi encontrado.</p>}
         </div>
       </section>
 
@@ -356,9 +356,9 @@ function RecordDetail({ navigate, patient, record, reports }) {
       <section className={`${cardClass} p-6`}>
         <h2 className="mb-3 text-lg font-bold">Registro clínico</h2>
         {record.contentHtml ? (
-          <div className="prose prose-invert max-w-none text-sm leading-6 text-[#e5e5e5]" dangerouslySetInnerHTML={{ __html: sanitizeHtml(record.contentHtml) }} />
+          <div className="prose prose-invert max-w-none text-sm leading-6 text-text-heading" dangerouslySetInnerHTML={{ __html: sanitizeHtml(record.contentHtml) }} />
         ) : (
-          <p className="text-sm text-[#a3a3a3]">{record.summary || 'Sem texto complementar.'}</p>
+          <p className="text-sm text-text-muted-v2">{record.summary || 'Sem texto complementar.'}</p>
         )}
       </section>
     </div>
@@ -368,8 +368,8 @@ function RecordDetail({ navigate, patient, record, reports }) {
 function DetailBlock({ title, value }) {
   return (
     <article className={`${cardClass} p-5`}>
-      <h2 className="text-sm font-bold text-[#f5f5f5]">{title}</h2>
-      <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#a3a3a3]">{value || 'Não informado'}</p>
+      <h2 className="text-sm font-bold text-text-heading">{title}</h2>
+      <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-text-muted-v2">{value || 'Não informado'}</p>
     </article>
   )
 }

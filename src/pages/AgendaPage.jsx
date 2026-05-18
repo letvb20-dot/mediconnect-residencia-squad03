@@ -127,7 +127,7 @@ export function AgendaPage({ navigate }) {
 
   if (loading) {
     return (
-      <div className="flex h-[50vh] items-center justify-center text-[#a3a3a3]">
+      <div className="flex h-[50vh] items-center justify-center text-text-muted-v2">
         <p>Carregando agenda...</p>
       </div>
     )
@@ -179,21 +179,21 @@ export function AgendaPage({ navigate }) {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-none flex-col gap-8 text-[#e5e5e5]">
+    <div className="mx-auto flex w-full max-w-none flex-col gap-8 text-text-body">
       <section className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-[32px] font-bold leading-8 tracking-[-0.02em] text-[#e5e5e5]">
+          <h1 className="text-[32px] font-bold leading-8 tracking-[-0.02em] text-text-body">
             Agenda
           </h1>
-          <p className="mt-2 text-sm leading-5 text-[#a3a3a3]">
+          <p className="mt-2 text-sm leading-5 text-text-muted-v2">
             Perfil atual: {viewerProfile?.role || (isDoctorScope ? 'Médico' : 'Usuário')}
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1 rounded-sm border border-[#404040] bg-[#262626] p-1">
+          <div className="flex items-center gap-1 rounded-sm border border-border-default-v2 bg-surface-card p-1">
             <button
-              className="grid size-7 place-items-center rounded-sm text-[#a3a3a3] transition hover:bg-[#303030] hover:text-[#e5e5e5]"
+              className="grid size-7 place-items-center rounded-sm text-text-muted-v2 transition hover:bg-surface-card-hover hover:text-text-body"
               onClick={() => {
                 if (activeView === 'Dia') setBaseDate((current) => subDays(current, 1))
                 if (activeView === 'Semana') setBaseDate((current) => subWeeks(current, 1))
@@ -203,14 +203,14 @@ export function AgendaPage({ navigate }) {
             >
               {'<'}
             </button>
-            <span className="min-w-[160px] text-center text-sm font-semibold text-[#e5e5e5] capitalize">
+            <span className="min-w-[160px] text-center text-sm font-semibold text-text-body capitalize">
               {activeView === 'Dia' && format(baseDate, "dd 'de' MMM", { locale: ptBR })}
               {activeView === 'Semana' &&
                 `${format(weekStart, 'dd MMM', { locale: ptBR })} - ${format(weekEnd, 'dd MMM', { locale: ptBR })}`}
               {activeView === 'Mes' && format(baseDate, 'MMMM yyyy', { locale: ptBR })}
             </span>
             <button
-              className="grid size-7 place-items-center rounded-sm text-[#a3a3a3] transition hover:bg-[#303030] hover:text-[#e5e5e5]"
+              className="grid size-7 place-items-center rounded-sm text-text-muted-v2 transition hover:bg-surface-card-hover hover:text-text-body"
               onClick={() => {
                 if (activeView === 'Dia') setBaseDate((current) => addDays(current, 1))
                 if (activeView === 'Semana') setBaseDate((current) => addWeeks(current, 1))
@@ -222,7 +222,7 @@ export function AgendaPage({ navigate }) {
             </button>
           </div>
           <button
-            className="h-9 rounded-sm border border-[#404040] bg-[#262626] px-4 text-sm font-medium text-[#e5e5e5] transition hover:bg-[#303030]"
+            className="h-9 rounded-sm border border-border-default-v2 bg-surface-card px-4 text-sm font-medium text-text-body transition hover:bg-surface-card-hover"
             onClick={() => setBaseDate(new Date())}
             type="button"
           >
@@ -231,14 +231,14 @@ export function AgendaPage({ navigate }) {
           {!isPatientScope ? (
             <>
               <button
-                className="h-9 rounded-sm border border-[#404040] bg-[#262626] px-4 text-sm font-medium text-[#e5e5e5] transition hover:bg-[#303030]"
+                className="h-9 rounded-sm border border-border-default-v2 bg-surface-card px-4 text-sm font-medium text-text-body transition hover:bg-surface-card-hover"
                 onClick={() => navigate('/consultas')}
                 type="button"
               >
                 Fila de consultas
               </button>
               <button
-                className="h-9 rounded-sm border border-[#3b82f6] bg-[#3b82f6] px-4 text-sm font-semibold text-white shadow-[0_10px_15px_rgba(59,130,246,0.16)] transition hover:bg-[#3478ed] disabled:cursor-not-allowed disabled:border-[#404040] disabled:bg-[#303030] disabled:text-[#737373] disabled:shadow-none"
+                className="h-9 rounded-sm border border-accent-primary bg-accent-primary px-4 text-sm font-semibold text-white shadow-[0_10px_15px_rgba(59,130,246,0.16)] transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:border-border-default-v2 disabled:bg-surface-card-hover disabled:text-text-muted-v2 disabled:shadow-none"
                 disabled={!canCreateAppointment}
                 onClick={() => openCreate()}
                 type="button"
@@ -251,26 +251,26 @@ export function AgendaPage({ navigate }) {
       </section>
 
       {error ? (
-        <section className="rounded-2xl border border-[#404040] bg-[#262626] p-5 shadow-[0_1px_3px_rgba(0,0,0,0.2)]">
+        <section className="rounded-2xl border border-border-default-v2 bg-surface-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.2)]">
           <div className="rounded-xl border border-dashed border-[#7f1d1d] bg-[#2a1111] p-6">
             <h2 className="text-base font-bold text-[#fecaca]">Não foi possível liberar a agenda</h2>
             <p className="mt-2 text-sm leading-6 text-[#fca5a5]">{error}</p>
-            <p className="mt-3 text-sm leading-6 text-[#a3a3a3]">
+            <p className="mt-3 text-sm leading-6 text-text-muted-v2">
               Enquanto esse vínculo não existir na API, a tela fica bloqueada para evitar exibir consultas de outro médico.
             </p>
           </div>
         </section>
       ) : (
         <section className={`grid gap-6 ${isPatientScope ? '' : 'xl:grid-cols-[minmax(0,1fr)_460px] 2xl:grid-cols-[minmax(0,1fr)_520px]'}`}>
-          <div className="self-start rounded-2xl border border-[#404040] bg-[#262626] p-5 shadow-[0_1px_3px_rgba(0,0,0,0.2)]">
+          <div className="self-start rounded-2xl border border-border-default-v2 bg-surface-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.2)]">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-base font-bold leading-6 text-[#e5e5e5]">
+                  <h2 className="text-base font-bold leading-6 text-text-body">
                     {format(baseDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}
                   </h2>
                 </div>
-                <p className="mt-1 text-sm leading-5 text-[#a3a3a3]">
+                <p className="mt-1 text-sm leading-5 text-text-muted-v2">
                   {isPatientScope
                     ? `${visibleAppointments.length} agendamentos em seu nome nesta data`
                     : `Visualização: ${activeView.toLowerCase()} | ${visibleAppointments.length} registros visíveis`}
@@ -284,8 +284,8 @@ export function AgendaPage({ navigate }) {
                     <button
                       className={`h-8 rounded-sm border px-3 text-sm font-semibold transition ${
                         activeView === view.value
-                          ? 'border-[#3b82f6] bg-[#3b82f6] text-white'
-                          : 'border-[#404040] bg-[#303030] text-[#a3a3a3] hover:text-[#e5e5e5]'
+                          ? 'border-accent-primary bg-accent-primary text-white'
+                          : 'border-border-default-v2 bg-surface-card-hover text-text-muted-v2 hover:text-text-body'
                       }`}
                       key={view.value}
                       onClick={() => setActiveView(view.value)}
@@ -315,10 +315,10 @@ export function AgendaPage({ navigate }) {
             <div className="mt-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-end">
               {!isDoctorScope ? (
                 <div className="grid w-full gap-3 sm:grid-cols-[minmax(22rem,1.35fr)_minmax(13rem,0.65fr)] lg:max-w-[48rem]">
-                  <label className="grid gap-1.5 text-xs font-semibold text-[#a3a3a3]">
+                  <label className="grid gap-1.5 text-xs font-semibold text-text-muted-v2">
                     <span>Médico</span>
                     <select
-                      className="h-9 rounded-sm border border-[#404040] bg-[#303030] px-3 text-sm font-medium text-[#e5e5e5] outline-none transition focus:border-[#3b82f6]"
+                      className="h-9 rounded-sm border border-border-default-v2 bg-surface-card-hover px-3 text-sm font-medium text-text-body outline-none transition focus:border-accent-primary"
                       onChange={(event) => {
                         setDoctorFilter(event.target.value)
                         setDoctorSearch('')
@@ -333,10 +333,10 @@ export function AgendaPage({ navigate }) {
                       ))}
                     </select>
                   </label>
-                  <label className="grid gap-1.5 text-xs font-semibold text-[#a3a3a3]">
+                  <label className="grid gap-1.5 text-xs font-semibold text-text-muted-v2">
                     <span>Unidade</span>
                     <select
-                      className="h-9 rounded-sm border border-[#404040] bg-[#303030] px-3 text-sm font-medium text-[#e5e5e5] outline-none transition focus:border-[#3b82f6]"
+                      className="h-9 rounded-sm border border-border-default-v2 bg-surface-card-hover px-3 text-sm font-medium text-text-body outline-none transition focus:border-accent-primary"
                       onChange={(event) => setUnitFilter(event.target.value)}
                       value={unitFilter}
                     >
@@ -354,7 +354,7 @@ export function AgendaPage({ navigate }) {
             ) : null}
 
             {!isDoctorScope && !isPatientScope && (
-              <div className="mt-4 rounded-xl border border-[#404040] bg-[#1f1f1f] px-4 py-3 text-sm text-[#a3a3a3]">
+              <div className="mt-4 rounded-xl border border-border-default-v2 bg-surface-inset px-4 py-3 text-sm text-text-muted-v2">
                 Perfil atual: {viewerProfile?.role || 'Administrador'}
               </div>
             )}
@@ -419,7 +419,7 @@ export function AgendaPage({ navigate }) {
             <div className="grid content-start gap-4">
               <DarkField label="Paciente">
                 <input
-                  className="h-10 rounded-md border border-[#404040] bg-[#303030] px-3 text-sm text-[#e5e5e5] outline-none transition placeholder:text-[#737373] focus:border-[#3b82f6]"
+                  className="h-10 rounded-md border border-border-default-v2 bg-surface-card-hover px-3 text-sm text-text-body outline-none transition placeholder:text-text-muted-v2 focus:border-accent-primary"
                   onChange={(event) => {
                     setModalPatientSearch(event.target.value)
                     updateForm('patientId', '')
@@ -445,7 +445,7 @@ export function AgendaPage({ navigate }) {
               <DarkField label="Profissional">
                 {isDoctorScope ? (
                   <input
-                    className="h-11 rounded-md border border-[#404040] bg-[#262626] px-3 text-sm text-[#a3a3a3] outline-none"
+                    className="h-11 rounded-md border border-border-default-v2 bg-surface-card px-3 text-sm text-text-muted-v2 outline-none"
                     disabled
                     readOnly
                     value={currentProfessional?.name || 'Médico não vinculado'}
@@ -453,7 +453,7 @@ export function AgendaPage({ navigate }) {
                 ) : (
                   <>
                     <input
-                      className="h-10 rounded-md border border-[#404040] bg-[#303030] px-3 text-sm text-[#e5e5e5] outline-none transition placeholder:text-[#737373] focus:border-[#3b82f6]"
+                      className="h-10 rounded-md border border-border-default-v2 bg-surface-card-hover px-3 text-sm text-text-body outline-none transition placeholder:text-text-muted-v2 focus:border-accent-primary"
                       onChange={(event) => {
                         setModalDoctorSearch(event.target.value)
                         updateForm('professionalId', '')
@@ -480,7 +480,7 @@ export function AgendaPage({ navigate }) {
               </DarkField>
               <DarkField label="Observações">
                 <textarea
-                  className="min-h-36 w-full resize-y rounded-md border border-[#404040] bg-[#303030] px-3 py-2 text-sm leading-5 text-[#e5e5e5] outline-none transition placeholder:text-[#737373] focus:border-[#3b82f6]"
+                  className="min-h-36 w-full resize-y rounded-md border border-border-default-v2 bg-surface-card-hover px-3 py-2 text-sm leading-5 text-text-body outline-none transition placeholder:text-text-muted-v2 focus:border-accent-primary"
                   onChange={(event) => updateForm('notes', event.target.value)}
                   placeholder="Observações sobre o agendamento"
                   value={form.notes}
@@ -492,7 +492,7 @@ export function AgendaPage({ navigate }) {
               <div className="grid gap-4 sm:grid-cols-2">
                 <DarkField label="Dia">
                   <input
-                    className="h-11 rounded-md border border-[#404040] bg-[#303030] px-3 text-sm text-[#e5e5e5] outline-none [color-scheme:dark] focus:border-[#3b82f6]"
+                    className="h-11 rounded-md border border-border-default-v2 bg-surface-card-hover px-3 text-sm text-text-body outline-none [color-scheme:dark] focus:border-accent-primary"
                     onChange={(event) => {
                       const parsedDate = parseLocalDate(event.target.value)
                       if (parsedDate) setBaseDate(parsedDate)
@@ -504,7 +504,7 @@ export function AgendaPage({ navigate }) {
 
                 <DarkField label="Horário">
                   <select
-                    className="h-11 rounded-md border border-[#404040] bg-[#303030] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#3b82f6] disabled:cursor-not-allowed disabled:text-[#737373]"
+                    className="h-11 rounded-md border border-border-default-v2 bg-surface-card-hover px-3 text-sm text-text-body outline-none focus:border-accent-primary disabled:cursor-not-allowed disabled:text-text-muted-v2"
                     disabled={!form.professionalId || slotsLoading || !timeOptions.length}
                     onChange={(event) => updateForm('time', event.target.value)}
                     required
@@ -523,7 +523,7 @@ export function AgendaPage({ navigate }) {
                       </option>
                     ))}
                   </select>
-                  {slotsLoading ? <span className="text-xs font-normal text-[#a3a3a3]">Calculando horários...</span> : null}
+                  {slotsLoading ? <span className="text-xs font-normal text-text-muted-v2">Calculando horários...</span> : null}
                   {slotsError ? <span className="text-xs font-normal text-amber-400">{slotsError}</span> : null}
                   {!slotsLoading && form.professionalId && !timeOptions.length ? (
                     <span className="text-xs font-normal text-amber-400">Nenhum horário disponível para este médico nesta data.</span>
@@ -534,7 +534,7 @@ export function AgendaPage({ navigate }) {
               <div className="grid gap-4 sm:grid-cols-2">
                 <DarkField label="Formato">
                   <select
-                    className="h-11 rounded-md border border-[#404040] bg-[#303030] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#3b82f6]"
+                    className="h-11 rounded-md border border-border-default-v2 bg-surface-card-hover px-3 text-sm text-text-body outline-none focus:border-accent-primary"
                     onChange={(event) => updateForm('mode', event.target.value)}
                     value={form.mode}
                   >
@@ -545,7 +545,7 @@ export function AgendaPage({ navigate }) {
 
                 <DarkField label="Status">
                   <select
-                    className="h-11 rounded-md border border-[#404040] bg-[#303030] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#3b82f6]"
+                    className="h-11 rounded-md border border-border-default-v2 bg-surface-card-hover px-3 text-sm text-text-body outline-none focus:border-accent-primary"
                     onChange={(event) => updateForm('status', event.target.value)}
                     value={form.status}
                   >
@@ -561,7 +561,7 @@ export function AgendaPage({ navigate }) {
                 </DarkField>
               </div>
 
-              <label className="flex h-12 items-center justify-between gap-4 rounded-md border border-[#404040] bg-[#303030] px-3 text-sm font-semibold text-[#e5e5e5]">
+              <label className="flex h-12 items-center justify-between gap-4 rounded-md border border-border-default-v2 bg-surface-card-hover px-3 text-sm font-semibold text-text-body">
                 <span>Alta prioridade</span>
                 <input
                   checked={Boolean(form.highPriority)}
@@ -573,7 +573,7 @@ export function AgendaPage({ navigate }) {
 
               <DarkField label="Tipo de consulta">
                 <select
-                  className="h-11 rounded-md border border-[#404040] bg-[#303030] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#3b82f6]"
+                  className="h-11 rounded-md border border-border-default-v2 bg-surface-card-hover px-3 text-sm text-text-body outline-none focus:border-accent-primary"
                   onChange={(event) => updateForm('type', event.target.value)}
                   value={form.type}
                 >
@@ -587,7 +587,7 @@ export function AgendaPage({ navigate }) {
 
               <DarkField label="Duração">
                 <input
-                  className="h-11 rounded-md border border-[#404040] bg-[#303030] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#3b82f6]"
+                  className="h-11 rounded-md border border-border-default-v2 bg-surface-card-hover px-3 text-sm text-text-body outline-none focus:border-accent-primary"
                   max="240"
                   min="15"
                   onChange={(event) => updateForm('durationMinutes', event.target.value)}
@@ -600,7 +600,7 @@ export function AgendaPage({ navigate }) {
           </div>
 
           {editingAppointment ? (
-            <div className="rounded-xl border border-[#404040] bg-[#1f1f1f] px-4 py-3 text-sm text-[#a3a3a3]">
+            <div className="rounded-xl border border-border-default-v2 bg-surface-inset px-4 py-3 text-sm text-text-muted-v2">
               <p>
                 Agendamento de {selectedPatient ? getPatientLabel(selectedPatient) : 'paciente não informado'} às {form.time}.
               </p>
@@ -621,14 +621,14 @@ export function AgendaPage({ navigate }) {
               </button>
             ) : null}
             <button
-              className="h-10 rounded-sm border border-[#404040] bg-[#303030] px-4 text-sm font-semibold text-[#e5e5e5] transition hover:bg-[#333333]"
+              className="h-10 rounded-sm border border-border-default-v2 bg-surface-card-hover px-4 text-sm font-semibold text-text-body transition hover:bg-surface-card-hover"
               onClick={closeModal}
               type="button"
             >
               Fechar
             </button>
             <button
-              className="h-10 rounded-sm border border-[#3b82f6] bg-[#3b82f6] px-4 text-sm font-semibold text-white transition hover:bg-[#3478ed] disabled:cursor-not-allowed disabled:border-[#404040] disabled:bg-[#303030] disabled:text-[#737373]"
+              className="h-10 rounded-sm border border-accent-primary bg-accent-primary px-4 text-sm font-semibold text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:border-border-default-v2 disabled:bg-surface-card-hover disabled:text-text-muted-v2"
               disabled={!canCreateAppointment}
               type="submit"
             >
@@ -647,9 +647,9 @@ function PatientAgendaList({ appointments, currentPatient, onAppointmentClick })
 
   if (!appointments.length) {
     return (
-      <div className="rounded-2xl border border-dashed border-[#404040] bg-[#1f1f1f] p-8 text-center">
-        <p className="text-sm font-semibold text-[#e5e5e5]">Nenhum agendamento encontrado nesta data.</p>
-        <p className="mt-2 text-sm leading-6 text-[#a3a3a3]">
+      <div className="rounded-2xl border border-dashed border-border-default-v2 bg-surface-inset p-8 text-center">
+        <p className="text-sm font-semibold text-text-body">Nenhum agendamento encontrado nesta data.</p>
+        <p className="mt-2 text-sm leading-6 text-text-muted-v2">
           Esta agenda mostra apenas consultas vinculadas a {patientName}.
         </p>
       </div>
@@ -660,28 +660,28 @@ function PatientAgendaList({ appointments, currentPatient, onAppointmentClick })
     <div className="grid gap-3">
       {appointments.map((appointment) => (
         <button
-          className="rounded-xl border border-[#404040] bg-[#1f1f1f] p-4 text-left transition hover:border-[#3b82f6]/50 hover:bg-[#242424]"
+          className="rounded-xl border border-border-default-v2 bg-surface-inset p-4 text-left transition hover:border-accent-primary/50 hover:bg-surface-card"
           key={appointment.id}
           onClick={() => onAppointmentClick?.(appointment)}
           type="button"
         >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
-              <p className="text-sm font-bold text-[#e5e5e5]">{appointment.type || 'Consulta'}</p>
-              <p className="mt-1 text-sm text-[#a3a3a3]">
+              <p className="text-sm font-bold text-text-body">{appointment.type || 'Consulta'}</p>
+              <p className="mt-1 text-sm text-text-muted-v2">
                 {appointment.professional || 'Médico(a) não informado'}
               </p>
             </div>
             <div className="shrink-0 text-left sm:text-right">
-              <p className="text-lg font-bold text-[#3b82f6]">{appointment.time || '--:--'}</p>
-              <span className="mt-1 inline-flex rounded-full border border-[#404040] bg-[#262626] px-2.5 py-1 text-xs font-semibold text-[#e5e5e5]">
+              <p className="text-lg font-bold text-accent-primary">{appointment.time || '--:--'}</p>
+              <span className="mt-1 inline-flex rounded-full border border-border-default-v2 bg-surface-card px-2.5 py-1 text-xs font-semibold text-text-body">
                 {appointment.status || 'Agendado'}
               </span>
             </div>
           </div>
-          <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-[#a3a3a3]">
-            {appointment.mode ? <span className="rounded-full bg-[#303030] px-2.5 py-1">{appointment.mode}</span> : null}
-            {appointment.room ? <span className="rounded-full bg-[#303030] px-2.5 py-1">{appointment.room}</span> : null}
+          <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-text-muted-v2">
+            {appointment.mode ? <span className="rounded-full bg-surface-card-hover px-2.5 py-1">{appointment.mode}</span> : null}
+            {appointment.room ? <span className="rounded-full bg-surface-card-hover px-2.5 py-1">{appointment.room}</span> : null}
           </div>
         </button>
       ))}
@@ -693,9 +693,9 @@ function AppointmentReadOnlyDetails({ appointment, onClose }) {
   if (!appointment) {
     return (
       <div className="grid gap-4">
-        <p className="text-sm text-[#a3a3a3]">Agendamento não encontrado.</p>
+        <p className="text-sm text-text-muted-v2">Agendamento não encontrado.</p>
         <div className="flex justify-end">
-          <button className="h-10 rounded-sm bg-[#3b82f6] px-4 text-sm font-semibold text-white" onClick={onClose} type="button">
+          <button className="h-10 rounded-sm bg-accent-primary px-4 text-sm font-semibold text-white" onClick={onClose} type="button">
             Fechar
           </button>
         </div>
@@ -719,7 +719,7 @@ function AppointmentReadOnlyDetails({ appointment, onClose }) {
         <ReadOnlyDetail label="Observações" value={appointment.notes} />
       ) : null}
       <div className="flex justify-end">
-        <button className="h-10 rounded-sm bg-[#3b82f6] px-4 text-sm font-semibold text-white" onClick={onClose} type="button">
+        <button className="h-10 rounded-sm bg-accent-primary px-4 text-sm font-semibold text-white" onClick={onClose} type="button">
           Fechar
         </button>
       </div>
@@ -729,9 +729,9 @@ function AppointmentReadOnlyDetails({ appointment, onClose }) {
 
 function ReadOnlyDetail({ label, value }) {
   return (
-    <div className="rounded-lg border border-[#404040] bg-[#1f1f1f] px-3 py-2.5">
-      <p className="text-xs font-semibold uppercase tracking-wide text-[#a3a3a3]">{label}</p>
-      <p className="mt-1 whitespace-pre-wrap text-sm leading-5 text-[#e5e5e5]">{value}</p>
+    <div className="rounded-lg border border-border-default-v2 bg-surface-inset px-3 py-2.5">
+      <p className="text-xs font-semibold uppercase tracking-wide text-text-muted-v2">{label}</p>
+      <p className="mt-1 whitespace-pre-wrap text-sm leading-5 text-text-body">{value}</p>
     </div>
   )
 }
@@ -998,18 +998,18 @@ function AvailabilitySidebar({ currentProfessional, isDoctorScope, professionals
   }
 
   return (
-    <aside className="grid self-start content-start gap-4 rounded-2xl border border-[#404040] bg-[#262626] p-4 shadow-[0_1px_3px_rgba(0,0,0,0.2)]">
+    <aside className="grid self-start content-start gap-4 rounded-2xl border border-border-default-v2 bg-surface-card p-4 shadow-[0_1px_3px_rgba(0,0,0,0.2)]">
       <div>
-        <h2 className="text-base font-bold text-[#f5f5f5]">Disponibilidade médica</h2>
-        <p className="mt-1 text-xs leading-5 text-[#a3a3a3]">Horários recorrentes e exceções da agenda.</p>
+        <h2 className="text-base font-bold text-text-heading">Disponibilidade médica</h2>
+        <p className="mt-1 text-xs leading-5 text-text-muted-v2">Horários recorrentes e exceções da agenda.</p>
       </div>
 
       {availabilityError ? (
         <p className="availability-error rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-5 text-amber-200">{availabilityError}</p>
       ) : null}
 
-      <section className="grid gap-3 rounded-xl border border-[#404040] bg-[#1f1f1f] p-3">
-        <h3 className="text-sm font-bold text-[#f5f5f5]">Filtros</h3>
+      <section className="grid gap-3 rounded-xl border border-border-default-v2 bg-surface-inset p-3">
+        <h3 className="text-sm font-bold text-text-heading">Filtros</h3>
         <SidebarField label="Médico">
           <select className={sidebarInputClass} disabled={isDoctorScope} onChange={(event) => updateAvailabilityFilter('doctorId', event.target.value)} value={availabilityFilters.doctorId}>
             <option value="">Todos</option>
@@ -1033,15 +1033,15 @@ function AvailabilitySidebar({ currentProfessional, isDoctorScope, professionals
             </select>
           </SidebarField>
         </div>
-        <button className="h-9 rounded-sm border border-[#3b82f6] bg-[#3b82f6] text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60" disabled={loadingAvailability} onClick={verifyAvailability} type="button">
+        <button className="h-9 rounded-sm border border-accent-primary bg-accent-primary text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60" disabled={loadingAvailability} onClick={verifyAvailability} type="button">
           {loadingAvailability ? 'Verificando...' : 'Verificar'}
         </button>
       </section>
 
-      {!isSecretary ? <form className="grid gap-3 rounded-xl border border-[#404040] bg-[#1f1f1f] p-3" onSubmit={saveAvailability}>
+      {!isSecretary ? <form className="grid gap-3 rounded-xl border border-border-default-v2 bg-surface-inset p-3" onSubmit={saveAvailability}>
         <div>
-          <h3 className="text-sm font-bold text-[#f5f5f5]">Cadastrar Disponibilidade</h3>
-          <p className="mt-1 text-xs leading-5 text-[#a3a3a3]">
+          <h3 className="text-sm font-bold text-text-heading">Cadastrar Disponibilidade</h3>
+          <p className="mt-1 text-xs leading-5 text-text-muted-v2">
             {availabilityFormRows.length ? 'Edite os dias, horários e status da disponibilidade existente.' : 'Selecione os dias para criar uma nova disponibilidade.'}
           </p>
         </div>
@@ -1054,10 +1054,10 @@ function AvailabilitySidebar({ currentProfessional, isDoctorScope, professionals
           </select>
         </SidebarField>
         <div className="grid gap-2">
-          <span className="text-xs font-semibold text-[#a3a3a3]">Dias</span>
+          <span className="text-xs font-semibold text-text-muted-v2">Dias</span>
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
             {weekdayOptions.map((day) => (
-              <label className="flex h-10 items-center justify-between rounded-sm border border-[#404040] bg-[#303030] px-3 text-xs font-semibold text-[#e5e5e5]" key={day.value}>
+              <label className="flex h-10 items-center justify-between rounded-sm border border-border-default-v2 bg-surface-card-hover px-3 text-xs font-semibold text-text-body" key={day.value}>
                 <span>{day.label}</span>
                 <input
                   checked={availabilityForm.weekdays.includes(day.value)}
@@ -1085,18 +1085,18 @@ function AvailabilitySidebar({ currentProfessional, isDoctorScope, professionals
           <SidebarField label="Slot (min)">
             <input className={sidebarInputClass} max="120" min="15" onChange={(event) => updateAvailabilityForm('slotMinutes', Number(event.target.value))} step="15" type="number" value={availabilityForm.slotMinutes} />
           </SidebarField>
-          <label className="flex h-10 items-center gap-2 text-xs font-semibold text-[#e5e5e5]">
+          <label className="flex h-10 items-center gap-2 text-xs font-semibold text-text-body">
             <input checked={availabilityForm.active} className="size-4 accent-[#3b82f6]" onChange={(event) => updateAvailabilityForm('active', event.target.checked)} type="checkbox" />
             Ativa
           </label>
         </div>
-        <button className="h-9 rounded-sm bg-[#3b82f6] text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60" disabled={savingAvailability} type="submit">
+        <button className="h-9 rounded-sm bg-accent-primary text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60" disabled={savingAvailability} type="submit">
           {savingAvailability ? 'Salvando...' : availabilityFormRows.length ? 'Salvar alteração' : 'Cadastrar disponibilidade'}
         </button>
       </form> : null}
 
-      {!isSecretary ? <section className="grid gap-3 rounded-xl border border-[#404040] bg-[#1f1f1f] p-3">
-        <h3 className="text-sm font-bold text-[#f5f5f5]">Exceções</h3>
+      {!isSecretary ? <section className="grid gap-3 rounded-xl border border-border-default-v2 bg-surface-inset p-3">
+        <h3 className="text-sm font-bold text-text-heading">Exceções</h3>
         <div className="grid gap-2">
           <SidebarField label="Médico">
             <select className={sidebarInputClass} disabled={isDoctorScope} onChange={(event) => updateExceptionFilter('doctorId', event.target.value)} value={exceptionFilters.doctorId}>
@@ -1111,7 +1111,7 @@ function AvailabilitySidebar({ currentProfessional, isDoctorScope, professionals
           </SidebarField>
         </div>
 
-        <form className="grid gap-2 border-t border-[#404040] pt-3" onSubmit={createException}>
+        <form className="grid gap-2 border-t border-border-default-v2 pt-3" onSubmit={createException}>
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
             <SidebarField label="Tipo">
               <select className={sidebarInputClass} onChange={(event) => updateExceptionForm('kind', event.target.value)} value={exceptionForm.kind}>
@@ -1129,18 +1129,18 @@ function AvailabilitySidebar({ currentProfessional, isDoctorScope, professionals
           <SidebarField label="Motivo">
             <input className={sidebarInputClass} onChange={(event) => updateExceptionForm('reason', event.target.value)} value={exceptionForm.reason} />
           </SidebarField>
-          <button className="h-9 rounded-sm border border-[#3b82f6] bg-[#3b82f6] text-sm font-semibold text-white" type="submit">Criar exceção</button>
+          <button className="h-9 rounded-sm border border-accent-primary bg-accent-primary text-sm font-semibold text-white" type="submit">Criar exceção</button>
         </form>
 
         <div className="grid gap-2">
           {exceptionRows.slice(0, 4).map((row) => (
-            <div className="rounded-md border border-[#404040] bg-[#262626] p-2 text-xs text-[#a3a3a3]" key={row.id}>
-              <p className="font-semibold text-[#e5e5e5]">{formatDisplayDate(row.date)} | {row.kind === 'disponibilidade_extra' ? 'Extra' : 'Bloqueio'}</p>
+            <div className="rounded-md border border-border-default-v2 bg-surface-card p-2 text-xs text-text-muted-v2" key={row.id}>
+              <p className="font-semibold text-text-body">{formatDisplayDate(row.date)} | {row.kind === 'disponibilidade_extra' ? 'Extra' : 'Bloqueio'}</p>
               <p>{row.startTime || 'Dia inteiro'}{row.endTime ? ` - ${row.endTime}` : ''}</p>
               {row.reason ? <p>{row.reason}</p> : null}
             </div>
           ))}
-          {!exceptionRows.length ? <p className="text-xs text-[#737373]">Nenhuma exceção encontrada.</p> : null}
+          {!exceptionRows.length ? <p className="text-xs text-text-muted-v2">Nenhuma exceção encontrada.</p> : null}
         </div>
       </section> : null}
 
@@ -1152,7 +1152,7 @@ function AvailabilitySidebar({ currentProfessional, isDoctorScope, professionals
   )
 }
 
-const sidebarInputClass = 'h-10 w-full rounded-sm border border-[#404040] bg-[#303030] px-3 text-sm text-[#e5e5e5] outline-none transition focus:border-[#3b82f6]'
+const sidebarInputClass = 'h-10 w-full rounded-sm border border-border-default-v2 bg-surface-card-hover px-3 text-sm text-text-body outline-none transition focus:border-accent-primary'
 
 function AvailabilityCheckModal({ onClose, result }) {
   if (!result) return null
@@ -1161,12 +1161,12 @@ function AvailabilityCheckModal({ onClose, result }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center">
-      <div className="agenda-modal-shell flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-[#404040] bg-[#242424] shadow-2xl">
-        <div className="flex items-center justify-between gap-4 border-b border-[#404040] px-5 py-4">
-          <h2 className="text-lg font-bold text-[#e5e5e5]">Verificação de disponibilidade</h2>
+      <div className="agenda-modal-shell flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border-default-v2 bg-surface-card shadow-2xl">
+        <div className="flex items-center justify-between gap-4 border-b border-border-default-v2 px-5 py-4">
+          <h2 className="text-lg font-bold text-text-body">Verificação de disponibilidade</h2>
           <button
             aria-label="Fechar"
-            className="grid size-8 place-items-center rounded-sm text-xl leading-none text-[#a3a3a3] transition hover:bg-[#303030] hover:text-[#e5e5e5]"
+            className="grid size-8 place-items-center rounded-sm text-xl leading-none text-text-muted-v2 transition hover:bg-surface-card-hover hover:text-text-body"
             onClick={onClose}
             type="button"
           >
@@ -1180,8 +1180,8 @@ function AvailabilityCheckModal({ onClose, result }) {
                 Disponibilidade encontrada para os filtros selecionados.
               </p>
               {rows.map((row) => (
-                <article className="rounded-lg border border-[#404040] bg-[#1f1f1f] p-3 text-sm text-[#a3a3a3]" key={row.id || `${row.doctorId}-${row.weekday}-${row.startTime}`}>
-                  <p className="font-semibold text-[#e5e5e5]">
+                <article className="rounded-lg border border-border-default-v2 bg-surface-inset p-3 text-sm text-text-muted-v2" key={row.id || `${row.doctorId}-${row.weekday}-${row.startTime}`}>
+                  <p className="font-semibold text-text-body">
                     {getWeekdayLabel(row.weekday)} | {row.startTime} - {row.endTime}
                   </p>
                   <p className="mt-1">
@@ -1203,7 +1203,7 @@ function AvailabilityCheckModal({ onClose, result }) {
 
 function SidebarField({ children, label }) {
   return (
-    <label className="grid gap-1.5 text-xs font-semibold text-[#a3a3a3]">
+    <label className="grid gap-1.5 text-xs font-semibold text-text-muted-v2">
       <span>{label}</span>
       {children}
     </label>
@@ -1274,7 +1274,7 @@ function isSecretaryProfile(profile) {
 
 function DarkField({ children, className = '', label }) {
   return (
-    <label className={`grid gap-2 text-sm font-semibold text-[#a3a3a3] ${className}`}>
+    <label className={`grid gap-2 text-sm font-semibold text-text-muted-v2 ${className}`}>
       <span>{label}</span>
       {children}
     </label>
@@ -1286,17 +1286,17 @@ function DarkModal({ children, onClose, open, title }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center">
-      <div className="agenda-modal-shell flex max-h-[96vh] min-h-[620px] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-[#404040] bg-[#242424] shadow-2xl">
-        <div className="flex items-center justify-between gap-4 border-b border-[#404040] px-5 py-4">
+      <div className="agenda-modal-shell flex max-h-[96vh] min-h-[620px] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-border-default-v2 bg-surface-card shadow-2xl">
+        <div className="flex items-center justify-between gap-4 border-b border-border-default-v2 px-5 py-4">
           <div className="flex items-center gap-3">
-            <span className="grid size-9 place-items-center rounded-sm bg-[#3b82f6] text-white">
+            <span className="grid size-9 place-items-center rounded-sm bg-accent-primary text-white">
               <StethoscopeIcon className="size-5" />
             </span>
-            <h2 className="text-lg font-bold text-[#e5e5e5]">{title}</h2>
+            <h2 className="text-lg font-bold text-text-body">{title}</h2>
           </div>
           <button
             aria-label="Fechar"
-            className="grid size-8 place-items-center rounded-sm text-xl leading-none text-[#a3a3a3] transition hover:bg-[#303030] hover:text-[#e5e5e5]"
+            className="grid size-8 place-items-center rounded-sm text-xl leading-none text-text-muted-v2 transition hover:bg-surface-card-hover hover:text-text-body"
             onClick={onClose}
             type="button"
           >
@@ -1311,14 +1311,14 @@ function DarkModal({ children, onClose, open, title }) {
 
 function SearchResults({ emptyText, getDescription, getLabel, items, onSelect, selectedId }) {
   return (
-    <div className="max-h-44 overflow-y-auto rounded-md border border-[#404040] bg-[#1f1f1f]">
+    <div className="max-h-44 overflow-y-auto rounded-md border border-border-default-v2 bg-surface-inset">
       {items.length ? (
         items.map((item) => {
           const isSelected = String(item.id) === String(selectedId)
           return (
             <button
               className={`block w-full px-3 py-2 text-left text-sm transition ${
-                isSelected ? 'bg-[#3b82f6]/20 text-[#e5e5e5]' : 'text-[#a3a3a3] hover:bg-[#303030] hover:text-[#e5e5e5]'
+                isSelected ? 'bg-accent-primary/20 text-text-body' : 'text-text-muted-v2 hover:bg-surface-card-hover hover:text-text-body'
               }`}
               key={item.id}
               onClick={() => onSelect(item)}
@@ -1326,13 +1326,13 @@ function SearchResults({ emptyText, getDescription, getLabel, items, onSelect, s
             >
               <span className="block font-semibold">{getLabel(item)}</span>
               {getDescription?.(item) ? (
-                <span className="mt-0.5 block text-xs text-[#737373]">{getDescription(item)}</span>
+                <span className="mt-0.5 block text-xs text-text-muted-v2">{getDescription(item)}</span>
               ) : null}
             </button>
           )
         })
       ) : (
-        <p className="px-3 py-2 text-xs text-[#737373]">{emptyText}</p>
+        <p className="px-3 py-2 text-xs text-text-muted-v2">{emptyText}</p>
       )}
     </div>
   )

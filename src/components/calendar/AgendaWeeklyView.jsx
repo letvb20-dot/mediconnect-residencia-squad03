@@ -27,8 +27,8 @@ export function AgendaWeeklyView({ baseDate, appointments, canCreateAppointment 
   )
 
   return (
-    <div className="agenda-calendar-shell rounded-2xl border border-[#404040] bg-[#262626] p-5">
-      <div className="agenda-calendar-header grid grid-cols-7 gap-4 border-b border-[#404040] pb-4">
+    <div className="agenda-calendar-shell rounded-2xl border border-border-default-v2 bg-surface-card p-5">
+      <div className="agenda-calendar-header grid grid-cols-7 gap-4 border-b border-border-subtle pb-4">
         {days.map((day) => {
           const isWeekend = day.getDay() === 0
 
@@ -36,12 +36,12 @@ export function AgendaWeeklyView({ baseDate, appointments, canCreateAppointment 
             <div key={day.toISOString()} className="text-center">
               <span
                 className={`block text-xs font-semibold uppercase tracking-[0.16em] ${
-                  isWeekend ? 'text-[#93c5fd]' : 'text-[#a3a3a3]'
+                  isWeekend ? 'text-blue-200' : 'text-text-muted-v2'
                 }`}
               >
                 {format(day, 'EEE', { locale: ptBR })}
               </span>
-              <span className={`mt-1 block text-2xl font-bold ${isToday(day) ? 'text-[#3b82f6]' : 'text-[#e5e5e5]'}`}>
+              <span className={`mt-1 block text-2xl font-bold ${isToday(day) ? 'text-accent-primary' : 'text-text-heading'}`}>
                 {format(day, 'dd')}
               </span>
             </div>
@@ -62,11 +62,11 @@ export function AgendaWeeklyView({ baseDate, appointments, canCreateAppointment 
           return (
             <div
               key={day.toISOString()}
-              className="agenda-week-day flex h-full min-w-0 flex-col gap-2 rounded-lg border border-[#404040]/50 bg-[#1f1f1f] p-2"
+              className="agenda-week-day flex h-full min-w-0 flex-col gap-2 rounded-lg border border-border-default-v2 bg-surface-inset p-2"
             >
               {dayAppointments.length === 0 ? (
                 <button
-                  className="flex h-full min-h-24 items-center justify-center rounded-md border border-dashed border-[#404040] p-4 text-center text-xs font-semibold text-[#737373] transition hover:border-[#3b82f6]/50 hover:text-[#93c5fd] disabled:cursor-not-allowed disabled:hover:border-[#404040] disabled:hover:text-[#737373]"
+                  className="flex h-full min-h-24 items-center justify-center rounded-md border border-dashed border-border-default-v2 p-4 text-center text-xs font-semibold text-text-muted-v2 transition hover:border-accent-primary/50 hover:text-blue-200 disabled:cursor-not-allowed disabled:hover:border-border-default-v2 disabled:hover:text-text-muted-v2"
                   disabled={!canCreateAppointment || dayIsPast}
                   onClick={() => onSlotCreate?.(day)}
                   type="button"
@@ -102,7 +102,7 @@ export function AgendaWeeklyView({ baseDate, appointments, canCreateAppointment 
                     </button>
                   ))}
                   <button
-                    className="mt-auto rounded-md border border-dashed border-[#404040] px-2 py-2 text-xs font-semibold text-[#737373] transition hover:border-[#3b82f6]/50 hover:text-[#93c5fd] disabled:cursor-not-allowed disabled:hover:border-[#404040] disabled:hover:text-[#737373]"
+                    className="mt-auto rounded-md border border-dashed border-border-default-v2 px-2 py-2 text-xs font-semibold text-text-muted-v2 transition hover:border-accent-primary/50 hover:text-blue-200 disabled:cursor-not-allowed disabled:hover:border-border-default-v2 disabled:hover:text-text-muted-v2"
                     disabled={!canCreateAppointment || dayIsPast}
                     onClick={() => onSlotCreate?.(day)}
                     type="button"
@@ -164,9 +164,9 @@ function getStatusColors(appointment) {
     case 'Cancelada':
       return 'border-[#7f1d1d] bg-[#450a0a] text-[#f87171] opacity-75'
     case 'Bloqueado':
-      return 'border-[#404040] bg-[#1f1f1f] text-[#737373]'
+      return 'border-border-default-v2 bg-surface-inset text-text-muted-v2'
     default:
-      return 'border-[#404040] bg-[#303030] text-[#e5e5e5]'
+      return 'border-border-default-v2 bg-surface-elevated text-text-heading'
   }
 }
 

@@ -15,6 +15,13 @@ test('traduz erros crus comuns do Supabase para pt-BR', () => {
   )
 })
 
+test('traduz CPF duplicado mesmo quando a API mistura portugues e erro tecnico', () => {
+  assert.equal(
+    translateErrorMessage('Falha ao criar registro do paciente: duplicate key value violates unique constraint "patients_cpf_key"'),
+    'Já existe um paciente cadastrado com este CPF.',
+  )
+})
+
 test('getResponseError preserva erros estruturados em portugues da API', async () => {
   const response = new Response(
     JSON.stringify({

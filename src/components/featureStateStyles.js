@@ -1,8 +1,8 @@
 export const featureStateStyles = {
   live: {
     badge: 'hidden',
-    panel: 'border-[#404040] bg-[#262626]',
-    title: 'text-[#e5e5e5]',
+    panel: 'border-border-default-v2 bg-surface-card',
+    title: 'text-text-heading',
     label: '',
   },
   partial: {

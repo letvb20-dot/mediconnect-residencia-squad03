@@ -10,20 +10,20 @@ import { StethoscopeIcon } from '../components/Brand.jsx'
 // ─── Estilos ────────────────────────────────────────────────────────────────
 
 const dotPanelStyle = {
-  backgroundColor: '#02070f',
+  backgroundColor: '#030712',
   backgroundImage:
-    'radial-gradient(rgba(147,197,253,0.14) 1px, transparent 1px), linear-gradient(105deg, #030406 0%, #071326 42%, #0d2454 100%)',
-  backgroundSize: '32px 32px, auto',
+    'radial-gradient(rgba(148,163,184,0.1) 1px, transparent 1px), linear-gradient(135deg, #030712 0%, #0c1a3d 50%, #1e3a5f 100%)',
+  backgroundSize: '28px 28px, auto',
 }
 
 const lightInputClass =
-  'h-11 w-full rounded-lg border border-gray-200 bg-white pl-10 pr-4 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
+  'h-12 w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
 
 const lightPasswordInputClass =
-  'h-11 w-full rounded-lg border border-gray-200 bg-white pl-10 pr-11 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
+  'h-12 w-full rounded-xl border border-gray-200 bg-white pl-10 pr-11 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
 
 const lightInputSimpleClass =
-  'h-11 w-full rounded-lg border border-gray-200 bg-white px-4 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
+  'h-12 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
 
 // ─── Página de Login ─────────────────────────────────────────────────────────
 
@@ -89,9 +89,9 @@ export function LoginPage({ navigate }) {
                 Tudo em uma única plataforma pensada para profissionais de saúde.
               </p>
 
-              <ul className="mt-8 flex flex-col gap-4">
-                <LeftFeature icon={<ActivityIcon />} text="Prontuário eletrônico com sugestões automáticas" />
-                <LeftFeature icon={<SparkleIcon />}  text="Análises preditivas e relatórios em segundos" />
+              <ul className="mt-8 flex flex-col gap-0">
+                <LeftFeature icon={<ActivityIcon />} text="Prontuário eletrônico com sugestões automáticas" showLine />
+                <LeftFeature icon={<SparkleIcon />}  text="Análises preditivas e relatórios em segundos" showLine />
                 <LeftFeature icon={<ShieldIcon />}   text="Conformidade LGPD e dados criptografados" />
               </ul>
             </div>
@@ -154,7 +154,7 @@ export function LoginPage({ navigate }) {
                     Senha
                   </label>
                   <button
-                    className="text-sm text-[#3b82f6] transition hover:text-blue-700"
+                    className="text-sm text-blue-600 transition hover:text-blue-700 hover:underline"
                     onClick={() => navigate('/recuperar-senha')}
                     type="button"
                   >
@@ -187,7 +187,7 @@ export function LoginPage({ navigate }) {
               </div>
 
               <button
-                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#3b82f6] text-sm font-semibold text-white shadow-sm transition hover:bg-blue-600 disabled:opacity-50"
+                className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[#4f93f7] to-[#3b82f6] text-sm font-semibold text-white shadow-[0_2px_8px_rgba(59,130,246,0.3)] transition-all hover:shadow-[0_4px_12px_rgba(59,130,246,0.4)] hover:brightness-110 disabled:opacity-50"
                 disabled={loading}
                 type="submit"
               >
@@ -198,7 +198,7 @@ export function LoginPage({ navigate }) {
             <p className="mt-6 text-center text-sm text-gray-500">
               Não tem uma conta?{' '}
               <button
-                className="font-medium text-[#3b82f6] transition hover:text-blue-700"
+                className="font-medium text-blue-600 transition hover:text-blue-700 hover:underline"
                 onClick={() => navigate('/cadastro')}
                 type="button"
               >
@@ -343,7 +343,7 @@ export function RegisterPage({ navigate }) {
           </LightField>
         </div>
         <button
-          className="inline-flex h-11 w-full items-center justify-center rounded-lg bg-[#3b82f6] text-sm font-semibold text-white shadow-sm transition hover:bg-blue-600 disabled:opacity-60"
+          className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-gradient-to-b from-[#4f93f7] to-[#3b82f6] text-sm font-semibold text-white shadow-[0_2px_8px_rgba(59,130,246,0.3)] transition-all hover:shadow-[0_4px_12px_rgba(59,130,246,0.4)] hover:brightness-110 disabled:opacity-60"
           disabled={loading}
           type="submit"
         >
@@ -351,7 +351,7 @@ export function RegisterPage({ navigate }) {
         </button>
       </form>
       <button
-        className="mt-5 text-sm font-medium text-[#3b82f6] transition hover:text-blue-700"
+        className="mt-5 text-sm font-medium text-blue-600 transition hover:text-blue-700 hover:underline"
         onClick={() => navigate('/login')}
         type="button"
       >
@@ -416,7 +416,7 @@ export function ForgotPasswordPage({ navigate }) {
             </div>
           </LightField>
           <button
-            className="inline-flex h-11 w-full items-center justify-center rounded-lg bg-[#3b82f6] text-sm font-semibold text-white shadow-sm transition hover:bg-blue-600 disabled:opacity-50"
+            className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-gradient-to-b from-[#4f93f7] to-[#3b82f6] text-sm font-semibold text-white shadow-[0_2px_8px_rgba(59,130,246,0.3)] transition-all hover:shadow-[0_4px_12px_rgba(59,130,246,0.4)] hover:brightness-110 disabled:opacity-50"
             disabled={loading}
             type="submit"
           >
@@ -425,7 +425,7 @@ export function ForgotPasswordPage({ navigate }) {
         </form>
       )}
       <button
-        className="mt-5 text-sm font-medium text-[#3b82f6] transition hover:text-blue-700"
+        className="mt-5 text-sm font-medium text-blue-600 transition hover:text-blue-700 hover:underline"
         onClick={() => navigate('/login')}
         type="button"
       >
@@ -470,9 +470,9 @@ function AuthLayout({ children, description, title }) {
                 Agendamentos inteligentes, prontuários assistidos e insights em tempo real.
                 Tudo em uma única plataforma pensada para profissionais de saúde.
               </p>
-              <ul className="mt-8 flex flex-col gap-4">
-                <LeftFeature icon={<ActivityIcon />} text="Prontuário eletrônico com sugestões automáticas" />
-                <LeftFeature icon={<SparkleIcon />}  text="Análises preditivas e relatórios em segundos" />
+              <ul className="mt-8 flex flex-col gap-0">
+                <LeftFeature icon={<ActivityIcon />} text="Prontuário eletrônico com sugestões automáticas" showLine />
+                <LeftFeature icon={<SparkleIcon />}  text="Análises preditivas e relatórios em segundos" showLine />
                 <LeftFeature icon={<ShieldIcon />}   text="Conformidade LGPD e dados criptografados" />
               </ul>
             </div>
@@ -524,13 +524,16 @@ function RightLogo({ dark = false }) {
   )
 }
 
-function LeftFeature({ icon, text }) {
+function LeftFeature({ icon, text, showLine = false }) {
   return (
-    <li className="flex items-center gap-3">
-      <div className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-[#3b82f6]">
-        {icon}
+    <li className="flex gap-3">
+      <div className="flex flex-col items-center">
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-[#3b82f6]/30 bg-[#3b82f6]/10 text-[#60a5fa]">
+          {icon}
+        </div>
+        {showLine ? <div className="mt-1 h-6 w-px bg-[#3b82f6]/30" /> : null}
       </div>
-      <span className="text-sm text-white/65">{text}</span>
+      <span className="pt-1.5 text-sm text-white/65">{text}</span>
     </li>
   )
 }

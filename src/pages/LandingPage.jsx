@@ -27,8 +27,6 @@ import {
   X,
 } from 'lucide-react'
 
-import heroClinicImage from '../assets/figma/login-clinic.png'
-
 const navLinks = [
   { href: '#pilares', label: 'Soluções' },
   { href: '#como-funciona', label: 'Como funciona' },
@@ -327,15 +325,15 @@ function LandingHeader({ accountLabel, accountPath, goTo, goToSection }) {
 function Hero({ goTo }) {
   return (
     <section
-      className="relative isolate flex min-h-[600px] items-center overflow-hidden bg-[#02070f] bg-cover bg-center px-5 py-20 text-white sm:px-6 lg:min-h-[680px]"
-      style={{
-        backgroundImage: `linear-gradient(105deg, rgba(3, 4, 6, 0.94) 0%, rgba(7, 19, 38, 0.82) 44%, rgba(13, 36, 84, 0.48) 100%), url(${heroClinicImage})`,
-      }}
+      className="relative isolate flex min-h-[600px] items-center overflow-hidden bg-gradient-to-br from-[#030712] via-[#0c1a3d] to-[#1e3a5f] px-5 py-20 text-white sm:px-6 lg:min-h-[680px]"
     >
-      <div className="mx-auto w-full max-w-7xl">
+      <div className="pointer-events-none absolute left-1/2 top-1/4 -translate-x-1/2 h-[600px] w-[600px] rounded-full bg-[radial-gradient(circle,rgba(59,130,246,0.15)_0%,transparent_70%)] blur-2xl" />
+      <div className="pointer-events-none absolute inset-0 opacity-[0.07]" style={{ backgroundImage: 'radial-gradient(rgba(148,163,184,0.5) 1px, transparent 1px)', backgroundSize: '28px 28px' }} />
+
+      <div className="relative mx-auto w-full max-w-7xl">
         <div className="max-w-3xl">
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-sm text-white/80 backdrop-blur">
-            <Sparkles className="size-4 text-[#3b82f6]" />
+            <Sparkles className="size-4 text-[#60a5fa]" />
             Inteligência artificial para sua clínica
           </div>
 
@@ -350,12 +348,12 @@ function Hero({ goTo }) {
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <LandingButton className="min-h-12 px-5" onClick={() => goTo('/cadastro')}>
+            <LandingButton className="min-h-12 px-5 shadow-[0_4px_20px_rgba(59,130,246,0.35)] hover:shadow-[0_6px_28px_rgba(59,130,246,0.5)]" onClick={() => goTo('/cadastro')}>
               Criar conta gratuita
               <ArrowRight className="size-4" />
             </LandingButton>
             <LandingButton
-              className="min-h-12 border-white/30 bg-white/10 px-5 text-white hover:bg-white/15"
+              className="min-h-12 border-white/20 bg-white/8 px-5 text-white backdrop-blur-sm hover:bg-white/15"
               onClick={() => goTo('/login')}
               variant="secondary"
             >
@@ -363,10 +361,10 @@ function Hero({ goTo }) {
             </LandingButton>
           </div>
 
-          <div className="mt-8 flex flex-wrap gap-x-6 gap-y-3 text-sm text-white/75">
+          <div className="mt-8 flex flex-wrap gap-3 text-sm">
             {trustPoints.map((point) => (
-              <span className="inline-flex items-center gap-2" key={point}>
-                <CheckCircle2 className="size-4 text-[#3b82f6]" />
+              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-white/80 backdrop-blur-sm" key={point}>
+                <CheckCircle2 className="size-3.5 text-[#60a5fa]" />
                 {point}
               </span>
             ))}
@@ -390,7 +388,7 @@ function Pillars({ goToSection }) {
         <div className="mt-12 grid gap-5 md:grid-cols-3">
           {pillars.map((pillar) => (
             <article
-              className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm transition hover:border-[#3b82f6]/30 hover:shadow-md"
+              className="rounded-xl border border-gray-200 border-t-[3px] border-t-transparent bg-white p-6 shadow-sm transition-all hover:-translate-y-1 hover:border-t-[#3b82f6] hover:shadow-lg"
               key={pillar.title}
             >
               <div className={`mb-5 grid size-12 place-items-center rounded-lg ${pillar.iconClass}`}>
@@ -465,7 +463,7 @@ function Benefits() {
   return (
     <section className="scroll-mt-20 bg-white py-20 sm:py-24" id="beneficios">
       <div className="mx-auto max-w-7xl px-5 sm:px-6">
-        <div className="grid gap-8 bg-[#02070f] px-6 py-12 text-white sm:px-8 lg:grid-cols-[1fr_1.1fr] lg:items-center">
+        <div className="grid gap-8 rounded-2xl bg-gradient-to-br from-[#030712] via-[#0c1a3d] to-[#1e3a5f] px-6 py-12 text-white sm:px-8 lg:grid-cols-[1fr_1.1fr] lg:items-center">
           <div>
             <SectionKicker dark>Resultados operacionais</SectionKicker>
             <h2 className="mt-4 text-3xl font-semibold leading-tight sm:text-4xl">
@@ -495,7 +493,7 @@ function Benefits() {
 
           <div className="mt-12 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
             {benefits.map((benefit) => (
-              <article className="rounded-lg border border-gray-200 bg-white p-6 transition hover:border-[#3b82f6]/30 hover:bg-[#f4f7fb]" key={benefit.title}>
+              <article className="rounded-xl border border-gray-200 border-t-[3px] border-t-transparent bg-white p-6 transition-all hover:-translate-y-0.5 hover:border-t-[#3b82f6] hover:shadow-md" key={benefit.title}>
                 <div className="grid size-10 place-items-center rounded-lg bg-[#dbeafe] text-[#3b82f6]">
                   <benefit.Icon className="size-5" />
                 </div>
@@ -707,13 +705,13 @@ function SectionKicker({ children, dark = false }) {
 function LandingButton({ children, className = '', variant = 'primary', ...props }) {
   const variants = {
     ghost: 'border-transparent bg-transparent text-gray-700 hover:bg-[#f4f7fb]',
-    primary: 'border-[#3b82f6] bg-[#3b82f6] text-white hover:bg-blue-600',
+    primary: 'border-transparent bg-gradient-to-b from-[#4f93f7] to-[#3b82f6] text-white shadow-[0_2px_8px_rgba(59,130,246,0.3)] hover:brightness-110',
     secondary: 'border-gray-300 bg-white text-gray-800 hover:bg-[#f4f7fb]',
   }
 
   return (
     <button
-      className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-md border px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${variants[variant]} ${className}`}
+      className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-60 ${variants[variant]} ${className}`}
       type="button"
       {...props}
     >

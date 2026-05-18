@@ -20,7 +20,7 @@ export function RichTextEditor({ characterLimit = DEFAULT_CHARACTER_LIMIT, onCha
     content: value || '',
     editorProps: {
       attributes: {
-        class: 'report-rich-surface min-h-[560px] px-4 py-3 text-sm leading-6 text-[#e5e5e5] outline-none',
+        class: 'report-rich-surface min-h-[560px] px-4 py-3 text-sm leading-6 text-text-heading outline-none',
       },
       handlePaste(view, event) {
         const text = event.clipboardData?.getData('text/plain') || ''
@@ -67,13 +67,13 @@ export function RichTextEditor({ characterLimit = DEFAULT_CHARACTER_LIMIT, onCha
       : 'p'
 
   return (
-    <div className="report-rich-editor overflow-hidden rounded-sm border border-[#404040] bg-[#171717]">
-      <div className="report-rich-toolbar flex flex-wrap items-center gap-1 border-b border-[#404040] bg-[#202020] px-3 py-2">
+    <div className="report-rich-editor overflow-hidden rounded-sm border border-border-default-v2 bg-surface-inset">
+      <div className="report-rich-toolbar flex flex-wrap items-center gap-1 border-b border-border-default-v2 bg-surface-card-hover px-3 py-2">
         <ToolbarButton disabled={!tiptapEditor?.can().undo()} label="Desfazer" name="undo" onClick={() => tiptapEditor?.chain().focus().undo().run()} />
         <ToolbarButton disabled={!tiptapEditor?.can().redo()} label="Refazer" name="redo" onClick={() => tiptapEditor?.chain().focus().redo().run()} />
-        <span className="mx-1 h-5 w-px bg-[#404040]" />
+        <span className="mx-1 h-5 w-px bg-surface-card-hover" />
         <select
-          className="h-8 rounded-sm border border-[#404040] bg-[#171717] px-2 text-xs font-semibold text-[#d4d4d4]"
+          className="h-8 rounded-sm border border-border-default-v2 bg-surface-inset px-2 text-xs font-semibold text-text-body"
           onChange={(event) => {
             const selected = event.target.value
 
@@ -99,7 +99,7 @@ export function RichTextEditor({ characterLimit = DEFAULT_CHARACTER_LIMIT, onCha
         <ToolbarButton active={tiptapEditor?.isActive('italic')} label="Italico" name="italic" onClick={() => tiptapEditor?.chain().focus().toggleItalic().run()} />
         <ToolbarButton active={tiptapEditor?.isActive('underline')} label="Sublinhado" name="underline" onClick={() => tiptapEditor?.chain().focus().toggleUnderline().run()} />
         <ToolbarButton active={tiptapEditor?.isActive('strike')} label="Tachado" name="strike" onClick={() => tiptapEditor?.chain().focus().toggleStrike().run()} />
-        <span className="mx-1 h-5 w-px bg-[#404040]" />
+        <span className="mx-1 h-5 w-px bg-surface-card-hover" />
         <ToolbarButton active={tiptapEditor?.isActive({ textAlign: 'left' })} label="Alinhar a esquerda" name="align-left" onClick={() => tiptapEditor?.chain().focus().setTextAlign('left').run()} />
         <ToolbarButton active={tiptapEditor?.isActive({ textAlign: 'center' })} label="Centralizar" name="align-center" onClick={() => tiptapEditor?.chain().focus().setTextAlign('center').run()} />
         <ToolbarButton active={tiptapEditor?.isActive({ textAlign: 'right' })} label="Alinhar a direita" name="align-right" onClick={() => tiptapEditor?.chain().focus().setTextAlign('right').run()} />
@@ -128,7 +128,7 @@ function ToolbarButton({ active = false, disabled = false, label, name, onClick 
       aria-label={label}
       aria-pressed={active}
       className={`grid size-8 place-items-center rounded-sm transition ${
-        active ? 'bg-[#3b82f6]/20 text-[#3b82f6]' : 'text-[#a3a3a3] hover:bg-[#303030] hover:text-[#e5e5e5]'
+        active ? 'bg-[#3b82f6]/20 text-[#3b82f6]' : 'text-text-muted-v2 hover:bg-surface-card-hover hover:text-text-heading'
       } disabled:cursor-not-allowed disabled:opacity-40`}
       disabled={disabled}
       onMouseDown={(event) => event.preventDefault()}

@@ -73,8 +73,8 @@ function App() {
   // Tela de carregamento enquanto busca o role do usuário
   if (authLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#0a0a0a]">
-        <p className="text-sm text-[#a3a3a3]">Carregando...</p>
+      <div className="flex min-h-screen items-center justify-center bg-surface-page">
+        <p className="text-sm text-text-muted-v2">Carregando...</p>
       </div>
     )
   }
@@ -203,13 +203,13 @@ function RouteSuspense({ children, resetKey }) {
 function RouteFallback() {
   return (
     <div className="flex min-h-[40vh] items-center justify-center px-4">
-      <div className="w-full max-w-xl rounded-2xl border border-[#404040] bg-[#262626] p-5 shadow-sm">
-        <div className="h-4 w-36 animate-pulse rounded bg-[#404040]" />
+      <div className="w-full max-w-xl rounded-2xl border border-border-default-v2 bg-surface-card p-5 shadow-card">
+        <div className="h-4 w-36 animate-pulse rounded bg-surface-card-hover" />
         <div className="mt-4 grid gap-3">
-          <div className="h-20 animate-pulse rounded-xl bg-[#1a1a1a]" />
-          <div className="h-20 animate-pulse rounded-xl bg-[#1a1a1a]" />
+          <div className="h-20 animate-pulse rounded-xl bg-surface-inset" />
+          <div className="h-20 animate-pulse rounded-xl bg-surface-inset" />
         </div>
-        <p className="mt-4 text-sm text-[#a3a3a3]">Carregando modulo...</p>
+        <p className="mt-4 text-sm text-text-muted-v2">Carregando modulo...</p>
       </div>
     </div>
   )
@@ -218,9 +218,9 @@ function RouteFallback() {
 function RouteErrorFallback() {
   return (
     <div className="flex min-h-[40vh] items-center justify-center px-4">
-      <div className="max-w-xl rounded-2xl border border-red-500/40 bg-[#262626] p-6 text-center shadow-sm">
-        <h2 className="text-lg font-bold text-[#e5e5e5]">Não foi possível carregar esta tela</h2>
-        <p className="mt-2 text-sm leading-6 text-[#a3a3a3]">
+      <div className="max-w-xl rounded-2xl border border-red-500/40 bg-surface-card p-6 text-center shadow-card">
+        <h2 className="text-lg font-bold text-text-heading">Não foi possível carregar esta tela</h2>
+        <p className="mt-2 text-sm leading-6 text-text-muted-v2">
           Ocorreu um erro ao abrir o modulo. Recarregue a pagina e tente novamente.
         </p>
         <button
@@ -304,7 +304,7 @@ function resolveRoute(pathname, navigate, role, profile, user, isAuthenticated) 
   if (pathname === '/consultas') {
     return {
       element: <VisitsPage navigate={navigate} />,
-      title: 'Consultas',
+      title: 'Fila de Consultas',
       withShell: true,
     }
   }
@@ -386,7 +386,7 @@ function PatientDetailRoute({ navigate, patientId, role }) {
   }, [patientId])
 
   if (loading) {
-    return <div className="pt-10 text-sm text-[#a3a3a3]">Carregando paciente...</div>
+    return <div className="pt-10 text-sm text-text-muted-v2">Carregando paciente...</div>
   }
 
   return patient ? (
@@ -400,8 +400,8 @@ function UnauthorizedPage({ navigate }) {
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
       <p className="text-5xl">🔒</p>
-      <h1 className="mt-4 text-2xl font-bold text-[#e5e5e5]">Acesso não permitido</h1>
-      <p className="mt-2 text-sm text-[#a3a3a3]">
+      <h1 className="mt-4 text-2xl font-bold text-text-heading">Acesso não permitido</h1>
+      <p className="mt-2 text-sm text-text-muted-v2">
         Você não tem permissão para acessar esta página.
       </p>
       <button

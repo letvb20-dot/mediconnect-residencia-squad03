@@ -163,7 +163,7 @@ export function AgendaPage({ navigate }) {
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1 rounded-sm border border-[#404040] bg-[#262626] p-1">
             <button
-              className="grid size-7 place-items-center rounded-sm text-[#a3a3a3] transition hover:bg-[#303030] hover:text-[#e5e5e5]"
+              className="grid min-h-8 min-w-8 place-items-center rounded-sm text-[#a3a3a3] transition hover:bg-[#303030] hover:text-[#e5e5e5]"
               onClick={() => {
                 if (activeView === 'Dia') setBaseDate((current) => subDays(current, 1))
                 if (activeView === 'Semana') setBaseDate((current) => subWeeks(current, 1))
@@ -173,14 +173,14 @@ export function AgendaPage({ navigate }) {
             >
               {'<'}
             </button>
-            <span className="min-w-[160px] text-center text-sm font-semibold text-[#e5e5e5] capitalize">
+            <span className="min-w-[160px] px-2 py-1 text-center text-sm font-semibold text-[#e5e5e5] capitalize">
               {activeView === 'Dia' && format(baseDate, "dd 'de' MMM", { locale: ptBR })}
               {activeView === 'Semana' &&
                 `${format(weekStart, 'dd MMM', { locale: ptBR })} - ${format(weekEnd, 'dd MMM', { locale: ptBR })}`}
               {activeView === 'Mes' && format(baseDate, 'MMMM yyyy', { locale: ptBR })}
             </span>
             <button
-              className="grid size-7 place-items-center rounded-sm text-[#a3a3a3] transition hover:bg-[#303030] hover:text-[#e5e5e5]"
+              className="grid min-h-8 min-w-8 place-items-center rounded-sm text-[#a3a3a3] transition hover:bg-[#303030] hover:text-[#e5e5e5]"
               onClick={() => {
                 if (activeView === 'Dia') setBaseDate((current) => addDays(current, 1))
                 if (activeView === 'Semana') setBaseDate((current) => addWeeks(current, 1))
@@ -192,21 +192,21 @@ export function AgendaPage({ navigate }) {
             </button>
           </div>
           <button
-            className="h-9 rounded-sm border border-[#404040] bg-[#262626] px-4 text-sm font-medium text-[#e5e5e5] transition hover:bg-[#303030]"
+            className="min-h-9 rounded-sm border border-[#404040] bg-[#262626] px-4 py-1.5 text-sm font-medium text-[#e5e5e5] transition hover:bg-[#303030]"
             onClick={() => setBaseDate(new Date())}
             type="button"
           >
             Hoje
           </button>
           <button
-            className="h-9 rounded-sm border border-[#404040] bg-[#262626] px-4 text-sm font-medium text-[#e5e5e5] transition hover:bg-[#303030]"
+            className="min-h-9 rounded-sm border border-[#404040] bg-[#262626] px-4 py-1.5 text-sm font-medium text-[#e5e5e5] transition hover:bg-[#303030]"
             onClick={() => navigate('/consultas')}
             type="button"
           >
             Fila de consultas
           </button>
           <button
-            className="h-9 rounded-sm border border-[#3b82f6] bg-[#3b82f6] px-4 text-sm font-semibold text-white shadow-[0_10px_15px_rgba(59,130,246,0.16)] transition hover:bg-[#3478ed] disabled:cursor-not-allowed disabled:border-[#404040] disabled:bg-[#303030] disabled:text-[#737373] disabled:shadow-none"
+            className="min-h-9 rounded-sm border border-[#3b82f6] bg-[#3b82f6] px-4 py-1.5 text-sm font-semibold text-white shadow-[0_10px_15px_rgba(59,130,246,0.16)] transition hover:bg-[#3478ed] disabled:cursor-not-allowed disabled:border-[#404040] disabled:bg-[#303030] disabled:text-[#737373] disabled:shadow-none"
             disabled={!canCreateAppointment}
             onClick={() => openCreate()}
             type="button"
@@ -229,7 +229,7 @@ export function AgendaPage({ navigate }) {
       ) : (
         <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_460px] 2xl:grid-cols-[minmax(0,1fr)_520px]">
           <div className="self-start rounded-2xl border border-[#404040] bg-[#262626] p-5 shadow-[0_1px_3px_rgba(0,0,0,0.2)]">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="text-base font-bold leading-6 text-[#e5e5e5]">
@@ -241,11 +241,11 @@ export function AgendaPage({ navigate }) {
                 </p>
               </div>
 
-              <div className="flex max-w-full flex-wrap items-center justify-start gap-2 lg:justify-end">
-                <div className="flex shrink-0 gap-2">
+              <div className="flex max-w-full flex-wrap items-center justify-start gap-3 lg:justify-end">
+                <div className="flex flex-wrap gap-2">
                   {viewFilters.map((view) => (
                     <button
-                      className={`h-8 rounded-sm border px-3 text-sm font-semibold transition ${
+                      className={`min-h-8 rounded-sm border px-3 py-1 text-sm font-semibold transition ${
                         activeView === view.value
                           ? 'border-[#3b82f6] bg-[#3b82f6] text-white'
                           : 'border-[#404040] bg-[#303030] text-[#a3a3a3] hover:text-[#e5e5e5]'
@@ -258,10 +258,10 @@ export function AgendaPage({ navigate }) {
                     </button>
                   ))}
                 </div>
-                <div className="flex min-w-0 flex-nowrap gap-2 overflow-x-auto pb-1">
+                <div className="flex flex-wrap gap-2">
                   {statusFilters.map((filter) => (
                     <button
-                      className={`h-8 shrink-0 rounded-sm border px-3 text-sm font-semibold transition ${
+                      className={`min-h-8 rounded-sm border px-3 py-1 text-sm font-semibold transition ${
                         status === filter.value
                           ? 'border-[#3b82f6] bg-[#3b82f6]/10 text-[#3b82f6]'
                           : 'border-[#404040] bg-[#303030] text-[#a3a3a3] hover:text-[#e5e5e5]'
@@ -283,7 +283,7 @@ export function AgendaPage({ navigate }) {
                   <label className="grid gap-1.5 text-xs font-semibold text-[#a3a3a3]">
                     <span>Médico</span>
                     <select
-                      className="h-9 rounded-sm border border-[#404040] bg-[#303030] px-3 text-sm font-medium text-[#e5e5e5] outline-none transition focus:border-[#3b82f6]"
+                      className="min-h-9 w-full rounded-sm border border-[#404040] bg-[#303030] px-3 py-1.5 text-sm font-medium text-[#e5e5e5] outline-none transition focus:border-[#3b82f6]"
                       onChange={(event) => {
                         setDoctorFilter(event.target.value)
                         setDoctorSearch('')
@@ -301,7 +301,7 @@ export function AgendaPage({ navigate }) {
                   <label className="grid gap-1.5 text-xs font-semibold text-[#a3a3a3]">
                     <span>Unidade</span>
                     <select
-                      className="h-9 rounded-sm border border-[#404040] bg-[#303030] px-3 text-sm font-medium text-[#e5e5e5] outline-none transition focus:border-[#3b82f6]"
+                      className="min-h-9 w-full rounded-sm border border-[#404040] bg-[#303030] px-3 py-1.5 text-sm font-medium text-[#e5e5e5] outline-none transition focus:border-[#3b82f6]"
                       onChange={(event) => setUnitFilter(event.target.value)}
                       value={unitFilter}
                     >

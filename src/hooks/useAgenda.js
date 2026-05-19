@@ -10,7 +10,7 @@ import { profileRepository } from '../repositories/profileRepository.js'
 import { userRepository } from '../repositories/userRepository.js'
 import { visitRepository } from '../repositories/visitRepository.js'
 import { formatLocalDateInput, parseLocalDate, sortAppointmentsByTime } from '../utils/agendaDate.js'
-import { resolveCurrentPatient } from '../utils/patientIdentity.js'
+import { buildPatientFromProfile, resolveCurrentPatient } from '../utils/patientIdentity.js'
 
 const BOOKING_DAY_START = '07:00'
 const BOOKING_DAY_END = '18:00'
@@ -66,34 +66,40 @@ export function useAgenda() {
       try {
         setError('')
 
-        const [patientsData, professionalsData, currentProfile, usersData] = await Promise.all([
-          patientRepository.getAll(),
+        const [professionalsData, currentProfile, usersData] = await Promise.all([
           professionalRepository.getAll(),
           profileRepository.getCurrentUserProfile(),
           userRepository.getAll().catch(() => []),
         ])
+        const currentScope = currentProfile?.isPatient ? 'patient' : currentProfile?.isDoctor ? 'doctor' : 'global'
+        const patientsData = await patientRepository.getAll().catch((patientLoadError) => {
+          if (currentScope === 'patient') return []
+          throw patientLoadError
+        })
 
         if (!active) return
 
-        const currentScope = currentProfile?.isPatient ? 'patient' : currentProfile?.isDoctor ? 'doctor' : 'global'
         const resolvedProfessional = professionalRepository.resolveCurrentProfessional(currentProfile, professionalsData)
         const resolvedPatient = currentScope === 'patient'
-          ? resolveCurrentPatient(currentProfile, patientsData || [])
+          ? await recoverCurrentPatient(currentProfile, patientsData || [], usersData || [])
           : null
         const initialProfessionalId =
           currentScope === 'doctor'
             ? resolvedProfessional?.id || ''
             : professionalsData?.[0]?.id || ''
+        const scopedPatients = currentScope === 'patient'
+          ? (resolvedPatient ? [resolvedPatient] : [])
+          : patientsData || []
 
         setViewerProfile(currentProfile)
-        setPatients(currentScope === 'patient' ? (resolvedPatient ? [resolvedPatient] : []) : patientsData || [])
+        setPatients(scopedPatients)
         setUsers(usersData || [])
         setCurrentProfessional(resolvedProfessional)
         setCurrentPatient(resolvedPatient)
         setProfessionals(professionalsData || [])
         setForm((current) => ({
           ...current,
-          patientId: resolvedPatient?.id || (patientsData?.length ? patientsData[0].id : ''),
+          patientId: resolvedPatient?.id || (scopedPatients?.length ? scopedPatients[0].id : ''),
           professionalId: initialProfessionalId,
         }))
 
@@ -124,7 +130,7 @@ export function useAgenda() {
         )
         const appointmentsWithDisplayNames = resolveAppointmentDisplayNames(
           appointmentsWithCreatorNames,
-          patientsData || [],
+          scopedPatients,
           professionalsData || [],
         )
 
@@ -696,6 +702,150 @@ function filterAppointmentsByPatient(appointments, patientId) {
   )
 }
 
+export async function recoverCurrentPatient(profile, patientsData = [], usersData = []) {
+  const enrichedProfile = mergeProfileWithListedUser(profile, usersData)
+
+  const resolved = resolveCurrentPatient(enrichedProfile, patientsData)
+  if (resolved?.id) return normalizeRecoveredPatient(resolved, enrichedProfile)
+
+  const profilePatient = buildPatientFromProfile(enrichedProfile)
+  if (profilePatient?.id) return normalizeRecoveredPatient(profilePatient, enrichedProfile)
+
+  const patientByCpf = await findCurrentPatientByCpf(enrichedProfile)
+  if (patientByCpf?.id) return normalizeRecoveredPatient(patientByCpf, enrichedProfile)
+
+  const createdPatient = await createCurrentPatientRecord(enrichedProfile)
+  if (createdPatient?.id) return normalizeRecoveredPatient(createdPatient, enrichedProfile)
+
+  return buildScopedPatientFromProfile(enrichedProfile)
+}
+
+function mergeProfileWithListedUser(profile, usersData = []) {
+  const user = findMatchingListedUser(profile, usersData)
+  if (!user) return profile
+
+  return {
+    ...user,
+    ...profile,
+    patientId: profile?.patientId || user.patientId || user.patient_id || user.paciente_id,
+    patient_id: profile?.patient_id || user.patient_id || user.patientId || user.paciente_id,
+    email: profile?.email || user.email,
+    name: profile?.name || profile?.full_name || user.full_name || user.name || user.nome,
+    full_name: profile?.full_name || profile?.name || user.full_name || user.name || user.nome,
+    phone: profile?.phone || user.phone || user.phone_mobile || user.telefone || user.celular,
+    cpf: profile?.cpf || user.cpf || user.document || user.documento,
+  }
+}
+
+function findMatchingListedUser(profile, usersData = []) {
+  const profileIds = [
+    profile?.id,
+    profile?.userId,
+    profile?.user_id,
+    profile?.authUserId,
+    profile?.auth_user_id,
+    profile?.email,
+  ].map(normalizeValue).filter(Boolean)
+  const profileCpf = onlyDigits(profile?.cpf || profile?.document || profile?.documento)
+
+  return usersData.find((user) => {
+    const userIds = [
+      user.id,
+      user.userId,
+      user.user_id,
+      user.authUserId,
+      user.auth_user_id,
+      user.profileId,
+      user.profile_id,
+      user.email,
+    ].map(normalizeValue).filter(Boolean)
+
+    if (userIds.some((id) => profileIds.includes(id))) return true
+    return profileCpf && onlyDigits(user.cpf || user.document || user.documento) === profileCpf
+  }) || null
+}
+
+async function findCurrentPatientByCpf(profile) {
+  const cpf = onlyDigits(profile?.cpf || profile?.document || profile?.documento)
+  if (cpf.length !== 11) return null
+
+  const patients = await patientRepository.getAll({ cpf }).catch(() => [])
+  return resolveCurrentPatient(profile, patients || []) || patients?.[0] || null
+}
+
+async function createCurrentPatientRecord(profile) {
+  const cpf = onlyDigits(profile?.cpf || profile?.document || profile?.documento)
+  const phone = onlyDigits(profile?.phone || profile?.phone_mobile || profile?.telefone || profile?.celular)
+  const payload = {
+    email: profile?.email,
+    full_name: profile?.name || profile?.full_name || profile?.nome,
+    cpf,
+    phone,
+  }
+
+  if (!payload.email || !payload.full_name || cpf.length !== 11 || !/^\d{10,11}$/.test(phone)) {
+    return null
+  }
+
+  try {
+    const created = await patientRepository.create(payload)
+    return normalizeReturnedPatient(created)
+  } catch {
+    return findCurrentPatientByCpf(profile)
+  }
+}
+
+function normalizeRecoveredPatient(patient, profile) {
+  if (!patient?.id) return patient
+
+  const name = patient.name || patient.full_name || patient.nome || profile?.name || profile?.full_name || profile?.email || 'Paciente'
+  return {
+    ...patient,
+    id: patient.id,
+    patient_id: patient.patient_id || patient.id,
+    patientId: patient.patientId || patient.id,
+    name,
+    full_name: patient.full_name || name,
+    email: patient.email || profile?.email || '',
+    cpf: patient.cpf || profile?.cpf || '',
+    phone: patient.phone || patient.phone_mobile || profile?.phone || '',
+  }
+}
+
+function normalizeReturnedPatient(data) {
+  if (Array.isArray(data)) return data[0] || null
+  if (data?.patient) return data.patient
+  if (data?.paciente) return data.paciente
+  return data && typeof data === 'object' ? data : null
+}
+
+function buildScopedPatientFromProfile(profile) {
+  const id = [
+    profile?.patientId,
+    profile?.patient_id,
+    profile?.paciente_id,
+    profile?.id,
+    profile?.userId,
+    profile?.authUserId,
+    profile?.email,
+  ].find(Boolean)
+
+  if (!id) return null
+
+  const name = profile?.name || profile?.full_name || profile?.nome || profile?.email || 'Paciente'
+  return {
+    id,
+    patient_id: id,
+    patientId: id,
+    name,
+    full_name: name,
+    email: profile?.email || '',
+    cpf: profile?.cpf || '',
+    phone: profile?.phone || '',
+    isScopedFallback: true,
+  }
+}
+
 export function filterBookableAvailableSlots(slots, { appointments, date, doctorId, ignoredAppointmentId = null }) {
   const allowedTimes = new Set(generateTimesInclusive(BOOKING_DAY_START, BOOKING_DAY_END, BOOKING_SLOT_MINUTES))
 
@@ -985,6 +1135,10 @@ function formatPriorityNotes(notes, highPriority) {
 
 function normalizeValue(value) {
   return String(value || '').trim().toLowerCase()
+}
+
+function onlyDigits(value) {
+  return String(value || '').replace(/\D/g, '')
 }
 
 function normalizeStatus(status) {

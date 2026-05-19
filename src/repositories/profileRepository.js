@@ -9,9 +9,26 @@ const PROFILE_AVATAR_OVERRIDES_KEY = 'mediconnect.profile.avatar.overrides'
 export const profileRepository = {
   async getCurrentUserProfile() {
     const data = await authRepository.getUser()
+    const session = getAuthSession()
+    const sessionUser = session?.user || session?.usuario || null
+    const sessionMeta = sessionUser?.user_metadata || sessionUser?.metadata || sessionUser?.app_metadata || {}
     const profile = data?.profile || data?.perfil || {}
-    const user = data?.user || data?.usuario || profile || data
-    const meta = user?.user_metadata || user?.metadata || user?.app_metadata || {}
+    const user = data?.user || data?.usuario || sessionUser || profile || data
+    const meta = {
+      ...sessionMeta,
+      ...(user?.user_metadata || {}),
+      ...(user?.metadata || {}),
+      ...(user?.app_metadata || {}),
+    }
+    const patient = firstObjectFromSources([data, profile, user, meta, sessionUser, sessionMeta], [
+      'patient',
+      'patients',
+      'patientData',
+      'patient_data',
+      'paciente',
+      'dados_paciente',
+    ])
+    const patientSources = [patient, patient?.profile, patient?.perfil, patient?.user, patient?.usuario]
     const permissions = data?.permissions || {}
     const roles = collectRoles({ data, meta, profile, user })
     const normalizedRole = resolveNormalizedRole({ permissions, roles, user, meta })
@@ -28,18 +45,22 @@ export const profileRepository = {
       ''
 
     return {
-      id: profile?.id || user?.id || user?.user_id || user?.uid || '',
-      userId: profile?.user_id || user?.user_id || user?.id || '',
-      authUserId: profile?.auth_user_id || user?.auth_user_id || user?.id || user?.uid || '',
-      email: profile?.email || user?.email || meta.email || '',
+      id: profile?.id || user?.id || user?.user_id || user?.uid || sessionUser?.id || sessionUser?.uid || '',
+      userId: profile?.user_id || user?.user_id || user?.id || sessionUser?.user_id || sessionUser?.id || '',
+      authUserId: profile?.auth_user_id || user?.auth_user_id || user?.id || user?.uid || sessionUser?.auth_user_id || sessionUser?.id || sessionUser?.uid || '',
+      email: profile?.email || user?.email || sessionUser?.email || meta.email || firstValueFromSources(patientSources, ['email', 'user_email']) || '',
       name: profile?.full_name || user?.name || user?.nome || user?.full_name || meta.full_name || meta.name || 'Usuário',
-      phone: profile?.phone || user?.phone || user?.telefone || meta.phone || meta.telefone || '',
-      cpf: profile?.cpf || user?.cpf || meta.cpf || '',
+      phone: profile?.phone || user?.phone || user?.telefone || sessionUser?.phone || sessionUser?.telefone || meta.phone || meta.telefone || '',
+      cpf: profile?.cpf || user?.cpf || sessionUser?.cpf || meta.cpf || firstValueFromSources(patientSources, ['cpf', 'document', 'documento']) || '',
       role: ROLE_LABELS[normalizedRole] || user?.role || user?.cargo || meta.role || meta.cargo || 'Usuário do Sistema',
       unit: profile?.unit || user?.unit || user?.unidade || meta.unit || meta.unidade || 'Clínica Boa Vista',
       avatarUrl: getStoredAvatarOverride(profile, user) || getAvatarUrl(avatarUrl),
-      doctorId: data?.doctor_id || data?.doctorId || null,
-      patientId: data?.patient_id || data?.patientId || null,
+      doctorId: firstValueFromSources([data, profile, user, meta, sessionUser, sessionMeta], ['doctor_id', 'doctorId', 'medico_id']) || null,
+      patientId:
+        firstValueFromSources([data, profile, user, meta, sessionUser, sessionMeta], ['patient_id', 'patientId', 'paciente_id']) ||
+        firstValueFromSources(patientSources, ['id', 'patient_id', 'patientId', 'paciente_id']) ||
+        null,
+      patient,
       roles,
       permissions,
       isDoctor: normalizedRole === 'medico',
@@ -225,6 +246,36 @@ function collectRoles({ data, meta, profile, user }) {
     meta.role,
     meta.cargo,
   ].filter(Boolean)
+}
+
+function firstObjectFromSources(sources, keys) {
+  for (const source of sources) {
+    if (!source || typeof source !== 'object') continue
+
+    for (const key of keys) {
+      const value = source[key]
+      if (Array.isArray(value)) {
+        const item = value.find((entry) => entry && typeof entry === 'object' && !Array.isArray(entry))
+        if (item) return item
+      }
+      if (value && typeof value === 'object' && !Array.isArray(value)) return value
+    }
+  }
+
+  return null
+}
+
+function firstValueFromSources(sources, keys, fallback = '') {
+  for (const source of sources) {
+    if (!source || typeof source !== 'object') continue
+
+    for (const key of keys) {
+      const value = source[key]
+      if (value !== undefined && value !== null && value !== '') return value
+    }
+  }
+
+  return fallback
 }
 
 function resolveNormalizedRole({ permissions, roles, user, meta }) {

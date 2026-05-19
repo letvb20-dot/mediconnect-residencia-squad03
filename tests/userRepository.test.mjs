@@ -71,6 +71,193 @@ test('userRepository.create envia CPF e dados medicos mesmo sem criar paciente',
   assert.equal(body.specialty, 'Clinica medica')
 })
 
+test('userRepository.create cria registro de paciente automaticamente para role paciente', async () => {
+  const calls = []
+
+  globalThis.fetch = async (url, options = {}) => {
+    const requestUrl = String(url)
+    const method = options.method || 'GET'
+    calls.push({ body: options.body ? JSON.parse(options.body) : null, method, url: requestUrl })
+
+    if (requestUrl.includes('/functions/v1/create-user')) {
+      return Response.json({ id: 'user-1', email: 'paciente@exemplo.com' })
+    }
+
+    if (requestUrl.includes('/rest/v1/patients?')) {
+      return Response.json([])
+    }
+
+    if (requestUrl.includes('/functions/v1/create-patient')) {
+      return Response.json({ id: 'patient-1', full_name: 'Maria Paciente', cpf: '98765432100' })
+    }
+
+    if (requestUrl.includes('/rest/v1/profiles?id=eq.user-1') && method === 'PATCH') {
+      return Response.json([{ id: 'user-1', patient_id: 'patient-1' }])
+    }
+
+    throw new Error(`URL inesperada: ${requestUrl}`)
+  }
+
+  const { userRepository } = await import('../src/repositories/userRepository.js')
+  const user = await userRepository.create({
+    cpf: '987.654.321-00',
+    create_patient_record: false,
+    email: 'paciente@exemplo.com',
+    full_name: 'Maria Paciente',
+    phone: '(11) 98888-7777',
+    role: 'paciente',
+  })
+
+  const createUser = calls.find((call) => call.url.includes('/functions/v1/create-user'))
+  const createPatient = calls.find((call) => call.url.includes('/functions/v1/create-patient'))
+  const profilePatch = calls.find((call) => call.url.includes('/rest/v1/profiles?id=eq.user-1') && call.method === 'PATCH')
+
+  assert.equal(createUser.body.create_patient_record, true)
+  assert.equal(createUser.body.cpf, '98765432100')
+  assert.equal(createUser.body.phone_mobile, '11988887777')
+  assert.equal(createUser.body.role, 'paciente')
+  assert.equal(createPatient.body.cpf, '98765432100')
+  assert.equal(createPatient.body.phone_mobile, '11988887777')
+  assert.equal(profilePatch.body.patient_id, 'patient-1')
+  assert.equal(user.patientId, 'patient-1')
+})
+
+test('userRepository.createWithPassword cria registro de paciente automaticamente para role paciente', async () => {
+  const calls = []
+
+  globalThis.fetch = async (url, options = {}) => {
+    const requestUrl = String(url)
+    const method = options.method || 'GET'
+    calls.push({ body: options.body ? JSON.parse(options.body) : null, method, url: requestUrl })
+
+    if (requestUrl.includes('/functions/v1/create-user-with-password')) {
+      return Response.json({ id: 'user-1', email: 'paciente@exemplo.com' })
+    }
+
+    if (requestUrl.includes('/rest/v1/patients?')) {
+      return Response.json([])
+    }
+
+    if (requestUrl.includes('/functions/v1/create-patient')) {
+      return Response.json({ id: 'patient-1', full_name: 'Maria Paciente', cpf: '98765432100' })
+    }
+
+    if (requestUrl.includes('/rest/v1/profiles?id=eq.user-1') && method === 'PATCH') {
+      return Response.json([{ id: 'user-1', patient_id: 'patient-1' }])
+    }
+
+    throw new Error(`URL inesperada: ${requestUrl}`)
+  }
+
+  const { userRepository } = await import('../src/repositories/userRepository.js')
+  const user = await userRepository.createWithPassword({
+    cpf: '987.654.321-00',
+    create_patient_record: false,
+    email: 'paciente@exemplo.com',
+    full_name: 'Maria Paciente',
+    password: 'SenhaForte123',
+    phone: '(11) 98888-7777',
+    role: 'paciente',
+  })
+
+  const createUser = calls.find((call) => call.url.includes('/functions/v1/create-user-with-password'))
+  const createPatient = calls.find((call) => call.url.includes('/functions/v1/create-patient'))
+
+  assert.equal(createUser.body.create_patient_record, true)
+  assert.equal(createUser.body.cpf, '98765432100')
+  assert.equal(createUser.body.phone_mobile, '11988887777')
+  assert.equal(createUser.body.role, 'paciente')
+  assert.equal(createUser.body.password, 'SenhaForte123')
+  assert.equal(createPatient.body.cpf, '98765432100')
+  assert.equal(createPatient.body.phone_mobile, '11988887777')
+  assert.equal(user.patientId, 'patient-1')
+})
+
+test('userRepository.create reaproveita paciente existente por CPF sem duplicar', async () => {
+  const calls = []
+
+  globalThis.fetch = async (url, options = {}) => {
+    const requestUrl = String(url)
+    const method = options.method || 'GET'
+    calls.push({ body: options.body ? JSON.parse(options.body) : null, method, url: requestUrl })
+
+    if (requestUrl.includes('/functions/v1/create-user')) {
+      return Response.json({ id: 'user-1', email: 'paciente@exemplo.com' })
+    }
+
+    if (requestUrl.includes('/rest/v1/patients?')) {
+      return Response.json([{ id: 'patient-1', email: 'paciente@exemplo.com', cpf: '98765432100' }])
+    }
+
+    if (requestUrl.includes('/rest/v1/profiles?id=eq.user-1') && method === 'PATCH') {
+      return Response.json([{ id: 'user-1', patient_id: 'patient-1' }])
+    }
+
+    throw new Error(`URL inesperada: ${requestUrl}`)
+  }
+
+  const { userRepository } = await import('../src/repositories/userRepository.js')
+  const user = await userRepository.create({
+    cpf: '987.654.321-00',
+    email: 'paciente@exemplo.com',
+    full_name: 'Maria Paciente',
+    phone: '(11) 98888-7777',
+    role: 'paciente',
+  })
+
+  assert.equal(calls.some((call) => call.url.includes('/functions/v1/create-patient')), false)
+  assert.equal(user.patientId, 'patient-1')
+})
+
+test('userRepository.update cria paciente ao salvar usuario paciente existente sem vinculo', async () => {
+  const calls = []
+
+  globalThis.fetch = async (url, options = {}) => {
+    const requestUrl = String(url)
+    const method = options.method || 'GET'
+    const body = options.body ? JSON.parse(options.body) : null
+    calls.push({ body, method, url: requestUrl })
+
+    if (requestUrl.includes('/profiles?id=eq.user-1&select=*') && method === 'GET') {
+      return Response.json([{ id: 'user-1', email: 'paciente@exemplo.com', full_name: 'Maria Paciente', role: 'paciente' }])
+    }
+
+    if (requestUrl.includes('/profiles?id=eq.user-1') && method === 'PATCH' && !body.patient_id) {
+      return Response.json([{ id: 'user-1', email: 'paciente@exemplo.com', full_name: 'Maria Paciente', role: 'paciente' }])
+    }
+
+    if (requestUrl.includes('/rest/v1/patients?')) {
+      return Response.json([])
+    }
+
+    if (requestUrl.includes('/functions/v1/create-patient')) {
+      return Response.json({ id: 'patient-1', email: 'paciente@exemplo.com', cpf: '98765432100' })
+    }
+
+    if (requestUrl.includes('/profiles?id=eq.user-1') && method === 'PATCH' && body.patient_id) {
+      return Response.json([{ id: 'user-1', patient_id: 'patient-1' }])
+    }
+
+    throw new Error(`URL inesperada: ${requestUrl}`)
+  }
+
+  const { userRepository } = await import('../src/repositories/userRepository.js')
+  const user = await userRepository.update('user-1', {
+    cpf: '987.654.321-00',
+    email: 'paciente@exemplo.com',
+    full_name: 'Maria Paciente',
+    phone: '(11) 98888-7777',
+    role: 'paciente',
+  })
+
+  const createPatient = calls.find((call) => call.url.includes('/functions/v1/create-patient'))
+  const patientLinkPatch = calls.find((call) => call.method === 'PATCH' && call.body?.patient_id === 'patient-1')
+
+  assert.equal(createPatient.body.cpf, '98765432100')
+  assert.equal(patientLinkPatch.body.patient_id, 'patient-1')
+  assert.equal(user.patientId, 'patient-1')
+})
+
 test('userRepository.getAll mescla dados de medico nos detalhes do usuario', async () => {
   globalThis.fetch = async (url) => {
     const requestUrl = String(url)

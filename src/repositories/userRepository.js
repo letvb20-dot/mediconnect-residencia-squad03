@@ -1,6 +1,7 @@
 import { apiConfig, getAuthenticatedHeaders } from '../config/api.js'
 import { normalizeRole } from '../config/permissions.js'
 import { getResponseError, normalizeCollection } from './repositoryUtils.js'
+import { patientRepository } from './patientRepository.js'
 import { storeProfessionalOverride } from '../utils/professionalOverrides.js'
 
 const USER_PROFILE_TABLES = ['profiles', 'user_profiles']
@@ -62,17 +63,19 @@ export const userRepository = {
   // POST /functions/v1/create-user
   // Body documentado: email*, full_name*, role*, phone?, create_patient_record?, cpf?, phone_mobile?
   async create(data) {
+    const body = buildCreateUserBody(data)
     const response = await fetch(`${apiConfig.functionsUrl}/create-user`, {
       method: 'POST',
       headers: getAuthenticatedHeaders(),
-      body: JSON.stringify(buildCreateUserBody(data)),
+      body: JSON.stringify(body),
     })
 
     if (!response.ok) {
       throw new Error(await getResponseError(response, 'Erro ao criar usuário.'))
     }
 
-    return response.json()
+    const createdUser = await response.json()
+    return ensurePatientRecordForCreatedUser(createdUser, data, body)
   },
 
   // POST /functions/v1/create-user-with-password
@@ -93,7 +96,8 @@ export const userRepository = {
       throw new Error(await getResponseError(response, 'Erro ao criar usuário com senha.'))
     }
 
-    return response.json()
+    const createdUser = await response.json()
+    return ensurePatientRecordForCreatedUser(createdUser, data, body)
   },
 
   // PATCH /rest/v1/{profiles|user_profiles}?id=eq.{id}
@@ -122,12 +126,13 @@ export const userRepository = {
         const updatedProfileRow = getUpdatedProfileRow(responseData, body, data, userId, profileReference)
         const updatedUser = normalizeListedUser(updatedProfileRow)
         const syncFormData = { ...(profileReference || {}), ...data }
-        const syncedDoctor = await syncDoctorUser({ ...(profileReference || {}), ...updatedUser, id: userId }, syncFormData).catch((error) => {
+        const userWithPatient = await ensurePatientRecordForCreatedUser(updatedUser, syncFormData, { ...updatedUser, ...syncFormData })
+        const syncedDoctor = await syncDoctorUser({ ...(profileReference || {}), ...userWithPatient, id: userId }, syncFormData).catch((error) => {
           if (isIgnorableDoctorSyncError(error)) return null
           throw error
         })
-        if (syncedDoctor) storeDoctorNameOverride({ formData: data, syncedDoctor, updatedUser, userId })
-        return syncedDoctor ? mergeUserDoctor(updatedUser, [syncedDoctor]) : updatedUser
+        if (syncedDoctor) storeDoctorNameOverride({ formData: data, syncedDoctor, updatedUser: userWithPatient, userId })
+        return syncedDoctor ? mergeUserDoctor(userWithPatient, [syncedDoctor]) : userWithPatient
       }
 
       if (![404, 406].includes(response.status)) {
@@ -153,6 +158,149 @@ export const userRepository = {
 
     return true
   },
+}
+
+async function ensurePatientRecordForCreatedUser(createdUser, formData = {}, requestBody = {}) {
+  if (!shouldCreatePatientRecord(requestBody.role || formData.role, formData)) return createdUser
+
+  let patient = getPatientFromCreatedUser(createdUser) || await findExistingPatientForUser(formData, requestBody)
+
+  if (!patient) {
+    patient = await createPatientRecordForUser(formData, requestBody)
+  }
+
+  if (!getPatientIdentifier(patient)) {
+    patient = await findExistingPatientForUser(formData, requestBody) || patient
+  }
+
+  const userWithPatient = mergeCreatedUserPatient(createdUser, patient)
+  await persistPatientLinkOnProfile(userWithPatient, formData, patient).catch(() => false)
+
+  return userWithPatient
+}
+
+async function findExistingPatientForUser(formData = {}, requestBody = {}) {
+  const cpf = onlyDigits(formData.cpf || requestBody.cpf)
+  if (cpf) {
+    const byCpf = normalizeCollection(await patientRepository.getAll({ cpf }).catch(() => []))
+    const exactCpf = byCpf.find((patient) => onlyDigits(patient.cpf || patient.document || patient.documento) === cpf)
+    if (exactCpf || byCpf[0]) return exactCpf || byCpf[0]
+  }
+
+  const email = normalizeEmail(formData.email || requestBody.email)
+  if (!email) return null
+
+  const patients = normalizeCollection(await patientRepository.getAll().catch(() => []))
+  return patients.find((patient) => normalizeEmail(patient.email || patient.user_email || patient.mail) === email) || null
+}
+
+async function createPatientRecordForUser(formData = {}, requestBody = {}) {
+  const payload = buildPatientPayloadFromUser(formData, requestBody)
+
+  try {
+    return normalizeReturnedRow(await patientRepository.create(payload)) || null
+  } catch (error) {
+    const existingPatient = isDuplicatePatientError(error)
+      ? await findExistingPatientForUser(formData, requestBody).catch(() => null)
+      : null
+
+    if (existingPatient) return existingPatient
+
+    throw new Error(`Usuario criado, mas nao foi possivel criar o registro de paciente correspondente. ${error.message || ''}`.trim())
+  }
+}
+
+function buildPatientPayloadFromUser(formData = {}, requestBody = {}) {
+  return cleanPayload({
+    email: formData.email || requestBody.email,
+    full_name: formData.full_name || requestBody.full_name,
+    cpf: formData.cpf || requestBody.cpf,
+    phone: formData.phone || requestBody.phone,
+    phone_mobile: formData.phone_mobile || requestBody.phone_mobile,
+    birthDate: formData.birthDate || formData.birth_date || requestBody.birth_date,
+    birth_date: formData.birth_date || formData.birthDate || requestBody.birth_date,
+  })
+}
+
+function getPatientFromCreatedUser(createdUser) {
+  return firstObjectFromSources([createdUser], ['patient', 'patients', 'paciente', 'patientData', 'patient_data'])
+}
+
+function mergeCreatedUserPatient(createdUser, patient) {
+  if (!createdUser || typeof createdUser !== 'object') return createdUser
+
+  const patientId = getPatientIdentifier(patient)
+  if (!patientId) return createdUser
+
+  return {
+    ...createdUser,
+    patient,
+    patient_id: createdUser.patient_id || patientId,
+    patientId: createdUser.patientId || patientId,
+  }
+}
+
+async function persistPatientLinkOnProfile(createdUser, formData = {}, patient = null) {
+  const patientId = getPatientIdentifier(patient)
+  if (!patientId) return false
+
+  const identifiers = uniqueIdentifiers([
+    ['id', firstValueFromSources([createdUser, formData], ['id', 'profile_id', 'profileId'])],
+    ['user_id', firstValueFromSources([createdUser, formData], ['user_id', 'userId'])],
+    ['auth_user_id', firstValueFromSources([createdUser, formData], ['auth_user_id', 'authUserId', 'id'])],
+    ['email', createdUser?.email || formData.email],
+  ])
+
+  for (const table of USER_PROFILE_TABLES) {
+    for (const [field, value] of identifiers) {
+      const response = await fetch(`${apiConfig.restUrl}/${table}?${field}=eq.${encodeURIComponent(value)}`, {
+        method: 'PATCH',
+        headers: getAuthenticatedHeaders({ Prefer: 'return=representation,count=exact' }),
+        body: JSON.stringify({ patient_id: patientId }),
+      }).catch(() => null)
+
+      if (!response) continue
+      if (response.ok) {
+        const data = await response.json().catch(() => null)
+        if (normalizeReturnedRow(data) || getAffectedRowCount(response) !== 0) return true
+        continue
+      }
+
+      const text = await response.text().catch(() => '')
+      if (isUnsupportedProfilePatientLink(response.status, text)) break
+    }
+  }
+
+  return false
+}
+
+function getPatientIdentifier(patient) {
+  return firstValueFromSources([patient, patient?.patient, patient?.paciente], ['id', 'patient_id', 'patientId', 'paciente_id'])
+}
+
+function firstObjectFromSources(sources, keys) {
+  for (const source of sources) {
+    if (!source || typeof source !== 'object') continue
+
+    for (const key of keys) {
+      const value = source[key]
+      if (value && typeof value === 'object' && !Array.isArray(value)) return value
+    }
+  }
+
+  return null
+}
+
+function normalizeEmail(value) {
+  return String(value || '').trim().toLowerCase()
+}
+
+function isDuplicatePatientError(error) {
+  return /duplicate|unique|already exists|ja existe|jÃ¡ existe|patients_cpf_key|patients_email/i.test(String(error?.message || error || ''))
+}
+
+function isUnsupportedProfilePatientLink(status, text) {
+  return [400, 404, 406].includes(status) && /column|schema cache|relationship|not found|does not exist|pgrst/i.test(String(text || ''))
 }
 
 async function syncDoctorUser(user, formData = {}) {
@@ -380,7 +528,7 @@ function cloneTextResponse(response, text) {
 
 function buildCreateUserBody(data) {
   const role = normalizeRole(data.role) || data.role
-  const createPatientRecord = Boolean(data.create_patient_record)
+  const createPatientRecord = shouldCreatePatientRecord(role, data)
   const isDoctor = role === 'medico'
   const body = {
     email: data.email?.trim(),
@@ -400,7 +548,7 @@ function buildCreateUserBody(data) {
 
 function buildCreateUserWithPasswordBody(data) {
   const role = normalizeRole(data.role) || data.role
-  const createPatientRecord = Boolean(data.create_patient_record)
+  const createPatientRecord = shouldCreatePatientRecord(role, data)
   const isDoctor = role === 'medico'
   const body = {
     email: data.email?.trim(),
@@ -418,6 +566,10 @@ function buildCreateUserWithPasswordBody(data) {
   }
 
   return cleanPayload(body)
+}
+
+function shouldCreatePatientRecord(role, data = {}) {
+  return normalizeRole(role) === 'paciente' || Boolean(data.create_patient_record)
 }
 
 function onlyDigits(value) {
@@ -448,6 +600,7 @@ function normalizeListedUser(user) {
     status: resolveUserStatus(user, emailConfirmedAt),
     email_confirmed_at: emailConfirmedAt,
     doctorId: firstValueFromSources([user, metadata], ['doctor_id', 'doctorId', 'medico_id']),
+    patientId: firstValueFromSources([user, metadata], ['patient_id', 'patientId', 'paciente_id']),
     crm: firstValueFromSources([user, metadata], ['crm']),
     crm_uf: String(firstValueFromSources([user, metadata], ['crm_uf', 'crmUf', 'uf_crm']) || '').toUpperCase(),
     specialty: firstValueFromSources([user, metadata], ['specialty', 'specialidade', 'especialidade', 'speciality']),

@@ -256,7 +256,7 @@ export function AgendaPage({ navigate }) {
             <h2 className="text-base font-bold text-[#fecaca]">Não foi possível liberar a agenda</h2>
             <p className="mt-2 text-sm leading-6 text-[#fca5a5]">{error}</p>
             <p className="mt-3 text-sm leading-6 text-text-muted-v2">
-              Enquanto esse vínculo não existir na API, a tela fica bloqueada para evitar exibir consultas de outro médico.
+              Enquanto esse vínculo não existir na API, a tela fica bloqueada para evitar exibir consultas de outro perfil.
             </p>
           </div>
         </section>

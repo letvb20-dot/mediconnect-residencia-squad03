@@ -21,6 +21,10 @@ const inputClass =
   'h-10 w-full rounded-sm border border-border-default-v2 bg-surface-card-hover px-3 text-sm text-text-body outline-none transition focus:border-accent-primary'
 const compactInputClass =
   'h-8 w-full rounded-sm border border-border-default-v2 bg-surface-card-hover px-2 text-xs font-medium text-text-body outline-none transition focus:border-accent-primary'
+const DEFAULT_TIME_BLOCKS = [
+  { startTime: '08:00', endTime: '12:00' },
+  { startTime: '14:00', endTime: '18:00' },
+]
 
 export function AvailabilityPanel({
   canEditAvailability = false,
@@ -45,8 +49,7 @@ export function AvailabilityPanel({
   const [availabilityForm, setAvailabilityForm] = useState({
     doctorId: defaultDoctorId,
     weekdays: [1],
-    startTime: '08:00',
-    endTime: '18:00',
+    timeBlocks: createDefaultTimeBlocks(),
     slotMinutes: 30,
     appointmentType: 'presencial',
     active: true,
@@ -96,7 +99,12 @@ export function AvailabilityPanel({
   const loadAvailabilityRows = useCallback(async () => {
     if (!selectedDoctorId) {
       setAllAvailabilityRows([])
-      setAvailabilityForm((current) => ({ ...current, doctorId: '', weekdays: [] }))
+      setAvailabilityForm((current) => ({
+        ...current,
+        doctorId: '',
+        timeBlocks: createDefaultTimeBlocks(),
+        weekdays: [],
+      }))
       return
     }
 
@@ -111,6 +119,9 @@ export function AvailabilityPanel({
       const sortedRows = sortAvailabilityRows(rows)
       const activeRows = sortedRows.filter((row) => row.active !== false)
       const template = activeRows[0] || sortedRows[0]
+      const templateRows = template
+        ? activeRows.filter((row) => sameAppointmentType(row.appointmentType, template.appointmentType))
+        : []
 
       setAllAvailabilityRows(sortedRows)
       setAvailabilityForm((current) => ({
@@ -118,10 +129,9 @@ export function AvailabilityPanel({
         active: template?.active ?? current.active,
         appointmentType: template?.appointmentType || current.appointmentType,
         doctorId: selectedDoctorId,
-        endTime: template?.endTime || current.endTime,
         slotMinutes: template?.slotMinutes || current.slotMinutes,
-        startTime: template?.startTime || current.startTime,
-        weekdays: uniqueWeekdays(activeRows.map((row) => row.weekday)),
+        timeBlocks: timeBlocksFromRows(templateRows),
+        weekdays: uniqueWeekdays(templateRows.map((row) => row.weekday)),
       }))
     } catch (err) {
       setAllAvailabilityRows([])
@@ -190,24 +200,32 @@ export function AvailabilityPanel({
       window.alert('Selecione um médico para criar disponibilidade.')
       return
     }
-    if (!availabilityForm.weekdays.length && !allAvailabilityRows.length) {
+    const timeBlocks = normalizeTimeBlocks(availabilityForm.timeBlocks)
+    const scopedRows = allAvailabilityRows.filter((row) =>
+      sameAppointmentType(row.appointmentType, availabilityForm.appointmentType),
+    )
+    if (!availabilityForm.weekdays.length && !scopedRows.length) {
       window.alert('Selecione ao menos um dia da semana.')
       return
     }
-    if (availabilityForm.weekdays.length && !isValidTimeRange(availabilityForm.startTime, availabilityForm.endTime)) {
-      window.alert('O horário inicial deve ser menor que o horário final.')
+    if (availabilityForm.weekdays.length && !timeBlocks.every((block) => isValidTimeRange(block.startTime, block.endTime))) {
+      window.alert('O horário inicial deve ser menor que o horário final em todos os blocos.')
+      return
+    }
+    if (availabilityForm.weekdays.length && timeBlocksOverlap(timeBlocks)) {
+      window.alert('Os blocos de horário não podem se sobrepor.')
       return
     }
 
-    const hadRows = allAvailabilityRows.length > 0
+    const hadRows = scopedRows.length > 0
     setSavingAvailability(true)
 
     try {
-      const rowsByWeekday = groupAvailabilityRowsByWeekday(allAvailabilityRows)
+      const rowsByWeekday = groupAvailabilityRowsByWeekday(scopedRows)
       const selectedWeekdays = new Set(availabilityForm.weekdays.map(Number))
-      const editedRowIds = new Set(allAvailabilityRows.map((row) => String(row.id || '')).filter(Boolean))
+      const editedRowIds = new Set(scopedRows.map((row) => String(row.id || '')).filter(Boolean))
       const conflictingWeekdays = availabilityForm.weekdays.length
-        ? await findConflictingAvailability(availabilityForm, editedRowIds)
+        ? await findConflictingAvailability(availabilityForm, timeBlocks, editedRowIds)
         : []
       if (conflictingWeekdays.length) {
         window.alert(`Já existe disponibilidade sobreposta para: ${conflictingWeekdays.join(', ')}.`)
@@ -216,16 +234,22 @@ export function AvailabilityPanel({
 
       const saves = availabilityForm.weekdays.map((weekday) => {
         const rowsForDay = rowsByWeekday.get(Number(weekday)) || []
-        const [primaryRow, ...duplicateRows] = rowsForDay
+        const sortedDayRows = sortAvailabilityRows(rowsForDay)
+        const rowsToKeep = sortedDayRows.slice(0, timeBlocks.length)
+        const extraRows = sortedDayRows.slice(timeBlocks.length)
 
         return Promise.all([
-          primaryRow
-            ? availabilityRepository.update(primaryRow.id, availabilityForm)
-            : availabilityRepository.create({ ...availabilityForm, weekday }),
-          ...duplicateRows.map((row) => availabilityRepository.remove(row.id)),
+          ...timeBlocks.map((block, index) => {
+            const row = rowsToKeep[index]
+            const payload = { ...availabilityForm, ...block, weekday }
+            return row
+              ? availabilityRepository.update(row.id, payload)
+              : availabilityRepository.create(payload)
+          }),
+          ...extraRows.map((row) => availabilityRepository.remove(row.id)),
         ])
       })
-      const removals = allAvailabilityRows
+      const removals = scopedRows
         .filter((row) => !selectedWeekdays.has(Number(row.weekday)))
         .map((row) => availabilityRepository.remove(row.id))
 
@@ -262,7 +286,7 @@ export function AvailabilityPanel({
     }
   }
 
-  async function findConflictingAvailability(form, ignoredRowIds = new Set()) {
+  async function findConflictingAvailability(form, timeBlocks, ignoredRowIds = new Set()) {
     const conflicts = []
 
     for (const weekday of form.weekdays) {
@@ -275,7 +299,7 @@ export function AvailabilityPanel({
       if (rows.some((row) =>
         !ignoredRowIds.has(String(row.id || '')) &&
         row.active !== false &&
-        intervalsOverlap(form.startTime, form.endTime, row.startTime, row.endTime)
+        timeBlocks.some((block) => intervalsOverlap(block.startTime, block.endTime, row.startTime, row.endTime))
       )) {
         conflicts.push(getWeekdayLabel(weekday))
       }
@@ -290,7 +314,36 @@ export function AvailabilityPanel({
   }
 
   function updateAvailabilityForm(field, value) {
-    setAvailabilityForm((current) => ({ ...current, [field]: value }))
+    setAvailabilityForm((current) => {
+      if (field !== 'appointmentType') {
+        return { ...current, [field]: value }
+      }
+
+      const typeRows = sortAvailabilityRows(
+        allAvailabilityRows.filter((row) =>
+          row.active !== false && sameAppointmentType(row.appointmentType, value),
+        ),
+      )
+      const template = typeRows[0]
+
+      return {
+        ...current,
+        appointmentType: value,
+        active: template?.active ?? current.active,
+        slotMinutes: template?.slotMinutes || current.slotMinutes,
+        timeBlocks: timeBlocksFromRows(typeRows),
+        weekdays: typeRows.length ? uniqueWeekdays(typeRows.map((row) => row.weekday)) : current.weekdays,
+      }
+    })
+  }
+
+  function updateAvailabilityTimeBlock(index, field, value) {
+    setAvailabilityForm((current) => ({
+      ...current,
+      timeBlocks: normalizeTimeBlocks(current.timeBlocks).map((block, blockIndex) =>
+        blockIndex === index ? { ...block, [field]: value } : block,
+      ),
+    }))
   }
 
   function toggleAvailabilityWeekday(weekday) {
@@ -409,12 +462,6 @@ export function AvailabilityPanel({
                 <option value="telemedicina">Telemedicina</option>
               </select>
             </Field>
-            <Field label="Início">
-              <input className={`${inputClass} [color-scheme:dark]`} onChange={(event) => updateAvailabilityForm('startTime', event.target.value)} type="time" value={availabilityForm.startTime} />
-            </Field>
-            <Field label="Fim">
-              <input className={`${inputClass} [color-scheme:dark]`} onChange={(event) => updateAvailabilityForm('endTime', event.target.value)} type="time" value={availabilityForm.endTime} />
-            </Field>
             <Field label="Slot (min)">
               <input className={inputClass} max="120" min="15" onChange={(event) => updateAvailabilityForm('slotMinutes', Number(event.target.value))} step="15" type="number" value={availabilityForm.slotMinutes} />
             </Field>
@@ -422,6 +469,24 @@ export function AvailabilityPanel({
               <input checked={availabilityForm.active} className="size-4 accent-[#3b82f6]" onChange={(event) => updateAvailabilityForm('active', event.target.checked)} type="checkbox" />
               Ativa
             </label>
+          </div>
+          <div className="grid gap-2">
+            <span className="text-xs font-semibold text-text-muted-v2">Blocos de horário</span>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {normalizeTimeBlocks(availabilityForm.timeBlocks).map((block, index) => (
+                <div className="grid gap-2 rounded-sm border border-border-default-v2 bg-surface-card-hover p-2" key={index}>
+                  <p className="text-xs font-bold text-text-heading">Bloco {index + 1}</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Field label="Início">
+                      <input className={`${inputClass} [color-scheme:dark]`} onChange={(event) => updateAvailabilityTimeBlock(index, 'startTime', event.target.value)} type="time" value={block.startTime} />
+                    </Field>
+                    <Field label="Fim">
+                      <input className={`${inputClass} [color-scheme:dark]`} onChange={(event) => updateAvailabilityTimeBlock(index, 'endTime', event.target.value)} type="time" value={block.endTime} />
+                    </Field>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
           <button className="h-9 rounded-sm bg-accent-primary text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60" disabled={savingAvailability} type="submit">
             {savingAvailability ? 'Salvando...' : allAvailabilityRows.length ? 'Salvar alteração' : 'Cadastrar disponibilidade'}
@@ -567,6 +632,36 @@ function Field({ children, label }) {
   )
 }
 
+function createDefaultTimeBlocks() {
+  return DEFAULT_TIME_BLOCKS.map((block) => ({ ...block }))
+}
+
+function normalizeTimeBlocks(blocks = []) {
+  return DEFAULT_TIME_BLOCKS.map((defaultBlock, index) => ({
+    startTime: blocks[index]?.startTime || defaultBlock.startTime,
+    endTime: blocks[index]?.endTime || defaultBlock.endTime,
+  }))
+}
+
+function timeBlocksFromRows(rows = []) {
+  const sortedRows = sortAvailabilityRows(rows)
+  if (!sortedRows.length) return createDefaultTimeBlocks()
+
+  return normalizeTimeBlocks(sortedRows.map((row) => ({
+    startTime: row.startTime,
+    endTime: row.endTime,
+  })))
+}
+
+function timeBlocksOverlap(blocks = []) {
+  return blocks.some((current, currentIndex) =>
+    blocks.some((other, otherIndex) =>
+      currentIndex !== otherIndex &&
+      intervalsOverlap(current.startTime, current.endTime, other.startTime, other.endTime),
+    ),
+  )
+}
+
 function groupAvailabilityRowsByWeekday(rows = []) {
   return rows.reduce((map, row) => {
     const weekday = Number(row.weekday)
@@ -644,6 +739,10 @@ function normalizeAppointmentType(type) {
 
 function formatAppointmentType(type) {
   return normalizeAppointmentType(type) === 'telemedicina' ? 'Telemedicina' : 'Presencial'
+}
+
+function sameAppointmentType(first, second) {
+  return normalizeAppointmentType(first) === normalizeAppointmentType(second)
 }
 
 function normalizeTime(value) {

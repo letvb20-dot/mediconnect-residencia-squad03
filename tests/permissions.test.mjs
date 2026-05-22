@@ -12,10 +12,10 @@ test('normaliza aliases de perfis conhecidos', () => {
   assert.equal(normalizeRole('Secretária clínica'), 'secretaria')
 })
 
-test('medico acessa painel, consultas, pacientes e prontuario, mas nao analytics', () => {
+test('medico acessa painel, consultas, pacientes e prontuario, mas nao profissionais ou analytics', () => {
   assert.equal(canAccess('medico', '/pacientes'), true)
-  assert.equal(canAccess('medico', '/profissionais'), true)
-  assert.equal(canAccess('medico', '/profissionais/doctor-1'), true)
+  assert.equal(canAccess('medico', '/profissionais'), false)
+  assert.equal(canAccess('medico', '/profissionais/doctor-1'), false)
   assert.equal(canAccess('medico', '/consultas'), true)
   assert.equal(canAccess('Médico(a)', '/consultas'), true)
   assert.equal(canAccess('medico', '/prontuario/123'), true)
@@ -38,7 +38,8 @@ test('paciente acessa agendamento, relatorios clinicos, configuracoes e perfil',
   assert.equal(canAccess('paciente', '/agenda'), false)
   assert.equal(canAccess('paciente', '/agendamento'), true)
   assert.equal(canAccess('paciente', '/agendamento/doctor-1'), true)
-  assert.equal(canAccess('paciente', '/profissionais'), true)
+  assert.equal(canAccess('paciente', '/profissionais'), false)
+  assert.equal(canAccess('paciente', '/profissionais/doctor-1'), false)
   assert.equal(canAccess('paciente', '/laudos'), true)
   assert.equal(canAccess('paciente', '/configuracoes'), true)
   assert.equal(canAccess('paciente', '/perfil'), true)

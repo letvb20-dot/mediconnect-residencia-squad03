@@ -71,7 +71,6 @@ const ROLE_ROUTES = {
   medico: [
     '/inicio', '/home', '/dashboard',
     '/agenda',
-    '/profissionais',
     '/consultas',
     '/pacientes',
     '/laudos',
@@ -91,7 +90,6 @@ const ROLE_ROUTES = {
   ],
   paciente: [
     '/agendamento',
-    '/profissionais',
     '/laudos',
     '/configuracoes', '/config',
     '/perfil',
@@ -172,7 +170,6 @@ export const ROLE_NAV_ITEMS = {
   medico: [
     { path: '/inicio', label: 'Painel' },
     { path: '/agenda', label: 'Agenda' },
-    { path: '/profissionais', label: 'Profissionais' },
     { path: '/pacientes', label: 'Pacientes' },
     { path: '/laudos', label: 'Relatórios' },
     { path: '/comunicacao', label: 'Comunicação' },
@@ -188,7 +185,6 @@ export const ROLE_NAV_ITEMS = {
   ],
   paciente: [
     { path: '/agendamento', label: 'Agendamento' },
-    { path: '/profissionais', label: 'Profissionais' },
     { path: '/laudos', label: 'Relatórios' },
     { path: '/configuracoes', label: 'Configurações' },
   ],

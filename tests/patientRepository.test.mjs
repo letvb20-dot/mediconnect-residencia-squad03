@@ -361,6 +361,15 @@ test('availabilityRepository.getAvailableSlots usa a disponibilidade cadastrada 
           start_time: '10:00',
           weekday: 'monday',
         },
+        {
+          active: true,
+          doctor_id: 'doctor-1',
+          end_time: '15:00',
+          id: 'availability-2',
+          slot_minutes: 30,
+          start_time: '14:00',
+          weekday: 'monday',
+        },
       ])
     }
 
@@ -380,7 +389,7 @@ test('availabilityRepository.getAvailableSlots usa a disponibilidade cadastrada 
     appointmentType: 'Teleconsulta',
   })
 
-  assert.deepEqual(slots.map((slot) => slot.time), ['10:00', '10:30', '11:00'])
+  assert.deepEqual(slots.map((slot) => slot.time), ['10:00', '10:30', '11:00', '14:00', '14:30', '15:00'])
   assert.equal(calls.some((url) => url.includes('/functions/v1/get-available-slots')), false)
 })
 

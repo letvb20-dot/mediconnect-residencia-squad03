@@ -114,19 +114,19 @@ function getStatusToneClass(appointment) {
 }
 
 function getDotColor(appointment) {
-  if (isHighPriority(appointment)) return 'bg-[#c084fc]'
+  if (isHighPriority(appointment)) return 'bg-[#d8b4fe]'
 
   switch (appointment?.status) {
     case 'Confirmado':
     case 'Confirmada':
-      return 'bg-[#60a5fa]'
+      return 'bg-[#93c5fd]'
     case 'Em triagem':
-      return 'bg-[#c084fc]'
+      return 'bg-[#d8b4fe]'
     case 'Realizado':
       return 'bg-[#86efac]'
     case 'Cancelado':
     case 'Cancelada':
-      return 'bg-[#f87171]'
+      return 'bg-[#fda4af]'
     case 'Agendado':
     case 'Aguardando':
       return 'bg-[#fbbf24]'

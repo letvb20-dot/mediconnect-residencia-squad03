@@ -79,7 +79,7 @@ export function AgendaWeeklyView({ baseDate, appointments, canCreateAppointment 
                     <button
                       key={appointment.id}
                       onClick={() => onAppointmentClick && onAppointmentClick(appointment)}
-                      className={`agenda-event ${getStatusToneClass(appointment)} flex w-full min-w-0 flex-col items-start overflow-hidden rounded-md border px-1.5 py-1 text-left shadow-sm transition hover:brightness-110 ${getStatusColors(appointment)}`}
+                      className={`agenda-event ${getStatusToneClass(appointment)} flex w-full min-w-0 flex-col items-start overflow-hidden rounded-md border px-1.5 py-1 text-left shadow-sm transition hover:brightness-110`}
                       type="button"
                     >
                       <div className="mb-0.5 flex w-full min-w-0 items-center gap-1 overflow-hidden">
@@ -141,32 +141,6 @@ function getStatusToneClass(appointment) {
     case 'Aguardando':
     default:
       return 'agenda-event-waiting'
-  }
-}
-
-function getStatusColors(appointment) {
-  if (isHighPriority(appointment)) return 'border-[#7e22ce] bg-[#3b0764] text-[#e9d5ff]'
-
-  switch (appointment?.status) {
-    case 'Confirmado':
-    case 'Confirmada':
-      return 'border-[#1d4ed8] bg-[#172554] text-[#93c5fd]'
-    case 'Em triagem':
-      return 'border-[#7e22ce] bg-[#3b0764] text-[#e9d5ff]'
-    case 'Realizado':
-    case 'Concluida':
-    case 'Concluída':
-      return 'border-[#166534] bg-[#052e1a] text-[#86efac]'
-    case 'Agendado':
-    case 'Aguardando':
-      return 'border-[#a16207] bg-[#422006] text-[#fde68a]'
-    case 'Cancelado':
-    case 'Cancelada':
-      return 'border-[#7f1d1d] bg-[#450a0a] text-[#f87171] opacity-75'
-    case 'Bloqueado':
-      return 'border-border-default-v2 bg-surface-inset text-text-muted-v2'
-    default:
-      return 'border-border-default-v2 bg-surface-elevated text-text-heading'
   }
 }
 

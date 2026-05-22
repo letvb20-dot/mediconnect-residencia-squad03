@@ -1,7 +1,12 @@
 const SPECIAL_CHARS_PATTERN = /[^\p{L}\p{N}\s]/gu
+const PERSON_NAME_PATTERN = /[^\p{L}\s]/gu
 
 export function sanitizePlainText(value) {
   return String(value || '').replace(SPECIAL_CHARS_PATTERN, '')
+}
+
+export function sanitizePersonName(value) {
+  return String(value || '').replace(PERSON_NAME_PATTERN, '')
 }
 
 export function sanitizeAlphaNumeric(value) {

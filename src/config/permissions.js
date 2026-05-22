@@ -45,6 +45,7 @@ const ROLE_ROUTES = {
   admin: [
     '/inicio', '/home', '/dashboard',
     '/agenda',
+    '/profissionais',
     '/pacientes',
     '/laudos',
     '/relatorios',
@@ -57,6 +58,7 @@ const ROLE_ROUTES = {
   gestor: [
     '/inicio', '/home', '/dashboard',
     '/agenda',
+    '/profissionais',
     '/pacientes',
     '/laudos',
     '/relatorios',
@@ -69,6 +71,7 @@ const ROLE_ROUTES = {
   medico: [
     '/inicio', '/home', '/dashboard',
     '/agenda',
+    '/profissionais',
     '/consultas',
     '/pacientes',
     '/laudos',
@@ -79,6 +82,7 @@ const ROLE_ROUTES = {
   secretaria: [
     '/inicio', '/home', '/dashboard',
     '/agenda',
+    '/profissionais',
     '/consultas',
     '/pacientes',
     '/comunicacao', '/mensagens',
@@ -86,7 +90,8 @@ const ROLE_ROUTES = {
     '/perfil',
   ],
   paciente: [
-    '/agenda',
+    '/agendamento',
+    '/profissionais',
     '/laudos',
     '/configuracoes', '/config',
     '/perfil',
@@ -147,6 +152,7 @@ export const ROLE_NAV_ITEMS = {
   admin: [
     { path: '/inicio', label: 'Painel' },
     { path: '/agenda', label: 'Agenda' },
+    { path: '/profissionais', label: 'Profissionais' },
     { path: '/pacientes', label: 'Pacientes' },
     { path: '/laudos', label: 'Relatórios' },
     { path: '/relatorios', label: 'Analytics' },
@@ -156,6 +162,7 @@ export const ROLE_NAV_ITEMS = {
   gestor: [
     { path: '/inicio', label: 'Painel' },
     { path: '/agenda', label: 'Agenda' },
+    { path: '/profissionais', label: 'Profissionais' },
     { path: '/pacientes', label: 'Pacientes' },
     { path: '/laudos', label: 'Relatórios' },
     { path: '/relatorios', label: 'Analytics' },
@@ -165,6 +172,7 @@ export const ROLE_NAV_ITEMS = {
   medico: [
     { path: '/inicio', label: 'Painel' },
     { path: '/agenda', label: 'Agenda' },
+    { path: '/profissionais', label: 'Profissionais' },
     { path: '/pacientes', label: 'Pacientes' },
     { path: '/laudos', label: 'Relatórios' },
     { path: '/comunicacao', label: 'Comunicação' },
@@ -173,12 +181,14 @@ export const ROLE_NAV_ITEMS = {
   secretaria: [
     { path: '/inicio', label: 'Painel' },
     { path: '/agenda', label: 'Agenda' },
+    { path: '/profissionais', label: 'Profissionais' },
     { path: '/pacientes', label: 'Pacientes' },
     { path: '/comunicacao', label: 'Comunicação' },
     { path: '/configuracoes', label: 'Configurações' },
   ],
   paciente: [
-    { path: '/agenda', label: 'Agenda' },
+    { path: '/agendamento', label: 'Agendamento' },
+    { path: '/profissionais', label: 'Profissionais' },
     { path: '/laudos', label: 'Relatórios' },
     { path: '/configuracoes', label: 'Configurações' },
   ],

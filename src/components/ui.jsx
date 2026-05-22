@@ -1,6 +1,6 @@
 const buttonVariants = {
   primary:
-    'border-transparent bg-gradient-to-b from-[#4f93f7] to-[#3b82f6] text-white shadow-[0_2px_8px_rgba(59,130,246,0.3)] hover:shadow-[0_4px_12px_rgba(59,130,246,0.4)] hover:brightness-110 focus-visible:outline-[#3b82f6]',
+    'border-transparent bg-accent-primary text-white shadow-[0_2px_8px_rgba(27,63,108,0.26)] hover:bg-accent-hover hover:shadow-[0_4px_12px_rgba(27,63,108,0.34)] focus-visible:outline-accent-primary',
   secondary:
     'border-border-default-v2 bg-surface-card text-text-body hover:bg-surface-card-hover focus-visible:outline-border-strong',
   ghost:
@@ -11,9 +11,9 @@ const buttonVariants = {
 
 export const appCardClass = 'rounded-2xl border border-border-default-v2 bg-surface-card shadow-card transition-shadow hover:shadow-card-hover'
 export const appInputClass =
-  'h-11 w-full rounded-xl border border-border-default-v2 bg-surface-inset px-3 text-sm text-text-body outline-none transition placeholder:text-text-muted-v2 focus:border-accent-primary focus:ring-2 focus:ring-[#3b82f6]/20'
+  'h-11 w-full rounded-xl border border-border-default-v2 bg-surface-inset px-3 text-sm text-text-body outline-none transition placeholder:text-text-muted-v2 focus:border-accent-primary focus:ring-2 focus:ring-accent-primary/20'
 export const appTextareaClass =
-  'min-h-28 w-full rounded-xl border border-border-default-v2 bg-surface-inset px-3 py-2 text-sm leading-6 text-text-body outline-none transition placeholder:text-text-muted-v2 focus:border-accent-primary focus:ring-2 focus:ring-[#3b82f6]/20'
+  'min-h-28 w-full rounded-xl border border-border-default-v2 bg-surface-inset px-3 py-2 text-sm leading-6 text-text-body outline-none transition placeholder:text-text-muted-v2 focus:border-accent-primary focus:ring-2 focus:ring-accent-primary/20'
 export const appLabelClass = 'mb-1.5 block text-xs font-medium text-text-heading'
 
 export function Button({

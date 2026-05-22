@@ -37,5 +37,5 @@ export function cleanPersonName(...candidates) {
 
 export function isValidPersonName(value) {
   const name = String(value || '').trim()
-  return name.length >= 3 && !isEmailLike(name) && /[A-Za-zÀ-ÿ]/.test(name)
+  return name.length >= 3 && !isEmailLike(name) && /^[\p{L}\s]+$/u.test(name)
 }

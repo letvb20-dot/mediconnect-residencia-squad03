@@ -4,7 +4,7 @@ import { StethoscopeIcon } from '../components/Brand.jsx'
 import { ADMIN_CREATABLE_ROLES, GESTOR_CREATABLE_ROLES, hasCapability, normalizeRole, ROLE_LABELS } from '../config/permissions.js'
 import { translateErrorMessage } from '../repositories/repositoryUtils.js'
 import { userRepository } from '../repositories/userRepository.js'
-import { sanitizeFieldValue } from '../utils/inputSanitizers.js'
+import { sanitizeFieldValue, sanitizePersonName } from '../utils/inputSanitizers.js'
 
 const darkInput =
   'h-10 w-full rounded-lg border border-border-default-v2 bg-surface-inset px-3 text-sm text-text-heading outline-none transition placeholder:text-text-muted-v2 focus:border-[#3b82f6] focus:ring-1 focus:ring-[#3b82f6]'
@@ -106,7 +106,11 @@ export function UsersPage({ embedded = false, embeddedHeaderOnly = false, hideHe
 
   function handleFormChange(event) {
     const { checked, name, type, value } = event.target
-    const nextValue = type === 'checkbox' ? checked : sanitizeFieldValue(name, value)
+    const nextValue = type === 'checkbox'
+      ? checked
+      : name === 'full_name'
+        ? sanitizePersonName(value)
+        : sanitizeFieldValue(name, value)
     setForm((current) => ({ ...current, [name]: nextValue }))
   }
 

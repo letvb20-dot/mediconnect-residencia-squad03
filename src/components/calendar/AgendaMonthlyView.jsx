@@ -22,16 +22,16 @@ export function AgendaMonthlyView({ baseDate, appointments, onDayClick }) {
   const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 
   return (
-    <div className="agenda-calendar-shell rounded-2xl border border-border-default-v2 bg-surface-card p-5">
-      <div className="agenda-calendar-header grid grid-cols-7 gap-px border-b border-border-subtle pb-4">
+    <div className="agenda-calendar-shell rounded-xl border border-border-default-v2 bg-surface-card p-3">
+      <div className="agenda-calendar-header grid grid-cols-7 gap-px border-b border-border-subtle pb-2">
         {weekDays.map((day) => (
-          <div key={day} className="text-center text-xs font-semibold uppercase tracking-widest text-text-muted-v2">
+          <div key={day} className="text-center text-[11px] font-semibold uppercase tracking-wide text-text-muted-v2">
             {day}
           </div>
         ))}
       </div>
 
-      <div className="mt-4 grid grid-cols-7 gap-2">
+      <div className="mt-2 grid grid-cols-7 gap-1.5">
         {days.map((day) => {
           const isCurrentMonth = isSameMonth(day, monthStart)
 
@@ -48,7 +48,7 @@ export function AgendaMonthlyView({ baseDate, appointments, onDayClick }) {
             <button
               key={day.toISOString()}
               onClick={() => onDayClick && onDayClick(day)}
-              className={`agenda-month-day flex min-h-[100px] flex-col rounded-xl border p-2 text-left transition hover:border-border-strong ${
+              className={`agenda-month-day flex min-h-[72px] flex-col rounded-lg border p-1.5 text-left transition hover:border-border-strong xl:min-h-[78px] ${
                 isCurrentMonth
                   ? 'border-border-default-v2 bg-surface-inset'
                   : 'border-transparent bg-transparent opacity-40 hover:opacity-80'
@@ -57,18 +57,18 @@ export function AgendaMonthlyView({ baseDate, appointments, onDayClick }) {
               <span
                 className={`text-sm font-bold ${
                   isToday(day)
-                    ? 'flex h-6 w-6 items-center justify-center rounded-full bg-accent-primary text-white'
+                    ? 'flex h-5 w-5 items-center justify-center rounded-full bg-accent-primary text-xs text-white'
                     : 'text-text-heading'
                 }`}
               >
                 {format(day, 'd')}
               </span>
 
-              <div className="mt-2 flex w-full flex-col gap-1">
-                {dayAppointments.slice(0, 3).map((appointment) => (
+              <div className="mt-1 flex w-full flex-col gap-0.5">
+                {dayAppointments.slice(0, 2).map((appointment) => (
                   <div
                     key={appointment.id}
-                    className={`agenda-month-event ${getStatusToneClass(appointment)} flex items-center gap-1.5 truncate rounded bg-surface-card-hover px-1.5 py-1 text-[10px] font-semibold text-text-muted-v2`}
+                    className={`agenda-month-event ${getStatusToneClass(appointment)} flex items-center gap-1 truncate rounded bg-surface-card-hover px-1 py-0.5 text-[9px] font-semibold leading-4 text-text-muted-v2`}
                   >
                     <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${getDotColor(appointment)}`} />
                     <span className="truncate">
@@ -76,9 +76,9 @@ export function AgendaMonthlyView({ baseDate, appointments, onDayClick }) {
                     </span>
                   </div>
                 ))}
-                {dayAppointments.length > 3 && (
-                  <span className="text-[10px] font-semibold text-accent-primary">
-                    + {dayAppointments.length - 3} mais
+                {dayAppointments.length > 2 && (
+                  <span className="text-[9px] font-semibold leading-4 text-accent-primary">
+                    + {dayAppointments.length - 2} mais
                   </span>
                 )}
               </div>

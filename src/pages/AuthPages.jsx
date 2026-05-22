@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { authRepository } from '../repositories/authRepository.js'
 import { patientRepository } from '../repositories/patientRepository.js'
 import { translateErrorMessage } from '../repositories/repositoryUtils.js'
-import { maskBrazilianPhone, maskCpf } from '../utils/inputSanitizers.js'
+import { maskBrazilianPhone, maskCpf, sanitizePersonName } from '../utils/inputSanitizers.js'
 
 import { StethoscopeIcon } from '../components/Brand.jsx'
 
@@ -17,13 +17,21 @@ const dotPanelStyle = {
 }
 
 const lightInputClass =
-  'h-12 w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
+  'h-12 w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-[#1b3f6c] focus:ring-2 focus:ring-[#1b3f6c]/20'
 
 const lightPasswordInputClass =
-  'h-12 w-full rounded-xl border border-gray-200 bg-white pl-10 pr-11 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
+  'h-12 w-full rounded-xl border border-gray-200 bg-white pl-10 pr-11 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-[#1b3f6c] focus:ring-2 focus:ring-[#1b3f6c]/20'
 
 const lightInputSimpleClass =
-  'h-12 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
+  'h-12 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-[#1b3f6c] focus:ring-2 focus:ring-[#1b3f6c]/20'
+
+const authPrimaryButtonClass =
+  'inline-flex h-12 w-full items-center justify-center rounded-xl bg-[#1b3f6c] text-sm font-semibold text-white shadow-[0_2px_8px_rgba(27,63,108,0.28)] transition-all hover:bg-[#153255] hover:shadow-[0_4px_12px_rgba(27,63,108,0.36)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1b3f6c] disabled:opacity-60'
+
+const authPrimaryButtonWithGapClass = `${authPrimaryButtonClass} gap-2`
+
+const authLinkClass =
+  'font-medium text-[#1b3f6c] transition hover:text-[#153255] hover:underline'
 
 // ─── Página de Login ─────────────────────────────────────────────────────────
 
@@ -65,7 +73,7 @@ export function LoginPage({ navigate }) {
             className="pointer-events-none absolute right-0 top-0 h-[480px] w-[480px]"
             style={{
               background:
-                'radial-gradient(ellipse at top right, rgba(59,130,246,0.22) 0%, transparent 65%)',
+                'radial-gradient(ellipse at top right, rgba(27,63,108,0.24) 0%, transparent 65%)',
             }}
           />
 
@@ -74,7 +82,7 @@ export function LoginPage({ navigate }) {
 
             <div className="max-w-[440px]">
               <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm text-white/80">
-                <span className="text-[#3b82f6]">✦</span>
+                <span className="text-[#8fb5e3]">✦</span>
                 Inteligência Artificial para sua clínica
               </div>
 
@@ -154,7 +162,7 @@ export function LoginPage({ navigate }) {
                     Senha
                   </label>
                   <button
-                    className="text-sm text-blue-600 transition hover:text-blue-700 hover:underline"
+                    className={`text-sm ${authLinkClass}`}
                     onClick={() => navigate('/recuperar-senha')}
                     type="button"
                   >
@@ -187,7 +195,7 @@ export function LoginPage({ navigate }) {
               </div>
 
               <button
-                className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[#4f93f7] to-[#3b82f6] text-sm font-semibold text-white shadow-[0_2px_8px_rgba(59,130,246,0.3)] transition-all hover:shadow-[0_4px_12px_rgba(59,130,246,0.4)] hover:brightness-110 disabled:opacity-50"
+                className={authPrimaryButtonWithGapClass}
                 disabled={loading}
                 type="submit"
               >
@@ -198,7 +206,7 @@ export function LoginPage({ navigate }) {
             <p className="mt-6 text-center text-sm text-gray-500">
               Não tem uma conta?{' '}
               <button
-                className="font-medium text-blue-600 transition hover:text-blue-700 hover:underline"
+                className={authLinkClass}
                 onClick={() => navigate('/cadastro')}
                 type="button"
               >
@@ -233,7 +241,9 @@ export function RegisterPage({ navigate }) {
         ? maskCpf(value)
         : field === 'phone_mobile'
           ? maskBrazilianPhone(value)
-          : value
+          : field === 'full_name'
+            ? sanitizePersonName(value)
+            : value
     setForm((current) => ({ ...current, [field]: nextValue }))
   }
 
@@ -343,7 +353,7 @@ export function RegisterPage({ navigate }) {
           </LightField>
         </div>
         <button
-          className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-gradient-to-b from-[#4f93f7] to-[#3b82f6] text-sm font-semibold text-white shadow-[0_2px_8px_rgba(59,130,246,0.3)] transition-all hover:shadow-[0_4px_12px_rgba(59,130,246,0.4)] hover:brightness-110 disabled:opacity-60"
+          className={authPrimaryButtonClass}
           disabled={loading}
           type="submit"
         >
@@ -351,7 +361,7 @@ export function RegisterPage({ navigate }) {
         </button>
       </form>
       <button
-        className="mt-5 text-sm font-medium text-blue-600 transition hover:text-blue-700 hover:underline"
+        className={`mt-5 text-sm ${authLinkClass}`}
         onClick={() => navigate('/login')}
         type="button"
       >
@@ -416,7 +426,7 @@ export function ForgotPasswordPage({ navigate }) {
             </div>
           </LightField>
           <button
-            className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-gradient-to-b from-[#4f93f7] to-[#3b82f6] text-sm font-semibold text-white shadow-[0_2px_8px_rgba(59,130,246,0.3)] transition-all hover:shadow-[0_4px_12px_rgba(59,130,246,0.4)] hover:brightness-110 disabled:opacity-50"
+            className={authPrimaryButtonClass}
             disabled={loading}
             type="submit"
           >
@@ -425,7 +435,7 @@ export function ForgotPasswordPage({ navigate }) {
         </form>
       )}
       <button
-        className="mt-5 text-sm font-medium text-blue-600 transition hover:text-blue-700 hover:underline"
+        className={`mt-5 text-sm ${authLinkClass}`}
         onClick={() => navigate('/login')}
         type="button"
       >
@@ -451,14 +461,14 @@ function AuthLayout({ children, description, title }) {
             className="pointer-events-none absolute right-0 top-0 h-[480px] w-[480px]"
             style={{
               background:
-                'radial-gradient(ellipse at top right, rgba(59,130,246,0.22) 0%, transparent 65%)',
+                'radial-gradient(ellipse at top right, rgba(27,63,108,0.24) 0%, transparent 65%)',
             }}
           />
           <div className="relative flex flex-1 flex-col justify-between px-12 py-10">
             <RightLogo dark />
             <div className="max-w-[440px]">
               <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm text-white/80">
-                <span className="text-[#3b82f6]">✦</span>
+                <span className="text-[#8fb5e3]">✦</span>
                 Inteligência Artificial para sua clínica
               </div>
               <h1 className="text-[34px] font-bold leading-[1.22] tracking-tight text-white">
@@ -509,7 +519,7 @@ function AuthLayout({ children, description, title }) {
 function RightLogo({ dark = false }) {
   return (
     <div className="flex items-center gap-3">
-      <div className="flex size-10 shrink-0 items-center justify-center rounded-[10px] bg-[#3b82f6]">
+      <div className="flex size-10 shrink-0 items-center justify-center rounded-[10px] bg-[#1b3f6c]">
         <StethoscopeIcon className="size-5 text-white" />
       </div>
       <div>
@@ -528,10 +538,10 @@ function LeftFeature({ icon, text, showLine = false }) {
   return (
     <li className="flex gap-3">
       <div className="flex flex-col items-center">
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-[#3b82f6]/30 bg-[#3b82f6]/10 text-[#60a5fa]">
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-[#8fb5e3]/30 bg-[#1b3f6c]/35 text-[#8fb5e3]">
           {icon}
         </div>
-        {showLine ? <div className="mt-1 h-6 w-px bg-[#3b82f6]/30" /> : null}
+        {showLine ? <div className="mt-1 h-6 w-px bg-[#8fb5e3]/30" /> : null}
       </div>
       <span className="pt-1.5 text-sm text-white/65">{text}</span>
     </li>

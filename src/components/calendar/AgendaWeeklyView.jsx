@@ -27,21 +27,21 @@ export function AgendaWeeklyView({ baseDate, appointments, canCreateAppointment 
   )
 
   return (
-    <div className="agenda-calendar-shell rounded-2xl border border-border-default-v2 bg-surface-card p-5">
-      <div className="agenda-calendar-header grid grid-cols-7 gap-4 border-b border-border-subtle pb-4">
+    <div className="agenda-calendar-shell rounded-xl border border-border-default-v2 bg-surface-card p-3">
+      <div className="agenda-calendar-header grid grid-cols-7 gap-2 border-b border-border-subtle pb-2">
         {days.map((day) => {
           const isWeekend = day.getDay() === 0
 
           return (
             <div key={day.toISOString()} className="text-center">
               <span
-                className={`block text-xs font-semibold uppercase tracking-[0.16em] ${
+                className={`block text-[11px] font-semibold uppercase tracking-wide ${
                   isWeekend ? 'text-blue-200' : 'text-text-muted-v2'
                 }`}
               >
                 {format(day, 'EEE', { locale: ptBR })}
               </span>
-              <span className={`mt-1 block text-2xl font-bold ${isToday(day) ? 'text-accent-primary' : 'text-text-heading'}`}>
+              <span className={`mt-0.5 block text-xl font-bold leading-6 ${isToday(day) ? 'text-accent-primary' : 'text-text-heading'}`}>
                 {format(day, 'dd')}
               </span>
             </div>
@@ -49,7 +49,7 @@ export function AgendaWeeklyView({ baseDate, appointments, canCreateAppointment 
         })}
       </div>
 
-      <div className="mt-4 grid min-h-[400px] grid-cols-7 gap-4">
+      <div className="mt-2 grid min-h-[300px] grid-cols-7 gap-2 xl:min-h-[340px]">
         {days.map((day) => {
           const dayIsPast = isBefore(startOfDay(day), startOfDay(new Date()))
           const dayAppointments = weeklyAppointments.filter((appointment) => {
@@ -62,11 +62,11 @@ export function AgendaWeeklyView({ baseDate, appointments, canCreateAppointment 
           return (
             <div
               key={day.toISOString()}
-              className="agenda-week-day flex h-full min-w-0 flex-col gap-2 rounded-lg border border-border-default-v2 bg-surface-inset p-2"
+              className="agenda-week-day flex h-full min-w-0 flex-col gap-1.5 rounded-lg border border-border-default-v2 bg-surface-inset p-1.5"
             >
               {dayAppointments.length === 0 ? (
                 <button
-                  className="flex h-full min-h-24 items-center justify-center rounded-md border border-dashed border-border-default-v2 p-4 text-center text-xs font-semibold text-text-muted-v2 transition hover:border-accent-primary/50 hover:text-blue-200 disabled:cursor-not-allowed disabled:hover:border-border-default-v2 disabled:hover:text-text-muted-v2"
+                  className="flex h-full min-h-16 items-center justify-center rounded-md border border-dashed border-border-default-v2 p-2 text-center text-xs font-semibold text-text-muted-v2 transition hover:border-accent-primary/50 hover:text-blue-200 disabled:cursor-not-allowed disabled:hover:border-border-default-v2 disabled:hover:text-text-muted-v2"
                   disabled={!canCreateAppointment || dayIsPast}
                   onClick={() => onSlotCreate?.(day)}
                   type="button"
@@ -79,22 +79,22 @@ export function AgendaWeeklyView({ baseDate, appointments, canCreateAppointment 
                     <button
                       key={appointment.id}
                       onClick={() => onAppointmentClick && onAppointmentClick(appointment)}
-                      className={`agenda-event ${getStatusToneClass(appointment)} flex w-full min-w-0 flex-col items-start overflow-hidden rounded-md border p-2 text-left shadow-sm transition hover:brightness-110 ${getStatusColors(appointment)}`}
+                      className={`agenda-event ${getStatusToneClass(appointment)} flex w-full min-w-0 flex-col items-start overflow-hidden rounded-md border px-1.5 py-1 text-left shadow-sm transition hover:brightness-110 ${getStatusColors(appointment)}`}
                       type="button"
                     >
-                      <div className="mb-1 flex w-full min-w-0 items-center gap-1.5 overflow-hidden">
+                      <div className="mb-0.5 flex w-full min-w-0 items-center gap-1 overflow-hidden">
                         <span className="shrink-0 rounded bg-black/20 px-1.5 py-0.5 text-[10px] font-bold leading-none">
                           {appointment.time}
                         </span>
-                        <span className="min-w-0 flex-1 truncate text-[9px] font-semibold uppercase tracking-normal opacity-80">
+                        <span className="min-w-0 flex-1 truncate text-[8px] font-semibold uppercase tracking-normal opacity-80">
                           {appointment.mode}
                         </span>
                       </div>
-                      <span className="block w-full min-w-0 truncate text-xs font-bold leading-tight" title={appointment.patient}>
+                      <span className="block w-full min-w-0 truncate text-[11px] font-bold leading-4" title={appointment.patient}>
                         {appointment.patient}
                       </span>
                       <span
-                        className="mt-0.5 block w-full min-w-0 truncate text-[10px] font-medium opacity-80"
+                        className="block w-full min-w-0 truncate text-[9px] font-medium leading-3 opacity-80"
                         title={appointment.professional}
                       >
                         Dr(a). {appointment.professional?.split(' ')[0]}
@@ -102,7 +102,7 @@ export function AgendaWeeklyView({ baseDate, appointments, canCreateAppointment 
                     </button>
                   ))}
                   <button
-                    className="mt-auto rounded-md border border-dashed border-border-default-v2 px-2 py-2 text-xs font-semibold text-text-muted-v2 transition hover:border-accent-primary/50 hover:text-blue-200 disabled:cursor-not-allowed disabled:hover:border-border-default-v2 disabled:hover:text-text-muted-v2"
+                    className="mt-auto rounded-md border border-dashed border-border-default-v2 px-2 py-1.5 text-[11px] font-semibold text-text-muted-v2 transition hover:border-accent-primary/50 hover:text-blue-200 disabled:cursor-not-allowed disabled:hover:border-border-default-v2 disabled:hover:text-text-muted-v2"
                     disabled={!canCreateAppointment || dayIsPast}
                     onClick={() => onSlotCreate?.(day)}
                     type="button"

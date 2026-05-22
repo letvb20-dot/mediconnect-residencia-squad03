@@ -12,13 +12,14 @@ import {
 import { ptBR } from 'date-fns/locale'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { AvailabilityPanel } from '../components/availability/AvailabilityPanel.jsx'
 import { AgendaDailyView } from '../components/calendar/AgendaDailyView.jsx'
 import { AgendaMonthlyView } from '../components/calendar/AgendaMonthlyView.jsx'
 import { AgendaWeeklyView } from '../components/calendar/AgendaWeeklyView.jsx'
 import { StethoscopeIcon } from '../components/Brand.jsx'
 import { useAgenda } from '../hooks/useAgenda.js'
-import { NOTIFICATION_ACTION_EVENT, PENDING_NOTIFICATION_ACTION_KEY } from '../repositories/notificationRepository.js'
 import { AGENDA_EXCEPTIONS_CHANGED_EVENT, availabilityRepository } from '../repositories/availabilityRepository.js'
+import { NOTIFICATION_ACTION_EVENT, PENDING_NOTIFICATION_ACTION_KEY } from '../repositories/notificationRepository.js'
 import { translateErrorMessage } from '../repositories/repositoryUtils.js'
 import { formatLocalDateInput, parseLocalDate } from '../utils/agendaDate.js'
 
@@ -261,40 +262,19 @@ export function AgendaPage({ navigate }) {
           </div>
         </section>
       ) : (
-        <section className={`grid gap-6 ${isPatientScope ? '' : 'xl:grid-cols-[minmax(0,1fr)_460px] 2xl:grid-cols-[minmax(0,1fr)_520px]'}`}>
-          <div className="self-start rounded-2xl border border-border-default-v2 bg-surface-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.2)]">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <section className={`grid gap-6 ${isPatientScope ? '' : 'xl:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_380px]'}`}>
+          <div className="self-start rounded-2xl border border-border-default-v2 bg-surface-card p-4 shadow-[0_1px_3px_rgba(0,0,0,0.2)]">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="text-base font-bold leading-6 text-text-body">
                     {format(baseDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}
                   </h2>
                 </div>
-                <p className="mt-1 text-sm leading-5 text-text-muted-v2">
-                  {isPatientScope
-                    ? `${visibleAppointments.length} agendamentos em seu nome nesta data`
-                    : `Visualização: ${activeView.toLowerCase()} | ${visibleAppointments.length} registros visíveis`}
-                </p>
               </div>
 
               {!isPatientScope ? (
               <div className="flex max-w-full flex-wrap items-center justify-start gap-2 lg:justify-end">
-                <div className="flex shrink-0 gap-2">
-                  {viewFilters.map((view) => (
-                    <button
-                      className={`h-8 rounded-sm border px-3 text-sm font-semibold transition ${
-                        activeView === view.value
-                          ? 'border-accent-primary bg-accent-primary text-white'
-                          : 'border-border-default-v2 bg-surface-card-hover text-text-muted-v2 hover:text-text-body'
-                      }`}
-                      key={view.value}
-                      onClick={() => setActiveView(view.value)}
-                      type="button"
-                    >
-                      {view.label}
-                    </button>
-                  ))}
-                </div>
                 <div className="flex min-w-0 flex-nowrap gap-2 overflow-x-auto pb-1">
                   {statusFilters.map((filter) => (
                     <button
@@ -312,13 +292,29 @@ export function AgendaPage({ navigate }) {
             </div>
 
             {!isPatientScope ? (
-            <div className="mt-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-end">
+            <div className="mt-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-end">
+              <div className="flex shrink-0 gap-2">
+                {viewFilters.map((view) => (
+                  <button
+                    className={`h-8 rounded-sm border px-3 text-sm font-semibold transition ${
+                      activeView === view.value
+                        ? 'border-accent-primary bg-accent-primary text-white'
+                        : 'border-border-default-v2 bg-surface-card-hover text-text-muted-v2 hover:text-text-body'
+                    }`}
+                    key={view.value}
+                    onClick={() => setActiveView(view.value)}
+                    type="button"
+                  >
+                    {view.label}
+                  </button>
+                ))}
+              </div>
               {!isDoctorScope ? (
-                <div className="grid w-full gap-3 sm:grid-cols-[minmax(22rem,1.35fr)_minmax(13rem,0.65fr)] lg:max-w-[48rem]">
-                  <label className="grid gap-1.5 text-xs font-semibold text-text-muted-v2">
-                    <span>Médico</span>
+                <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+                  <label className="flex items-center gap-2 text-xs font-semibold text-text-muted-v2">
+                    <span className="shrink-0">Médico</span>
                     <select
-                      className="h-9 rounded-sm border border-border-default-v2 bg-surface-card-hover px-3 text-sm font-medium text-text-body outline-none transition focus:border-accent-primary"
+                      className="h-8 min-w-0 rounded-sm border border-border-default-v2 bg-surface-card-hover px-3 text-sm font-medium text-text-body outline-none transition focus:border-accent-primary sm:w-72"
                       onChange={(event) => {
                         setDoctorFilter(event.target.value)
                         setDoctorSearch('')
@@ -333,10 +329,10 @@ export function AgendaPage({ navigate }) {
                       ))}
                     </select>
                   </label>
-                  <label className="grid gap-1.5 text-xs font-semibold text-text-muted-v2">
-                    <span>Unidade</span>
+                  <label className="flex items-center gap-2 text-xs font-semibold text-text-muted-v2">
+                    <span className="shrink-0">Unidade</span>
                     <select
-                      className="h-9 rounded-sm border border-border-default-v2 bg-surface-card-hover px-3 text-sm font-medium text-text-body outline-none transition focus:border-accent-primary"
+                      className="h-8 min-w-0 rounded-sm border border-border-default-v2 bg-surface-card-hover px-3 text-sm font-medium text-text-body outline-none transition focus:border-accent-primary sm:w-44"
                       onChange={(event) => setUnitFilter(event.target.value)}
                       value={unitFilter}
                     >
@@ -354,12 +350,12 @@ export function AgendaPage({ navigate }) {
             ) : null}
 
             {!isDoctorScope && !isPatientScope && (
-              <div className="mt-4 rounded-xl border border-border-default-v2 bg-surface-inset px-4 py-3 text-sm text-text-muted-v2">
+              <div className="mt-3 rounded-xl border border-border-default-v2 bg-surface-inset px-4 py-2 text-sm text-text-muted-v2">
                 Perfil atual: {viewerProfile?.role || 'Administrador'}
               </div>
             )}
 
-            <div className="mt-6 grid gap-3">
+            <div className="mt-4 grid gap-3">
               {isPatientScope ? (
                 <PatientAgendaList
                   appointments={visibleAppointments}
@@ -400,10 +396,16 @@ export function AgendaPage({ navigate }) {
             </div>
           </div>
           {!isPatientScope ? (
-            <AvailabilitySidebar
+            <AvailabilityPanel
+              canEditAvailability={false}
+              compact
               currentProfessional={currentProfessional}
-              isDoctorScope={isDoctorScope}
+              lockDoctorSelection={isDoctorScope}
               professionals={professionals}
+              selectedProfessionalId={isDoctorScope ? currentProfessional?.id : doctorFilter !== 'Todos' ? doctorFilter : ''}
+              showDoctorFilter={!isDoctorScope}
+              showExceptionManagement={false}
+              title="Disponibilidade Médica"
               viewerProfile={viewerProfile}
             />
           ) : null}
@@ -736,7 +738,7 @@ function ReadOnlyDetail({ label, value }) {
   )
 }
 
-function AvailabilitySidebar({ currentProfessional, isDoctorScope, professionals, viewerProfile }) {
+export function AvailabilitySidebar({ currentProfessional, isDoctorScope, professionals, viewerProfile }) {
   const today = formatLocalDateInput(new Date())
   const defaultDoctorId = isDoctorScope ? currentProfessional?.id || '' : professionals[0]?.id || ''
   const isSecretary = isSecretaryProfile(viewerProfile)

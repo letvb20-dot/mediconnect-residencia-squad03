@@ -16,6 +16,8 @@ import { BrandLogo } from './Brand.jsx'
 const ALL_NAV_ITEMS = [
   { href: '/inicio', label: 'Painel', icon: 'pulse', activePaths: ['/inicio', '/home', '/dashboard'] },
   { href: '/agenda', label: 'Agenda', icon: 'calendar' },
+  { href: '/agendamento', label: 'Agendamento', icon: 'calendar' },
+  { href: '/profissionais', label: 'Profissionais', icon: 'doctor' },
   { href: '/pacientes', label: 'Pacientes', icon: 'users', exact: true },
   { href: '/laudos', label: 'Relatórios', icon: 'clipboard' },
   {
@@ -33,9 +35,11 @@ const titles = {
   '/home': 'Painel',
   '/dashboard': 'Painel',
   '/agenda': 'Agenda',
+  '/agendamento': 'Agendamento',
   '/consultas': 'Fila de Consultas',
   '/laudos': 'Relatórios',
   '/pacientes': 'Pacientes',
+  '/profissionais': 'Profissionais',
   '/comunicacao': 'Comunicação',
   '/mensagens': 'Comunicação',
   '/relatorios': 'Analytics',
@@ -519,6 +523,15 @@ function AppIcon({ className = 'size-5', name }) {
     return (
       <svg {...common}>
         <path d="M16 19a4 4 0 0 0-8 0M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM20 19a3 3 0 0 0-3-3M4 19a3 3 0 0 1 3-3" />
+      </svg>
+    )
+  }
+
+  if (name === 'doctor') {
+    return (
+      <svg {...common}>
+        <path d="M20 21a8 8 0 0 0-16 0M12 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z" />
+        <path d="M17.5 11.5h3M19 10v3" />
       </svg>
     )
   }

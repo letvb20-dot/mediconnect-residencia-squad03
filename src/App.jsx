@@ -15,6 +15,10 @@ const MessagesPage = lazyPage(() => import('./pages/MessagesPage.jsx'), 'Message
 const PatientDetailPage = lazyPage(() => import('./pages/PatientsPage.jsx'), 'PatientDetailPage')
 const PatientsPage = lazyPage(() => import('./pages/PatientsPage.jsx'), 'PatientsPage')
 const ProfilePage = lazyPage(() => import('./pages/ProfilePage.jsx'), 'ProfilePage')
+const ProfessionalDetailPage = lazyPage(() => import('./pages/ProfessionalsPage.jsx'), 'ProfessionalDetailPage')
+const ProfessionalsPage = lazyPage(() => import('./pages/ProfessionalsPage.jsx'), 'ProfessionalsPage')
+const PatientSchedulingDetailPage = lazyPage(() => import('./pages/PatientSchedulingPage.jsx'), 'PatientSchedulingDetailPage')
+const PatientSchedulingPage = lazyPage(() => import('./pages/PatientSchedulingPage.jsx'), 'PatientSchedulingPage')
 const ReportsPage = lazyPage(() => import('./pages/ReportsPage.jsx'), 'ReportsPage')
 const SettingsPage = lazyPage(() => import('./pages/SettingsPage.jsx'), 'SettingsPage')
 const UsersPage = lazyPage(() => import('./pages/UsersPage.jsx'), 'UsersPage')
@@ -22,7 +26,7 @@ const VisitsPage = lazyPage(() => import('./pages/VisitsPage.jsx'), 'VisitsPage'
 
 const PANEL_PATHS = ['/inicio', '/home', '/dashboard']
 const ROLE_HOME_PATHS = {
-  paciente: '/agenda',
+  paciente: '/agendamento',
 }
 const FREE_TEXT_INPUT_LIMIT = 255
 const FREE_TEXTAREA_LIMIT = 2000
@@ -284,6 +288,23 @@ function resolveRoute(pathname, navigate, role, profile, user, isAuthenticated) 
     }
   }
 
+  if (pathname === '/agendamento') {
+    return {
+      element: <PatientSchedulingPage navigate={navigate} />,
+      title: 'Agendamento',
+      withShell: true,
+    }
+  }
+
+  if (pathname.startsWith('/agendamento/')) {
+    const professionalId = pathname.split('/')[2]
+    return {
+      element: <PatientSchedulingDetailPage navigate={navigate} professionalId={professionalId} />,
+      title: 'Agendamento',
+      withShell: true,
+    }
+  }
+
   if (pathname === '/pacientes') {
     return {
       element: <PatientsPage navigate={navigate} role={role} />,
@@ -297,6 +318,23 @@ function resolveRoute(pathname, navigate, role, profile, user, isAuthenticated) 
     return {
       element: <PatientDetailRoute navigate={navigate} patientId={patientId} role={role} />,
       title: 'Paciente',
+      withShell: true,
+    }
+  }
+
+  if (pathname === '/profissionais') {
+    return {
+      element: <ProfessionalsPage navigate={navigate} role={role} />,
+      title: 'Profissionais',
+      withShell: true,
+    }
+  }
+
+  if (pathname.startsWith('/profissionais/')) {
+    const professionalId = pathname.split('/')[2]
+    return {
+      element: <ProfessionalDetailPage navigate={navigate} professionalId={professionalId} role={role} />,
+      title: 'Profissional',
       withShell: true,
     }
   }

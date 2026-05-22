@@ -4,7 +4,7 @@ import { hasCapability } from '../config/permissions.js'
 import { patientRepository } from '../repositories/patientRepository.js'
 import { translateErrorMessage } from '../repositories/repositoryUtils.js'
 import { isValidPersonName } from '../utils/brFormatters.js'
-import { maskHeight, sanitizeFieldValue } from '../utils/inputSanitizers.js'
+import { maskHeight, sanitizeFieldValue, sanitizePersonName } from '../utils/inputSanitizers.js'
 const ITEMS_PER_PAGE = 25
 
 const darkInput =
@@ -652,7 +652,9 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
           ? maskHeight(value)
           : name === 'weight'
             ? value.replace(/[^\d,.]/g, '').slice(0, 6)
-          : sanitizeFieldValue(name, value)
+            : name === 'name'
+              ? sanitizePersonName(value)
+              : sanitizeFieldValue(name, value)
 
     setFormData((currentData) => {
       const nextData = { ...currentData, [name]: nextValue }

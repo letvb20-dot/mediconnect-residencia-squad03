@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { canAccess, hasCapability, normalizeRole } from '../src/config/permissions.js'
+import { canAccess, hasCapability, normalizeRole, ROLE_NAV_ITEMS } from '../src/config/permissions.js'
 
 test('normaliza aliases de perfis conhecidos', () => {
   assert.equal(normalizeRole('doctor'), 'medico')
@@ -12,9 +12,9 @@ test('normaliza aliases de perfis conhecidos', () => {
   assert.equal(normalizeRole('Secretária clínica'), 'secretaria')
 })
 
-test('medico acessa painel, consultas, pacientes e prontuario, mas nao profissionais ou analytics', () => {
+test('medico acessa painel, profissionais, consultas, pacientes e prontuario, mas nao analytics', () => {
   assert.equal(canAccess('medico', '/pacientes'), true)
-  assert.equal(canAccess('medico', '/profissionais'), false)
+  assert.equal(canAccess('medico', '/profissionais'), true)
   assert.equal(canAccess('medico', '/profissionais/doctor-1'), false)
   assert.equal(canAccess('medico', '/consultas'), true)
   assert.equal(canAccess('Médico(a)', '/consultas'), true)
@@ -23,6 +23,7 @@ test('medico acessa painel, consultas, pacientes e prontuario, mas nao profissio
   assert.equal(canAccess('medico', '/relatorios'), false)
   assert.equal(canAccess('secretaria', '/prontuario/123'), false)
   assert.equal(canAccess('paciente', '/prontuario/123'), false)
+  assert.equal(ROLE_NAV_ITEMS.medico.some((item) => item.path === '/profissionais'), true)
 })
 
 test('secretaria acessa painel, agenda, consultas e pacientes', () => {

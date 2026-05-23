@@ -39,7 +39,7 @@ export const appointmentRepository = {
     }
 
     const data = await response.json()
-    return appointmentMapper.toUi(normalizeItem(data))
+    return appointmentMapper.toUi(requireReturnedItem(data, 'Falha ao criar o agendamento. A API nao retornou confirmacao da alteracao.'))
   },
 
   // PATCH /rest/v1/appointments?id=eq.{id}
@@ -57,7 +57,7 @@ export const appointmentRepository = {
     }
 
     const data = await response.json()
-    return appointmentMapper.toUi(normalizeItem(data))
+    return appointmentMapper.toUi(requireReturnedItem(data, 'Falha ao atualizar o agendamento. A API nao retornou confirmacao da alteracao.'))
   },
 
   async cancel(id, uiData) {
@@ -65,6 +65,12 @@ export const appointmentRepository = {
     // mas passamos direto para evitar ambiguidade.
     return this.update(id, { ...uiData, status: 'cancelled' })
   },
+}
+
+function requireReturnedItem(data, message) {
+  const item = normalizeItem(data)
+  if (!item) throw new Error(message)
+  return item
 }
 
 // Constrói apenas com os campos documentados no contrato OpenAPI

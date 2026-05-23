@@ -12,11 +12,14 @@ const readOnlyInputClass =
   'h-10 rounded-sm border border-border-default-v2 bg-surface-inset px-3 text-sm text-text-muted-v2 outline-none'
 
 export function ProfilePage({ navigate }) {
-  const [saved, setSaved] = useState(false)
+  const [saveMessage, setSaveMessage] = useState('')
   const [profile, setProfile] = useState({ name: '', role: '', email: '', phone: '', unit: '', avatarUrl: '' })
+  const [savedProfile, setSavedProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [savingProfile, setSavingProfile] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [avatarError, setAvatarError] = useState('')
+  const [profileError, setProfileError] = useState('')
   const fileInputRef = useRef(null)
 
   useEffect(() => {
@@ -24,13 +27,15 @@ export function ProfilePage({ navigate }) {
       .getCurrentUserProfile()
       .then((data) => {
         setProfile(data)
+        setSavedProfile(data)
         setLoading(false)
       })
       .catch(() => setLoading(false))
   }, [])
 
   function update(field, value) {
-    setSaved(false)
+    setSaveMessage('')
+    setProfileError('')
     setProfile((current) => ({ ...current, [field]: value }))
   }
 
@@ -45,18 +50,48 @@ export function ProfilePage({ navigate }) {
 
     setUploadingAvatar(true)
     setAvatarError('')
+    setSaveMessage('')
 
     try {
       const result = await profileRepository.updateAvatar(file)
       setProfile((current) => ({
         ...current,
-        avatarUrl: result.avatarUrl || URL.createObjectURL(file),
+        avatarUrl: result.avatarUrl,
       }))
+      setSavedProfile((current) => current ? { ...current, avatarUrl: result.avatarUrl } : current)
     } catch (err) {
       setAvatarError(translateErrorMessage(err.message, 'Erro ao enviar avatar.'))
     } finally {
       setUploadingAvatar(false)
       event.target.value = ''
+    }
+  }
+
+  async function handleProfileSubmit(event) {
+    event.preventDefault()
+    if (!canEditProfile) return
+
+    setSavingProfile(true)
+    setProfileError('')
+    setSaveMessage('')
+
+    try {
+      const changedFields = getChangedProfileFields(profile, savedProfile)
+      if (!Object.keys(changedFields).length) return
+
+      const updatedProfile = await profileRepository.updateCurrentUserProfile({
+        email: changedFields.email,
+        name: changedFields.name,
+        phone: changedFields.phone,
+        unit: changedFields.unit,
+      })
+      setProfile(updatedProfile)
+      setSavedProfile(updatedProfile)
+      setSaveMessage('Alteracoes salvas')
+    } catch (err) {
+      setProfileError(translateErrorMessage(err.message, 'Erro ao salvar perfil.'))
+    } finally {
+      setSavingProfile(false)
     }
   }
 
@@ -108,17 +143,14 @@ export function ProfilePage({ navigate }) {
 
           <form
             className="grid gap-4"
-            onSubmit={(event) => {
-              event.preventDefault()
-              if (canEditProfile) setSaved(true)
-            }}
+            onSubmit={handleProfileSubmit}
           >
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Nome">
                 <input className={currentInputClass} onChange={(event) => update('name', event.target.value)} readOnly={!canEditProfile} value={profile.name} />
               </Field>
               <Field label="Cargo">
-                <input className={currentInputClass} onChange={(event) => update('role', event.target.value)} readOnly={!canEditProfile} value={profile.role} />
+                <input className={readOnlyInputClass} readOnly value={profile.role} />
               </Field>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
@@ -142,10 +174,11 @@ export function ProfilePage({ navigate }) {
             </Field>
             {canEditProfile ? (
               <div className="flex flex-wrap items-center gap-3">
-                <button className="h-10 rounded-sm bg-[#3b82f6] px-4 text-sm font-semibold text-white" type="submit">
-                  Salvar alterações
+                <button className="h-10 rounded-sm bg-[#3b82f6] px-4 text-sm font-semibold text-white disabled:opacity-60" disabled={savingProfile} type="submit">
+                  {savingProfile ? 'Salvando...' : 'Salvar alterações'}
                 </button>
-                {saved ? <span className="rounded bg-amber-500/20 px-2.5 py-1 text-xs font-bold text-amber-300">Preferências salvas localmente</span> : null}
+                {saveMessage ? <span className="rounded bg-emerald-500/15 px-2.5 py-1 text-xs font-bold text-emerald-300">{saveMessage}</span> : null}
+                {profileError ? <span className="text-xs font-semibold text-red-400">{profileError}</span> : null}
               </div>
             ) : null}
           </form>
@@ -188,6 +221,32 @@ function Info({ label, value }) {
       <dd className="mt-1 text-text-heading">{value || '-'}</dd>
     </div>
   )
+}
+
+function getChangedProfileFields(profile, savedProfile) {
+  if (!savedProfile) {
+    return {
+      email: profile.email,
+      name: profile.name,
+      phone: profile.phone,
+      unit: profile.unit,
+    }
+  }
+
+  const candidates = {
+    email: profile.email,
+    name: profile.name,
+    phone: profile.phone,
+    unit: profile.unit,
+  }
+
+  return Object.fromEntries(
+    Object.entries(candidates).filter(([field, value]) => !sameProfileValue(value, savedProfile[field])),
+  )
+}
+
+function sameProfileValue(a, b) {
+  return String(a ?? '').trim() === String(b ?? '').trim()
 }
 
 function initials(name) {

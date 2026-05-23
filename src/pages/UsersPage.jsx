@@ -324,9 +324,7 @@ export function UsersPage({ embedded = false, embeddedHeaderOnly = false, hideHe
                       <tr className="cursor-pointer transition hover:bg-surface-card-hover" key={user.id} onClick={() => setSelectedUser(user)}>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
-                            <span className="grid size-8 place-items-center rounded-full bg-accent-muted text-xs font-bold text-accent-primary">
-                              {(user.full_name || user.email || '?').charAt(0).toUpperCase()}
-                            </span>
+                            <UserAvatar user={user} />
                             <span className="font-medium text-text-heading">{user.full_name || '—'}</span>
                           </div>
                         </td>
@@ -696,6 +694,27 @@ function UserDetailModal({ onClose, onDelete, onEdit, user }) {
         </div>
       </div>
     </div>
+  )
+}
+
+function UserAvatar({ user }) {
+  const [failedUrl, setFailedUrl] = useState('')
+  const avatarUrl = user.avatarUrl || user.avatar_url || user.avatar_path || ''
+  const hasAvatar = Boolean(avatarUrl) && failedUrl !== avatarUrl
+
+  return (
+    <span className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-full bg-accent-muted text-xs font-bold text-accent-primary">
+      {hasAvatar ? (
+        <img
+          alt=""
+          className="size-full object-cover"
+          onError={() => setFailedUrl(avatarUrl)}
+          src={avatarUrl}
+        />
+      ) : (
+        (user.full_name || user.email || '?').charAt(0).toUpperCase()
+      )}
+    </span>
   )
 }
 

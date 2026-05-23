@@ -4,7 +4,8 @@ import { normalizeRole, ROLE_LABELS } from '../config/permissions.js'
 import { getResponseError } from './repositoryUtils.js'
 
 const USER_PROFILE_TABLES = ['profiles', 'user_profiles']
-const PROFILE_AVATAR_OVERRIDES_KEY = 'mediconnect.profile.avatar.overrides'
+export const PROFILE_CHANGED_EVENT = 'mediconnect:profile-changed'
+export const PROFILE_AVATAR_CHANGED_EVENT = PROFILE_CHANGED_EVENT
 
 export const profileRepository = {
   async getCurrentUserProfile() {
@@ -54,7 +55,7 @@ export const profileRepository = {
       cpf: profile?.cpf || user?.cpf || sessionUser?.cpf || meta.cpf || firstValueFromSources(patientSources, ['cpf', 'document', 'documento']) || '',
       role: ROLE_LABELS[normalizedRole] || user?.role || user?.cargo || meta.role || meta.cargo || 'Usuário do Sistema',
       unit: profile?.unit || user?.unit || user?.unidade || meta.unit || meta.unidade || 'Clínica Boa Vista',
-      avatarUrl: getStoredAvatarOverride(profile, user) || getAvatarUrl(avatarUrl),
+      avatarUrl: getAvatarUrl(avatarUrl),
       doctorId: firstValueFromSources([data, profile, user, meta, sessionUser, sessionMeta], ['doctor_id', 'doctorId', 'medico_id']) || null,
       patientId:
         firstValueFromSources([data, profile, user, meta, sessionUser, sessionMeta], ['patient_id', 'patientId', 'paciente_id']) ||
@@ -71,11 +72,32 @@ export const profileRepository = {
     }
   },
 
+  async updateCurrentUserProfile(data) {
+    const profile = await this.getCurrentUserProfile()
+    const payload = getChangedProfilePayload(profile, buildProfileUpdatePayload(data))
+
+    if (!Object.keys(payload).length) return profile
+    if (!getProfileIdentifiers(profile).length) {
+      throw new Error('Não foi possível identificar o usuário para salvar o perfil.')
+    }
+
+    const updatedRow = await persistProfileFields(profile, payload, 'Falha ao salvar perfil.')
+    const updatedProfile = mergeProfileUpdate(profile, updatedRow, payload)
+    updateStoredSessionProfile(updatedProfile, payload)
+    notifyProfileChanged({ profile: updatedProfile })
+
+    return updatedProfile
+  },
+
   async updateAvatar(file) {
     const profile = await this.getCurrentUserProfile()
 
     if (!profile.id) {
       throw new Error('Não foi possível identificar o usuário para enviar o avatar.')
+    }
+
+    if (profile.isPatient && !profile.patientId) {
+      throw new Error('Não foi possível identificar o paciente vinculado para salvar o avatar.')
     }
 
     // POST /storage/v1/object/avatars/{path}
@@ -95,9 +117,10 @@ export const profileRepository = {
     }
 
     const avatarUrl = getAvatarUrl(objectPath)
-    await persistProfileAvatar(profile, avatarUrl).catch(() => false)
-    storeAvatarOverride(profile, avatarUrl)
+    await persistProfileAvatar(profile, avatarUrl)
+    await persistPatientAvatar(profile, avatarUrl)
     updateStoredSessionAvatar(avatarUrl, objectPath)
+    notifyProfileChanged({ avatarUrl, path: objectPath })
 
     return {
       avatarUrl,
@@ -132,13 +155,42 @@ function getAvatarUrl(path) {
 }
 
 async function persistProfileAvatar(profile, avatarUrl) {
+  return persistProfileFields(profile, { avatar_url: avatarUrl }, 'Falha ao salvar avatar no perfil.', (row) => {
+    return getAvatarUrl(row?.avatar_url || row?.avatarUrl || row?.avatar_path) === avatarUrl
+  })
+}
+
+async function persistPatientAvatar(profile, avatarUrl) {
+  if (!profile.isPatient) return null
+
+  const response = await fetch(`${apiConfig.restUrl}/patients?id=eq.${encodeURIComponent(profile.patientId)}`, {
+    method: 'PATCH',
+    headers: getAuthenticatedHeaders({ Prefer: 'return=representation' }),
+    body: JSON.stringify({ avatar_url: avatarUrl }),
+  })
+
+  if (!response.ok) {
+    throw new Error(await getResponseError(response, 'Falha ao salvar avatar no perfil do paciente.'))
+  }
+
+  const data = await response.json().catch(() => null)
+  const rows = Array.isArray(data) ? data : data ? [data] : []
+  const confirmedRow = rows.find((row) => getAvatarUrl(row?.avatar_url || row?.avatarUrl || row?.avatar_path) === avatarUrl)
+
+  if (!confirmedRow) {
+    throw new Error('Falha ao salvar avatar no perfil do paciente. A API nao retornou confirmacao da alteracao.')
+  }
+
+  return confirmedRow
+}
+
+async function persistProfileFields(profile, payload, fallbackMessage, isConfirmed = () => true) {
   const identifiers = [
     ['id', profile?.id],
     ['user_id', profile?.userId],
     ['auth_user_id', profile?.authUserId],
     ['email', profile?.email],
   ].filter(([, value]) => value)
-  const payload = { avatar_url: avatarUrl }
   let lastError = null
 
   for (const table of USER_PROFILE_TABLES) {
@@ -156,15 +208,16 @@ async function persistProfileAvatar(profile, avatarUrl) {
       if (response.ok) {
         const data = await response.json().catch(() => null)
         const rows = Array.isArray(data) ? data : data ? [data] : []
-        if (rows.length) return true
+        const confirmedRow = rows.find((row) => isConfirmed(row))
+        if (confirmedRow) return confirmedRow
         continue
       }
-      lastError = new Error(await getResponseError(response, 'Falha ao salvar avatar no perfil.'))
+      lastError = new Error(await getResponseError(response, fallbackMessage))
     }
   }
 
   if (lastError) throw lastError
-  return false
+  throw new Error(`${fallbackMessage} A API nao retornou confirmacao da alteracao.`)
 }
 
 function updateStoredSessionAvatar(avatarUrl, avatarPath) {
@@ -191,46 +244,98 @@ function updateStoredSessionAvatar(avatarUrl, avatarPath) {
   })
 }
 
-function getStoredAvatarOverride(profile, user) {
-  const overrides = readAvatarOverrides()
-  for (const key of getProfileAvatarKeys(profile, user)) {
-    if (overrides[key]) return overrides[key]
+function updateStoredSessionProfile(profile, payload = {}) {
+  const session = getAuthSession()
+  if (!session) return
+
+  const nextProfile = {
+    ...(session.profile || session.perfil || {}),
+    ...payload,
+    email: profile.email,
+    full_name: profile.name,
+    phone: profile.phone,
+    unit: profile.unit,
   }
-  return ''
+  const nextUser = {
+    ...(session.user || session.usuario || {}),
+    email: profile.email,
+    full_name: profile.name,
+    name: profile.name,
+    phone: profile.phone,
+    unit: profile.unit,
+  }
+
+  saveAuthSession({
+    ...session,
+    profile: nextProfile,
+    perfil: session.perfil ? nextProfile : session.perfil,
+    user: nextUser,
+    usuario: session.usuario ? nextUser : session.usuario,
+  })
 }
 
-function storeAvatarOverride(profile, avatarUrl) {
-  if (typeof window === 'undefined' || !avatarUrl) return
-  const overrides = readAvatarOverrides()
-  for (const key of getProfileAvatarKeys(profile)) {
-    overrides[key] = avatarUrl
-  }
-  window.localStorage.setItem(PROFILE_AVATAR_OVERRIDES_KEY, JSON.stringify(overrides))
+function notifyProfileChanged(detail) {
+  if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return
+
+  const EventConstructor = typeof window.CustomEvent === 'function' ? window.CustomEvent : Event
+  window.dispatchEvent(new EventConstructor(PROFILE_CHANGED_EVENT, { detail }))
 }
 
-function readAvatarOverrides() {
-  if (typeof window === 'undefined') return {}
-  try {
-    return JSON.parse(window.localStorage.getItem(PROFILE_AVATAR_OVERRIDES_KEY) || '{}') || {}
-  } catch {
-    window.localStorage.removeItem(PROFILE_AVATAR_OVERRIDES_KEY)
-    return {}
-  }
+function buildProfileUpdatePayload(data = {}) {
+  return cleanProfilePayload({
+    full_name: data.name ?? data.full_name,
+    email: data.email,
+    phone: data.phone,
+    unit: data.unit,
+  })
 }
 
-function getProfileAvatarKeys(profile, user = {}) {
+function getChangedProfilePayload(profile, payload) {
+  const currentValues = {
+    email: profile.email,
+    full_name: profile.name,
+    phone: profile.phone,
+    unit: profile.unit,
+  }
+
+  return Object.fromEntries(
+    Object.entries(payload).filter(([field, value]) => !sameProfileValue(value, currentValues[field])),
+  )
+}
+
+function sameProfileValue(a, b) {
+  return String(a ?? '').trim() === String(b ?? '').trim()
+}
+
+function cleanProfilePayload(payload) {
+  return Object.fromEntries(
+    Object.entries(payload)
+      .filter(([, value]) => value !== undefined && value !== null)
+      .map(([key, value]) => [key, typeof value === 'string' ? value.trim() : value]),
+  )
+}
+
+function getProfileIdentifiers(profile) {
   return [
-    profile?.id,
-    profile?.userId,
-    profile?.user_id,
-    profile?.authUserId,
-    profile?.auth_user_id,
-    profile?.email,
-    user?.id,
-    user?.user_id,
-    user?.auth_user_id,
-    user?.email,
-  ].map((value) => String(value || '').trim().toLowerCase()).filter(Boolean)
+    ['id', profile?.id],
+    ['user_id', profile?.userId],
+    ['auth_user_id', profile?.authUserId],
+    ['email', profile?.email],
+  ].filter(([, value]) => value)
+}
+
+function mergeProfileUpdate(profile, row = {}, payload = {}) {
+  return {
+    ...profile,
+    email: pickValue(row.email, payload.email, profile.email),
+    name: pickValue(row.full_name, row.name, row.nome, payload.full_name, profile.name),
+    phone: pickValue(row.phone, row.phone_mobile, row.telefone, payload.phone, profile.phone),
+    unit: pickValue(row.unit, row.unidade, payload.unit, profile.unit),
+  }
+}
+
+function pickValue(...values) {
+  return values.find((value) => value !== undefined && value !== null) ?? ''
 }
 
 function collectRoles({ data, meta, profile, user }) {

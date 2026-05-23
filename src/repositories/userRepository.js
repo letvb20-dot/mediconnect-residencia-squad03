@@ -2,7 +2,6 @@ import { apiConfig, getAuthenticatedHeaders } from '../config/api.js'
 import { normalizeRole } from '../config/permissions.js'
 import { getResponseError, normalizeCollection } from './repositoryUtils.js'
 import { patientRepository } from './patientRepository.js'
-import { storeProfessionalOverride } from '../utils/professionalOverrides.js'
 
 const USER_PROFILE_TABLES = ['profiles', 'user_profiles']
 const USER_DOCTOR_TABLES = ['doctors', 'medicos']
@@ -122,7 +121,19 @@ export const userRepository = {
       lastResponse = response
 
       if (response.ok) {
-        const responseData = await response.json().catch(() => null)
+        let responseData = await response.json().catch(() => null)
+        if (!normalizeReturnedRow(responseData)) {
+          const confirmedProfile = await getUpdatedProfileByIdentifier({
+            body,
+            field: 'id',
+            table,
+            value: userId,
+          })
+          if (!confirmedProfile) {
+            throw new Error('Erro ao atualizar usuario. A API nao retornou confirmacao da alteracao.')
+          }
+          responseData = [confirmedProfile]
+        }
         const updatedProfileRow = getUpdatedProfileRow(responseData, body, data, userId, profileReference)
         const updatedUser = normalizeListedUser(updatedProfileRow)
         const syncFormData = { ...(profileReference || {}), ...data }
@@ -131,7 +142,6 @@ export const userRepository = {
           if (isIgnorableDoctorSyncError(error)) return null
           throw error
         })
-        if (syncedDoctor) storeDoctorNameOverride({ formData: data, syncedDoctor, updatedUser: userWithPatient, userId })
         return syncedDoctor ? mergeUserDoctor(userWithPatient, [syncedDoctor]) : userWithPatient
       }
 
@@ -262,7 +272,7 @@ async function persistPatientLinkOnProfile(createdUser, formData = {}, patient =
       if (!response) continue
       if (response.ok) {
         const data = await response.json().catch(() => null)
-        if (normalizeReturnedRow(data) || getAffectedRowCount(response) !== 0) return true
+        if (normalizeReturnedRow(data) || getAffectedRowCount(response) > 0) return true
         continue
       }
 
@@ -358,8 +368,12 @@ async function patchDoctorByIdentifiers({ attempts, identifiers, requireUpdatedR
           const data = await response.json().catch(() => null)
           const row = normalizeReturnedRow(data)
           if (row) return normalizeDoctorUser(row)
-          if (options.allowEmptySuccess && getAffectedRowCount(response) !== 0) {
+          if (options.allowEmptySuccess && getAffectedRowCount(response) > 0) {
             return normalizeDoctorUser(buildSyntheticDoctorRow(field, value, attempt))
+          }
+          if (options.allowEmptySuccess && getAffectedRowCount(response) === null) {
+            const confirmedRow = await getUpdatedDoctorByIdentifier({ attempt, field, table, value })
+            if (confirmedRow) return normalizeDoctorUser(confirmedRow)
           }
           break
         }
@@ -377,6 +391,38 @@ async function patchDoctorByIdentifiers({ attempts, identifiers, requireUpdatedR
   }
 
   return null
+}
+
+async function getUpdatedDoctorByIdentifier({ attempt, field, table, value }) {
+  const query = new URLSearchParams({ select: '*' })
+  query.set(field, `eq.${value}`)
+
+  const response = await fetch(`${apiConfig.restUrl}/${table}?${query.toString()}`, {
+    headers: getAuthenticatedHeaders(),
+  }).catch(() => null)
+
+  if (!response?.ok) return null
+
+  const row = normalizeReturnedRow(await response.json().catch(() => null))
+  if (!row || !doctorRowMatchesPayload(row, attempt)) return null
+
+  return row
+}
+
+async function getUpdatedProfileByIdentifier({ body, field, table, value }) {
+  const query = new URLSearchParams({ select: '*' })
+  query.set(field, `eq.${value}`)
+
+  const response = await fetch(`${apiConfig.restUrl}/${table}?${query.toString()}`, {
+    headers: getAuthenticatedHeaders(),
+  }).catch(() => null)
+
+  if (!response?.ok) return null
+
+  const row = normalizeReturnedRow(await response.json().catch(() => null))
+  if (!row || !profileRowMatchesPayload(row, body)) return null
+
+  return row
 }
 
 async function getProfileReference(userId) {
@@ -415,24 +461,6 @@ function getUpdatedProfileRow(responseData, body, formData, userId, profileRefer
   }
 }
 
-function storeDoctorNameOverride({ formData = {}, syncedDoctor = null, updatedUser = {}, userId }) {
-  const role = normalizeRole(formData.role || updatedUser.role)
-  const hasDoctorFields = ['doctorId', 'doctor_id', 'crm', 'crm_uf', 'crmUf', 'specialty', 'specialidade'].some((field) => formData[field] || updatedUser[field])
-  if (role !== 'medico' && !hasDoctorFields) return
-
-  storeProfessionalOverride({
-    ...(syncedDoctor || {}),
-    id: syncedDoctor?.id || formData.doctorId || formData.doctor_id || updatedUser.doctorId || updatedUser.doctor_id,
-    doctorId: formData.doctorId || formData.doctor_id || updatedUser.doctorId || updatedUser.doctor_id,
-    userId: syncedDoctor?.userId || formData.userId || formData.user_id || updatedUser.userId || updatedUser.user_id || userId,
-    authUserId: formData.authUserId || formData.auth_user_id || updatedUser.authUserId || updatedUser.auth_user_id || userId,
-    email: formData.email || updatedUser.email || syncedDoctor?.email,
-    cpf: formData.cpf || updatedUser.cpf || syncedDoctor?.cpf,
-    full_name: formData.full_name || updatedUser.full_name || syncedDoctor?.full_name,
-    phone: formData.phone || formData.phone_mobile || updatedUser.phone || updatedUser.phone_mobile || syncedDoctor?.phone,
-  })
-}
-
 function normalizeReturnedRow(data) {
   const rows = normalizeCollection(data)
   if (rows.length) return rows[0]
@@ -457,6 +485,50 @@ function getAffectedRowCount(response) {
 
   const match = contentRange.match(/\/(\d+)$/)
   return match ? Number(match[1]) : null
+}
+
+function doctorRowMatchesPayload(row, payload) {
+  return Object.entries(payload).every(([field, value]) => {
+    if (value === undefined || value === null || value === '') return true
+
+    const rowValue = getDoctorComparableValue(row, field)
+    if (['cpf', 'phone_mobile', 'crm'].includes(field)) {
+      return onlyDigits(rowValue) === onlyDigits(value)
+    }
+    if (field === 'crm_uf') {
+      return String(rowValue || '').trim().toUpperCase() === String(value || '').trim().toUpperCase()
+    }
+
+    return String(rowValue || '').trim().toLowerCase() === String(value || '').trim().toLowerCase()
+  })
+}
+
+function profileRowMatchesPayload(row, payload) {
+  return Object.entries(payload).every(([field, value]) => {
+    if (value === undefined || value === null || value === '') return true
+
+    const rowValue = getProfileComparableValue(row, field)
+    if (field === 'phone') {
+      return onlyDigits(rowValue) === onlyDigits(value)
+    }
+
+    return String(rowValue || '').trim().toLowerCase() === String(value || '').trim().toLowerCase()
+  })
+}
+
+function getDoctorComparableValue(row, field) {
+  if (field === 'phone_mobile') return row.phone_mobile || row.phone || row.telefone || row.celular
+  if (field === 'specialty') return row.specialty || row.specialidade || row.speciality || row.especialidade
+  if (field === 'full_name') return row.full_name || row.name || row.nome
+  if (field === 'email') return row.email || row.user_email || row.usuario_email
+  return row[field]
+}
+
+function getProfileComparableValue(row, field) {
+  if (field === 'full_name') return row.full_name || row.name || row.nome
+  if (field === 'phone') return row.phone || row.phone_mobile || row.telefone || row.celular
+  if (field === 'email') return row.email || row.user_email || row.usuario_email
+  return row[field]
 }
 
 function buildDoctorSyncBody(user, data) {
@@ -515,7 +587,7 @@ function isUnsupportedDoctorPatch(status, text) {
 }
 
 function isIgnorableDoctorSyncError(error) {
-  return /Tabela|doctors|medicos|not found|does not exist|schema cache/i.test(String(error?.message || ''))
+  return /Tabela|not found|does not exist|schema cache/i.test(String(error?.message || ''))
 }
 
 function cloneTextResponse(response, text) {
@@ -595,6 +667,7 @@ function normalizeListedUser(user) {
     phone: firstValueFromSources([user, metadata], ['phone', 'phone_mobile', 'celular', 'telefone']),
     phone_mobile: firstValueFromSources([user, metadata], ['phone_mobile', 'phone', 'celular', 'telefone']),
     cpf: formatCpf(firstValueFromSources([user, metadata], ['cpf', 'document', 'documento'])),
+    avatarUrl: normalizeUserAvatarUrl(firstValueFromSources([user, metadata], ['avatarUrl', 'avatar_url', 'avatar_path', 'picture', 'photo_url', 'foto_url'])),
     role,
     roles: role ? [role] : [],
     status: resolveUserStatus(user, emailConfirmedAt),
@@ -869,6 +942,14 @@ function formatCpf(value) {
     .replace(/(\d{3})(\d)/, '$1.$2')
     .replace(/(\d{3})(\d)/, '$1.$2')
     .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+}
+
+function normalizeUserAvatarUrl(value) {
+  const avatar = String(value || '').trim()
+  if (!avatar) return ''
+  if (/^https?:\/\//i.test(avatar)) return avatar
+
+  return `${apiConfig.storageUrl}/object/public/avatars/${avatar.replace(/^\/+/, '')}`
 }
 
 function cleanPayload(payload) {

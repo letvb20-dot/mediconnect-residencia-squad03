@@ -71,6 +71,7 @@ const ROLE_ROUTES = {
   medico: [
     '/inicio', '/home', '/dashboard',
     '/agenda',
+    '/profissionais',
     '/consultas',
     '/pacientes',
     '/laudos',
@@ -94,6 +95,10 @@ const ROLE_ROUTES = {
     '/configuracoes', '/config',
     '/perfil',
   ],
+}
+
+const ROLE_EXACT_ROUTES = {
+  medico: ['/profissionais'],
 }
 
 // Capacidades especiais por role
@@ -170,6 +175,7 @@ export const ROLE_NAV_ITEMS = {
   medico: [
     { path: '/inicio', label: 'Painel' },
     { path: '/agenda', label: 'Agenda' },
+    { path: '/profissionais', label: 'Profissionais' },
     { path: '/pacientes', label: 'Pacientes' },
     { path: '/laudos', label: 'Relatórios' },
     { path: '/comunicacao', label: 'Comunicação' },
@@ -202,7 +208,11 @@ export function canAccess(role, pathname) {
   const allowed = ROLE_ROUTES[normalizedRole]
   if (allowed === '*') return true
   if (!Array.isArray(allowed)) return false
-  return allowed.some((route) => pathname === route || pathname.startsWith(route + '/'))
+  const exactRoutes = ROLE_EXACT_ROUTES[normalizedRole] || []
+  return allowed.some((route) => {
+    if (exactRoutes.includes(route)) return pathname === route
+    return pathname === route || pathname.startsWith(route + '/')
+  })
 }
 
 // Verifica se um role tem uma capacidade específica

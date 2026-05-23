@@ -33,7 +33,7 @@ export const availabilityRepository = {
       throw new Error(await getResponseError(response, 'Falha ao criar disponibilidade.'))
     }
 
-    return mapAvailability(normalizeItem(await response.json()))
+    return mapAvailability(requireReturnedItem(await response.json(), 'Falha ao criar disponibilidade. A API nao retornou confirmacao da alteracao.'))
   },
 
   // PATCH /rest/v1/doctor_availability?id=eq.{uuid}
@@ -48,7 +48,7 @@ export const availabilityRepository = {
       throw new Error(await getResponseError(response, 'Falha ao atualizar disponibilidade.'))
     }
 
-    return mapAvailability(normalizeItem(await response.json()))
+    return mapAvailability(requireReturnedItem(await response.json(), 'Falha ao atualizar disponibilidade. A API nao retornou confirmacao da alteracao.'))
   },
 
   // DELETE /rest/v1/doctor_availability?id=eq.{uuid}
@@ -96,7 +96,7 @@ export const availabilityRepository = {
       throw new Error(await getResponseError(response, 'Falha ao criar exceção de agenda.'))
     }
 
-    return mapException(normalizeItem(await response.json()))
+    return mapException(requireReturnedItem(await response.json(), 'Falha ao criar excecao de agenda. A API nao retornou confirmacao da alteracao.'))
   },
 
   // O modal de novo agendamento deve refletir somente a disponibilidade cadastrada.
@@ -137,6 +137,12 @@ const PORTUGUESE_WEEKDAYS = {
   sex: 5,
   sabado: 6,
   sab: 6,
+}
+
+function requireReturnedItem(data, message) {
+  const item = normalizeItem(data)
+  if (!item) throw new Error(message)
+  return item
 }
 
 function weekdayToApi(value) {

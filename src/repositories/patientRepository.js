@@ -104,9 +104,9 @@ export const patientRepository = {
   },
 
   // PATCH /rest/v1/patients?id=eq.{id}
-  // Primeiro salva o nucleo documentado e, em seguida, tenta grupos estendidos.
-  // Se a API ainda nao tiver alguma coluna opcional, o grupo e ignorado sem
-  // impedir que os campos principais sejam persistidos.
+  // Salva o nucleo documentado e os grupos estendidos sem mascarar falhas.
+  // Se a API recusar um campo enviado pelo usuario, a tela deve exibir erro
+  // em vez de manter uma alteracao apenas local.
   async update(patientId, data) {
     validatePatientPayload(data)
     const body = buildUpdatePatientBody(data)
@@ -115,11 +115,12 @@ export const patientRepository = {
 
     if (!groups.core.length && !groups.optional.length) return []
 
-    representation = await patchRequiredPatientGroup(patientId, groups.core)
+    if (groups.core.length) {
+      representation = await patchPatient(patientId, groups.core[0])
+    }
 
     for (const attempt of groups.optional) {
-      const nextRepresentation = await patchPatient(patientId, attempt, { required: false })
-      if (nextRepresentation) representation = nextRepresentation
+      representation = await patchPatient(patientId, attempt)
     }
 
     return representation
@@ -148,7 +149,7 @@ export const patientRepository = {
       throw new Error(await getResponseError(response, 'Falha ao enviar avatar do paciente.'))
     }
 
-    await updatePatientAvatarUrl(patientId, avatarUrl).catch(() => null)
+    await updatePatientAvatarUrl(patientId, avatarUrl)
 
     return {
       avatarUrl,
@@ -251,7 +252,19 @@ function mapPatientToDirectory(patient, appointments = []) {
     responsibleCpf: formatCpf(value(['responsibleCpf', 'responsible_cpf', 'guardian_cpf', 'cpf_responsavel'])),
     spouseName: value(['spouseName', 'spouse_name', 'nome_conjuge', 'nome_esposo']),
     phone: formatBrazilianPhone(value(['phone', 'phone_mobile', 'telefone', 'celular'])),
-    avatarUrl: normalizeAvatarUrl(patient.avatarUrl || patient.avatar_url || patient.avatar_path),
+    avatarUrl: normalizeAvatarUrl(value([
+      'avatarUrl',
+      'avatar_url',
+      'avatar_path',
+      'avatar',
+      'photoUrl',
+      'photo_url',
+      'picture',
+      'imageUrl',
+      'image_url',
+      'foto',
+      'foto_url',
+    ])),
     detailId: patientId,
     insurance: normalizeInsurance(insurance),
     city,
@@ -609,11 +622,6 @@ function buildUpdateGroups(body) {
   return {
     core: uniquePayloads([
       pickPayload(body, ['full_name', 'phone_mobile', 'email']),
-      pickPayload(body, ['full_name', 'phone_mobile']),
-      pickPayload(body, ['full_name', 'email']),
-      pickPayload(body, ['full_name']),
-      pickPayload(body, ['phone_mobile']),
-      pickPayload(body, ['email']),
     ]),
     optional: uniquePayloads([
       pickPayload(body, [
@@ -665,7 +673,7 @@ function uniquePayloads(payloads) {
   })
 }
 
-async function patchPatient(patientId, payload, { required }) {
+async function patchPatient(patientId, payload) {
   const response = await fetch(`${apiConfig.restUrl}/patients?id=eq.${encodeURIComponent(patientId)}`, {
     method: 'PATCH',
     headers: getAuthenticatedHeaders({ Prefer: 'return=representation' }),
@@ -673,45 +681,15 @@ async function patchPatient(patientId, payload, { required }) {
   })
 
   if (response.ok) {
-    return response.json()
+    const data = await response.json()
+    const rows = Array.isArray(data) ? data : data ? [data] : []
+    if (!rows.length) {
+      throw new Error('Erro ao atualizar paciente. A API nao retornou confirmacao da alteracao.')
+    }
+    return rows
   }
 
-  const text = await response.text().catch(() => '')
-
-  if (!required && isUnsupportedOptionalPatch(response.status, text)) {
-    return null
-  }
-
-  throw new Error(await getResponseError(cloneTextResponse(response, text), 'Erro ao atualizar paciente.'))
-}
-
-async function patchRequiredPatientGroup(patientId, attempts) {
-  let lastSkipped = null
-
-  for (const attempt of attempts) {
-    const result = await patchPatient(patientId, attempt, { required: false })
-    if (result) return result
-    lastSkipped = attempt
-  }
-
-  if (lastSkipped) {
-    throw new Error('Erro ao atualizar paciente. A API recusou os campos principais do paciente.')
-  }
-
-  return []
-}
-
-function isUnsupportedOptionalPatch(status, text) {
-  if (![400, 404, 406].includes(status)) return false
-  return /column|schema cache|relationship|not found|does not exist|pgrst/i.test(String(text || ''))
-}
-
-function cloneTextResponse(response, text) {
-  return new Response(text, {
-    headers: response.headers,
-    status: response.status,
-    statusText: response.statusText,
-  })
+  throw new Error(await getResponseError(response, 'Erro ao atualizar paciente.'))
 }
 
 function buildRegisterPatientWithPasswordPayload(data) {
@@ -753,15 +731,25 @@ function validatePatientPayload(data, { requireRegistrationFields = false, requi
 }
 
 async function updatePatientAvatarUrl(patientId, avatarUrl) {
-  const response = await fetch(`${apiConfig.restUrl}/patients?id=eq.${patientId}`, {
+  const response = await fetch(`${apiConfig.restUrl}/patients?id=eq.${encodeURIComponent(patientId)}`, {
     method: 'PATCH',
-    headers: getAuthenticatedHeaders({ Prefer: 'return=minimal' }),
+    headers: getAuthenticatedHeaders({ Prefer: 'return=representation' }),
     body: JSON.stringify({ avatar_url: avatarUrl }),
   })
 
   if (!response.ok) {
     throw new Error(await getResponseError(response, 'Falha ao salvar avatar do paciente.'))
   }
+
+  const data = await response.json().catch(() => null)
+  const rows = Array.isArray(data) ? data : data ? [data] : []
+  const updated = rows.find((row) => normalizeAvatarUrl(row?.avatar_url || row?.avatarUrl || row?.avatar_path) === avatarUrl)
+
+  if (!updated) {
+    throw new Error('Falha ao salvar avatar do paciente. A API nao confirmou a alteracao.')
+  }
+
+  return updated
 }
 
 function calculateAge(birthDate) {

@@ -8,7 +8,7 @@ import {
   PENDING_NOTIFICATION_ACTION_KEY,
   notificationRepository,
 } from '../repositories/notificationRepository.js'
-import { profileRepository } from '../repositories/profileRepository.js'
+import { PROFILE_AVATAR_CHANGED_EVENT, profileRepository } from '../repositories/profileRepository.js'
 import { useSocketEvent } from '../providers/socketContext.js'
 import { BrandLogo } from './Brand.jsx'
 
@@ -54,7 +54,7 @@ export function AppShell({ children, currentPath, navigate, role, routeTitle }) 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
-  const [viewerProfile, setViewerProfile] = useState({ name: 'Usuário', role: 'Usuário do Sistema' })
+  const [viewerProfile, setViewerProfile] = useState({ avatarUrl: '', name: 'Usuário', role: 'Usuário do Sistema' })
   const [notifications, setNotifications] = useState([])
   useSocketEvent('nova_notificacao', (payload) => {
     // Increment notifications unread
@@ -104,28 +104,35 @@ export function AppShell({ children, currentPath, navigate, role, routeTitle }) 
   useEffect(() => {
     let active = true
 
-    profileRepository
-      .getCurrentUserProfile()
-      .then((profile) => {
-        if (!active || !profile) return
+    function loadViewerProfile() {
+      profileRepository
+        .getCurrentUserProfile()
+        .then((profile) => {
+          if (!active || !profile) return
 
-        setViewerProfile({
-          name: profile.name || 'Usuário',
-          role: ROLE_LABELS[normalizedRole] || profile.role || 'Usuário do Sistema',
+          setViewerProfile({
+            avatarUrl: profile.avatarUrl || '',
+            name: profile.name || 'Usuário',
+            role: ROLE_LABELS[normalizedRole] || profile.role || 'Usuário do Sistema',
+          })
         })
-      })
-      .catch(() => {
-        // Fallback: usa o label do role diretamente
-        if (active && normalizedRole) {
-          setViewerProfile((prev) => ({
-            ...prev,
-            role: ROLE_LABELS[normalizedRole] || 'Usuário do Sistema',
-          }))
-        }
-      })
+        .catch(() => {
+          // Fallback: usa o label do role diretamente
+          if (active && normalizedRole) {
+            setViewerProfile((prev) => ({
+              ...prev,
+              role: ROLE_LABELS[normalizedRole] || 'Usuário do Sistema',
+            }))
+          }
+        })
+    }
+
+    loadViewerProfile()
+    window.addEventListener(PROFILE_AVATAR_CHANGED_EVENT, loadViewerProfile)
 
     return () => {
       active = false
+      window.removeEventListener(PROFILE_AVATAR_CHANGED_EVENT, loadViewerProfile)
     }
   }, [normalizedRole])
 
@@ -369,9 +376,11 @@ export function AppShell({ children, currentPath, navigate, role, routeTitle }) 
                   }}
                   type="button"
                 >
-                  <span className="app-topbar-avatar grid size-8 shrink-0 place-items-center rounded-full border border-[#3b82f6]/30 bg-[#3b82f6]/15 text-xs font-bold text-accent-primary ring-2 ring-[#3b82f6]/20">
-                    {getInitials(viewerProfile.name)}
-                  </span>
+                  <ProfileAvatar
+                    avatarUrl={viewerProfile.avatarUrl}
+                    className="app-topbar-avatar size-8 text-xs ring-2 ring-[#3b82f6]/20"
+                    name={viewerProfile.name}
+                  />
                   <span className="hidden min-w-0 sm:block">
                     <span className="app-topbar-profile-name block max-w-40 truncate text-sm font-semibold leading-4 text-text-heading">
                       {viewerProfile.name}
@@ -396,7 +405,11 @@ export function AppShell({ children, currentPath, navigate, role, routeTitle }) 
                         role="menuitem"
                         type="button"
                       >
-                        <UserIcon className="size-4 text-text-muted-v2" />
+                        <ProfileAvatar
+                          avatarUrl={viewerProfile.avatarUrl}
+                          className="size-4 text-[9px]"
+                          name={viewerProfile.name}
+                        />
                         Ver perfil
                       </button>
                     ) : null}
@@ -462,6 +475,26 @@ function NavItem({ active, item, onNavigate, sidebarCollapsed = false }) {
       <AppIcon className={`size-5 shrink-0 ${sidebarCollapsed ? 'lg:mx-auto' : ''}`} name={item.icon} />
       <span className={sidebarCollapsed ? 'lg:hidden' : ''}>{item.label}</span>
     </a>
+  )
+}
+
+function ProfileAvatar({ avatarUrl = '', className = 'size-8 text-xs', name }) {
+  const [failedUrl, setFailedUrl] = useState('')
+  const hasAvatar = Boolean(avatarUrl) && failedUrl !== avatarUrl
+
+  return (
+    <span className={`grid shrink-0 place-items-center overflow-hidden rounded-full border border-[#3b82f6]/30 bg-[#3b82f6]/15 font-bold text-accent-primary ${className}`}>
+      {hasAvatar ? (
+        <img
+          alt=""
+          className="size-full object-cover"
+          onError={() => setFailedUrl(avatarUrl)}
+          src={avatarUrl}
+        />
+      ) : (
+        getInitials(name)
+      )}
+    </span>
   )
 }
 
@@ -599,15 +632,6 @@ function BellIcon({ className = 'size-5' }) {
     <svg className={className} fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
       <path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
       <path d="M10 21h4" />
-    </svg>
-  )
-}
-
-function UserIcon({ className = 'size-4' }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
-      <path d="M20 21a8 8 0 0 0-16 0" />
-      <circle cx="12" cy="7" r="4" />
     </svg>
   )
 }

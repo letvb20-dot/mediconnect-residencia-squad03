@@ -58,7 +58,7 @@ export const reportRepository = {
     }
 
     const data = await response.json()
-    return reportMapper.toUi(normalizeItem(data))
+    return reportMapper.toUi(requireReturnedItem(data, 'Falha ao criar relatorio medico. A API nao retornou confirmacao da alteracao.'))
   },
 
   // PATCH /rest/v1/reports?id=eq.{uuid}
@@ -74,7 +74,7 @@ export const reportRepository = {
     }
 
     const data = await response.json()
-    return reportMapper.toUi(normalizeItem(data))
+    return reportMapper.toUi(requireReturnedItem(data, 'Falha ao atualizar relatorio medico. A API nao retornou confirmacao da alteracao.'))
   },
 
   // DELETE /rest/v1/reports?id=eq.{uuid} (não documentado mas é DELETE padrão PostgREST)
@@ -90,6 +90,12 @@ export const reportRepository = {
 
     return true
   },
+}
+
+function requireReturnedItem(data, message) {
+  const item = normalizeItem(data)
+  if (!item) throw new Error(message)
+  return item
 }
 
 async function getDoctorNameMap() {

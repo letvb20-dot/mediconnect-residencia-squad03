@@ -194,7 +194,7 @@ export function ProfessionalsPage({ navigate }) {
   )
 }
 
-export function ProfessionalDetailPage({ navigate, professionalId, role }) {
+export function ProfessionalDetailPage({ navigate, professionalId, role, selfProfile = false }) {
   const [professionals, setProfessionals] = useState([])
   const [viewerProfile, setViewerProfile] = useState(null)
   const [availabilityRows, setAvailabilityRows] = useState([])
@@ -233,13 +233,15 @@ export function ProfessionalDetailPage({ navigate, professionalId, role }) {
     }
   }, [])
 
-  const professional = useMemo(
-    () => professionals.find((item) => sameProfessionalId(item.id, decodedProfessionalId)) || null,
-    [decodedProfessionalId, professionals],
-  )
   const currentProfessional = useMemo(
     () => professionalRepository.resolveCurrentProfessional(viewerProfile, professionals),
     [professionals, viewerProfile],
+  )
+  const professional = useMemo(
+    () => selfProfile
+      ? currentProfessional
+      : professionals.find((item) => sameProfessionalId(item.id, decodedProfessionalId)) || null,
+    [currentProfessional, decodedProfessionalId, professionals, selfProfile],
   )
   const canEditAvailability = useMemo(
     () => canEditProfessionalAvailability(role, viewerProfile, currentProfessional, professional),
@@ -290,12 +292,14 @@ export function ProfessionalDetailPage({ navigate, professionalId, role }) {
   }
 
   if (!professional) {
+    const notFoundAction = selfProfile ? '/inicio' : '/profissionais'
+
     return (
       <div className="mx-auto max-w-3xl rounded-2xl border border-border-default-v2 bg-surface-card p-8 text-center text-text-heading">
-        <h1 className="text-xl font-bold">Profissional não encontrado</h1>
+        <h1 className="text-xl font-bold">{selfProfile ? 'Perfil profissional nao encontrado' : 'Profissional nao encontrado'}</h1>
         <button
           className="mt-6 rounded-lg bg-[#3b82f6] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#2563eb]"
-          onClick={() => navigate('/profissionais')}
+          onClick={() => navigate(notFoundAction)}
           type="button"
         >
           Voltar
@@ -320,13 +324,15 @@ export function ProfessionalDetailPage({ navigate, professionalId, role }) {
     <div className="mx-auto max-w-7xl space-y-6 text-text-heading">
       <div className="flex flex-col items-start justify-between gap-4 border-b border-border-default-v2 pb-6 md:flex-row md:items-center">
         <div className="flex items-start gap-4">
-          <button
-            className="mt-1 grid size-10 place-items-center rounded-lg border border-border-default-v2 bg-surface-card text-text-heading transition hover:bg-surface-card-hover"
-            onClick={() => navigate('/profissionais')}
-            type="button"
-          >
-            <ProfessionalIcon className="size-5" name="arrow-left" />
-          </button>
+          {!selfProfile ? (
+            <button
+              className="mt-1 grid size-10 place-items-center rounded-lg border border-border-default-v2 bg-surface-card text-text-heading transition hover:bg-surface-card-hover"
+              onClick={() => navigate('/profissionais')}
+              type="button"
+            >
+              <ProfessionalIcon className="size-5" name="arrow-left" />
+            </button>
+          ) : null}
           <div>
             <h1 className="text-[32px] font-bold leading-8 tracking-[-0.02em] text-text-heading">{professional.name}</h1>
             <p className="mt-1 text-sm text-text-muted-v2">{specialty || 'Especialidade não informada'}</p>

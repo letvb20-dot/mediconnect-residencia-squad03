@@ -122,6 +122,52 @@ test('userRepository.create cria registro de paciente automaticamente para role 
   assert.equal(user.patientId, 'patient-1')
 })
 
+test('userRepository.create nao falha quando API nao suporta vinculo direto do paciente no perfil', async () => {
+  const calls = []
+
+  globalThis.fetch = async (url, options = {}) => {
+    const requestUrl = String(url)
+    const method = options.method || 'GET'
+    calls.push({ body: options.body ? JSON.parse(options.body) : null, method, url: requestUrl })
+
+    if (requestUrl.includes('/functions/v1/create-user')) {
+      return Response.json({ id: 'user-1', email: 'paciente@exemplo.com' })
+    }
+
+    if (requestUrl.includes('/rest/v1/patients?')) {
+      return Response.json([])
+    }
+
+    if (requestUrl.includes('/functions/v1/create-patient')) {
+      return Response.json({ id: 'patient-1', full_name: 'Maria Paciente', cpf: '98765432100' })
+    }
+
+    if (requestUrl.includes('/rest/v1/profiles?') && method === 'PATCH') {
+      return Response.json({ message: "Could not find the 'patient_id' column of 'profiles' in the schema cache" }, { status: 400 })
+    }
+
+    if (requestUrl.includes('/rest/v1/user_profiles?') && method === 'PATCH') {
+      return Response.json({ message: 'relation "user_profiles" does not exist' }, { status: 404 })
+    }
+
+    throw new Error(`URL inesperada: ${requestUrl}`)
+  }
+
+  const { userRepository } = await import('../src/repositories/userRepository.js')
+  const user = await userRepository.create({
+    cpf: '987.654.321-00',
+    email: 'paciente@exemplo.com',
+    full_name: 'Maria Paciente',
+    phone: '(11) 98888-7777',
+    role: 'paciente',
+  })
+
+  const profilePatch = calls.find((call) => call.url.includes('/rest/v1/profiles?') && call.method === 'PATCH')
+
+  assert.equal(profilePatch.body.patient_id, 'patient-1')
+  assert.equal(user.patientId, 'patient-1')
+})
+
 test('userRepository.createWithPassword cria registro de paciente automaticamente para role paciente', async () => {
   const calls = []
 
@@ -265,6 +311,7 @@ test('userRepository.getAll mescla dados de medico nos detalhes do usuario', asy
     if (requestUrl.includes('/profiles?')) {
       return Response.json([
         {
+          avatar_url: 'users/user-1/avatar.png',
           id: 'user-1',
           email: 'medico@exemplo.com',
           full_name: 'Dr Joao Lima',
@@ -297,6 +344,7 @@ test('userRepository.getAll mescla dados de medico nos detalhes do usuario', asy
   const users = await userRepository.getAll()
 
   assert.equal(users[0].cpf, '123.456.789-01')
+  assert.match(users[0].avatarUrl, /\/object\/public\/avatars\/users\/user-1\/avatar\.png$/)
   assert.equal(users[0].crm, '45678')
   assert.equal(users[0].crm_uf, 'RJ')
   assert.equal(users[0].specialty, 'Clinica medica')
@@ -474,14 +522,12 @@ test('userRepository.update usa doctor_id de profiles para atualizar doctors cor
   assert.equal(professionals[0].name, 'Nome Editado Pela Secretaria')
 })
 
-test('userRepository.update preserva doctor_id existente quando secretária edita perfil médico', async () => {
+test('userRepository.update nao mascara sincronizacao de doctors sem confirmacao', async () => {
   window.localStorage.clear()
-  const calls = []
 
   globalThis.fetch = async (url, options = {}) => {
     const requestUrl = String(url)
     const method = options.method || 'GET'
-    calls.push({ body: options.body ? JSON.parse(options.body) : null, method, url: requestUrl })
 
     if (requestUrl.includes('/profiles?id=eq.user-1') && method === 'GET') {
       return Response.json([{
@@ -494,7 +540,13 @@ test('userRepository.update preserva doctor_id existente quando secretária edit
     }
 
     if (requestUrl.includes('/profiles?id=eq.user-1') && method === 'PATCH') {
-      return Response.json([])
+      return Response.json([{
+        id: 'user-1',
+        doctor_id: 'doctor-1',
+        email: 'medico@exemplo.com',
+        full_name: 'Nome Atualizado',
+        role: 'medico',
+      }])
     }
 
     if (requestUrl.includes('/doctors?id=eq.doctor-1') && method === 'PATCH') {
@@ -503,6 +555,60 @@ test('userRepository.update preserva doctor_id existente quando secretária edit
 
     if (requestUrl.includes('/doctors?') && method === 'GET') {
       return Response.json([{ id: 'doctor-1', user_id: 'user-1', full_name: 'Nome Antigo', email: 'medico@exemplo.com' }])
+    }
+
+    throw new Error(`URL inesperada: ${requestUrl}`)
+  }
+
+  const { userRepository } = await import('../src/repositories/userRepository.js')
+  await assert.rejects(
+    () => userRepository.update('user-1', {
+      email: 'medico@exemplo.com',
+      full_name: 'Nome Atualizado',
+      role: 'medico',
+    }),
+    /Nao foi possivel sincronizar o cadastro do medico correspondente/
+  )
+})
+
+test('userRepository.update preserva doctor_id existente quando secretária edita perfil médico', async () => {
+  window.localStorage.clear()
+  const calls = []
+  const profileRow = {
+    id: 'user-1',
+    doctor_id: 'doctor-1',
+    email: 'medico@exemplo.com',
+    full_name: 'Nome Antigo',
+    role: 'medico',
+  }
+  const doctorRow = {
+    id: 'doctor-1',
+    user_id: 'user-1',
+    full_name: 'Nome Antigo',
+    email: 'medico@exemplo.com',
+  }
+
+  globalThis.fetch = async (url, options = {}) => {
+    const requestUrl = String(url)
+    const method = options.method || 'GET'
+    calls.push({ body: options.body ? JSON.parse(options.body) : null, method, url: requestUrl })
+
+    if (requestUrl.includes('/profiles?') && requestUrl.includes('id=eq.user-1') && method === 'GET') {
+      return Response.json([profileRow])
+    }
+
+    if (requestUrl.includes('/profiles?id=eq.user-1') && method === 'PATCH') {
+      Object.assign(profileRow, options.body ? JSON.parse(options.body) : {})
+      return Response.json([])
+    }
+
+    if (requestUrl.includes('/doctors?id=eq.doctor-1') && method === 'PATCH') {
+      Object.assign(doctorRow, options.body ? JSON.parse(options.body) : {})
+      return Response.json([])
+    }
+
+    if (requestUrl.includes('/doctors?') && method === 'GET') {
+      return Response.json([doctorRow])
     }
 
     if (requestUrl.includes('/profiles?') && method === 'GET') {
@@ -526,6 +632,7 @@ test('userRepository.update preserva doctor_id existente quando secretária edit
   assert.equal(user.full_name, 'Nome Editado Pela Secretaria')
 
   const { professionalRepository } = await import('../src/repositories/professionalRepository.js')
+  window.localStorage.clear()
   const professionals = await professionalRepository.getAll()
 
   assert.equal(professionals[0].name, 'Nome Editado Pela Secretaria')

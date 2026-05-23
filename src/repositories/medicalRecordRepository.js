@@ -59,7 +59,7 @@ export const medicalRecordRepository = {
         lastResponse = response
 
         if (response.ok) {
-          const created = normalizeItem(await response.json())
+          const created = requireReturnedItem(await response.json(), 'Erro ao criar prontuario. A API nao retornou confirmacao da alteracao.')
           return mapMedicalRecord(created)
         }
 
@@ -112,7 +112,7 @@ export const medicalRecordRepository = {
       lastResponse = response
 
       if (response.ok) {
-        return mapMedicalRecord(normalizeItem(await response.json()))
+        return mapMedicalRecord(requireReturnedItem(await response.json(), 'Erro ao atualizar prontuario. A API nao retornou confirmacao da alteracao.'))
       }
 
       if (![400, 404, 406].includes(response.status)) {
@@ -122,6 +122,12 @@ export const medicalRecordRepository = {
 
     throw new Error(await getResponseError(lastResponse, 'API de prontuários não encontrada.'))
   },
+}
+
+function requireReturnedItem(data, message) {
+  const item = normalizeItem(data)
+  if (!item) throw new Error(message)
+  return item
 }
 
 function buildCreatePayloads(data) {

@@ -138,6 +138,7 @@ export function AgendaPage({ navigate }) {
   const weekEnd = endOfWeek(baseDate, { weekStartsOn: 0 })
   const isDoctorScope = agendaScope === 'doctor'
   const isPatientScope = agendaScope === 'patient'
+  const showAvailabilitySidebar = !isPatientScope && !isDoctorScope
   const unitOptions = [
     ...new Set(professionals.map((professional) => professional.unit).filter(Boolean)),
   ].sort((a, b) => a.localeCompare(b, 'pt-BR'))
@@ -262,7 +263,7 @@ export function AgendaPage({ navigate }) {
           </div>
         </section>
       ) : (
-        <section className={`grid gap-6 ${isPatientScope ? '' : 'xl:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_380px]'}`}>
+        <section className={`grid gap-6 ${showAvailabilitySidebar ? 'xl:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_380px]' : ''}`}>
           <div className="self-start rounded-2xl border border-border-default-v2 bg-surface-card p-4 shadow-[0_1px_3px_rgba(0,0,0,0.2)]">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
@@ -395,7 +396,7 @@ export function AgendaPage({ navigate }) {
               )}
             </div>
           </div>
-          {!isPatientScope ? (
+          {showAvailabilitySidebar ? (
             <AvailabilityPanel
               canEditAvailability={false}
               compact

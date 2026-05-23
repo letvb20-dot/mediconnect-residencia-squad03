@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+import { apiConfig } from '../config/api.js'
 import { hasCapability } from '../config/permissions.js'
 import { patientRepository } from '../repositories/patientRepository.js'
 import { translateErrorMessage } from '../repositories/repositoryUtils.js'
@@ -187,7 +188,7 @@ export function PatientsPage({ navigate, role }) {
       const created = normalizeCreatedPatient(await patientRepository.create(patient))
       const patientId = created?.id || patient.id
       if (patientId) {
-        await patientRepository.update(patientId, patient).catch(() => null)
+        await patientRepository.update(patientId, patient)
       }
       const avatarResult = patient.avatarFile
         ? await patientRepository.uploadAvatar(patientId, patient.avatarFile)
@@ -195,7 +196,7 @@ export function PatientsPage({ navigate, role }) {
       const uploadedAttachments = await uploadPatientAttachments(patientId, patient.attachmentFiles)
       const nextAttachments = [...(patient.attachments || []), ...uploadedAttachments]
       if (uploadedAttachments.length) {
-        await patientRepository.update(patientId, { attachments: nextAttachments }).catch(() => null)
+        await patientRepository.update(patientId, { attachments: nextAttachments })
       }
       const newRow = {
         ...patient,
@@ -217,7 +218,7 @@ export function PatientsPage({ navigate, role }) {
       const uploadedAttachments = await uploadPatientAttachments(patient.id, patient.attachmentFiles)
       const nextAttachments = [...(patient.attachments || []), ...uploadedAttachments]
       if (uploadedAttachments.length) {
-        await patientRepository.update(patient.id, { attachments: nextAttachments }).catch(() => null)
+        await patientRepository.update(patient.id, { attachments: nextAttachments })
       }
       const nextPatient = {
         ...patient,
@@ -253,7 +254,7 @@ async function uploadPatientAttachments(patientId, files = []) {
     .map((result) => translateErrorMessage(result.reason?.message, 'Falha ao enviar anexo do paciente.'))
 
   if (failedUploads.length) {
-    window.alert(`Paciente salvo, mas ${failedUploads.length} anexo(s) nÃ£o puderam ser enviados. ${failedUploads[0]}`)
+    throw new Error(`${failedUploads.length} anexo(s) nao puderam ser enviados. ${failedUploads[0]}`)
   }
 
   return results
@@ -423,13 +424,7 @@ async function uploadPatientAttachments(patientId, files = []) {
                   <tr className="transition hover:bg-surface-card-hover" key={patient.id}>
                     <td className="px-6 py-4 align-top">
                       <button className="flex items-center gap-3 text-left" onClick={() => openDetail(patient)} type="button">
-                        {patient.avatarUrl ? (
-                          <img alt="" className="size-8 shrink-0 rounded-full border border-[#3b82f6]/30 object-cover" src={patient.avatarUrl} />
-                        ) : (
-                          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-surface-card-hover text-xs font-bold text-[#3b82f6]">
-                            {patient.name.charAt(0)}
-                          </span>
-                        )}
+                        <PatientAvatar className="size-8" patient={patient} />
                         <span className="min-w-0">
                           <span className="block whitespace-normal break-words font-medium text-text-heading transition hover:text-[#3b82f6]">
                             {patient.name}
@@ -562,7 +557,7 @@ async function uploadPatientAttachments(patientId, files = []) {
     .map((result) => translateErrorMessage(result.reason?.message, 'Falha ao enviar anexo do paciente.'))
 
   if (failedUploads.length) {
-    window.alert(`Paciente salvo, mas ${failedUploads.length} anexo(s) nao puderam ser enviados. ${failedUploads[0]}`)
+    throw new Error(`${failedUploads.length} anexo(s) nao puderam ser enviados. ${failedUploads[0]}`)
   }
 
   return results
@@ -630,7 +625,7 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
     lastVisit: patient?.lastVisit || null,
     nextVisit: patient?.nextVisit || null,
     lastVisitIso: patient?.lastVisitIso || null,
-    avatarUrl: patient?.avatarUrl || patient?.avatar_url || '',
+    avatarUrl: resolvePatientAvatarUrl(patient),
   }))
   const fileInputRef = useRef(null)
   const attachmentInputRef = useRef(null)
@@ -1136,7 +1131,7 @@ export function PatientDetailPage({ navigate, patient, role }) {
       const uploadedAttachments = await uploadPatientAttachments(updatedPatient.id, updatedPatient.attachmentFiles)
       const nextAttachments = [...(updatedPatient.attachments || []), ...uploadedAttachments]
       if (uploadedAttachments.length) {
-        await patientRepository.update(updatedPatient.id, { attachments: nextAttachments }).catch(() => null)
+        await patientRepository.update(updatedPatient.id, { attachments: nextAttachments })
       }
       setLocalPatient((current) => ({
         ...current,
@@ -1365,7 +1360,7 @@ function PatientSummary({ patient }) {
           <div className="mt-4 flex items-center gap-4">
             <PatientAvatar className="size-24" patient={patient} />
             <p className="text-sm leading-5 text-text-muted-v2">
-              {patient.avatarUrl ? 'Imagem cadastrada no perfil do paciente.' : 'Nenhuma foto cadastrada.'}
+              {resolvePatientAvatarUrl(patient) ? 'Imagem cadastrada no perfil do paciente.' : 'Nenhuma foto cadastrada.'}
             </p>
           </div>
         </div>
@@ -1385,21 +1380,32 @@ function PatientSummary({ patient }) {
 }
 
 function PatientAvatar({ className = 'mt-1 size-12', patient }) {
-  if (patient.avatarUrl) {
-    return (
-      <img
-        alt={`Foto de ${patient.name || 'paciente'}`}
-        className={`${className} shrink-0 rounded-full border border-[#3b82f6]/30 object-cover`}
-        src={patient.avatarUrl}
-      />
-    )
-  }
+  const [failedUrl, setFailedUrl] = useState('')
+  const avatarUrl = resolvePatientAvatarUrl(patient)
+  const hasAvatar = Boolean(avatarUrl) && failedUrl !== avatarUrl
 
   return (
-    <span className={`${className} grid shrink-0 place-items-center rounded-full border border-border-default-v2 bg-surface-card text-lg font-bold text-text-muted-v2`}>
-      {getPatientInitials(patient.name)}
+    <span className={`${className} grid shrink-0 place-items-center overflow-hidden rounded-full border border-[#3b82f6]/30 bg-surface-card text-lg font-bold text-text-muted-v2`}>
+      {hasAvatar ? (
+        <img
+          alt={`Foto de ${patient.name || 'paciente'}`}
+          className="size-full object-cover"
+          onError={() => setFailedUrl(avatarUrl)}
+          src={avatarUrl}
+        />
+      ) : (
+        getPatientInitials(patient.name)
+      )}
     </span>
   )
+}
+
+function resolvePatientAvatarUrl(patient) {
+  const avatar = String(patient?.avatarUrl || patient?.avatar_url || patient?.avatar_path || patient?.photo_url || patient?.foto_url || '').trim()
+  if (!avatar) return ''
+  if (/^(https?:|blob:|data:)/i.test(avatar)) return avatar
+
+  return `${apiConfig.storageUrl}/object/public/avatars/${avatar.replace(/^\/+/, '')}`
 }
 
 function getPatientInitials(name) {

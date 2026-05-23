@@ -1,7 +1,7 @@
 import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 
 import { AppShell } from './components/AppShell.jsx'
-import { canAccess } from './config/permissions.js'
+import { canAccess, normalizeRole } from './config/permissions.js'
 import { useAuth } from './hooks/useAuth.js'
 import { ForgotPasswordPage, LoginPage, RegisterPage } from './pages/AuthPages.jsx'
 import { NotFoundPage } from './pages/NotFoundPage.jsx'
@@ -323,9 +323,13 @@ function resolveRoute(pathname, navigate, role, profile, user, isAuthenticated) 
   }
 
   if (pathname === '/profissionais') {
+    const isDoctorRole = normalizeRole(role) === 'medico'
+
     return {
-      element: <ProfessionalsPage navigate={navigate} role={role} />,
-      title: 'Profissionais',
+      element: isDoctorRole
+        ? <ProfessionalDetailPage navigate={navigate} role={role} selfProfile />
+        : <ProfessionalsPage navigate={navigate} role={role} />,
+      title: isDoctorRole ? 'Meu perfil profissional' : 'Profissionais',
       withShell: true,
     }
   }

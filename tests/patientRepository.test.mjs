@@ -36,6 +36,9 @@ test('patientRepository.getById busca o paciente direto por id', async () => {
       return Response.json([
         {
           id: 'patient-1',
+          profile: {
+            avatar_path: 'patients/patient-1/avatar.jpg',
+          },
           full_name: 'Ana Souza',
           cpf: '12345678900',
           birth_date: '1990-01-01',
@@ -55,6 +58,7 @@ test('patientRepository.getById busca o paciente direto por id', async () => {
 
   assert.equal(patient.id, 'patient-1')
   assert.equal(patient.name, 'Ana Souza')
+  assert.match(patient.avatarUrl, /\/object\/public\/avatars\/patients\/patient-1\/avatar\.jpg$/)
   assert.ok(calls.some((url) => url.includes('/patients?') && url.includes('id=eq.patient-1')))
   assert.ok(calls.every((url) => !url.includes('/patients?select=*') || url.includes('id=eq.patient-1')))
 })
@@ -214,7 +218,62 @@ test('patientRepository.uploadAttachment tenta buckets de anexos antes de avatar
   assert.equal(calls.length, 2)
 })
 
-test('patientRepository.update tenta payload menor quando a API recusa coluna opcional', async () => {
+test('patientRepository.uploadAvatar salva avatar do paciente com confirmacao da API', async () => {
+  const calls = []
+  const file = new Blob(['avatar'], { type: 'image/png' })
+  file.name = 'foto.png'
+
+  globalThis.fetch = async (url, options = {}) => {
+    const requestUrl = String(url)
+    calls.push({ body: options.body, headers: options.headers, method: options.method, url: requestUrl })
+
+    if (requestUrl.includes('/storage/v1/object/avatars/patients/patient-1/avatar.png')) {
+      return Response.json({ Key: 'ok' })
+    }
+
+    if (requestUrl.includes('/rest/v1/patients?id=eq.patient-1') && options.method === 'PATCH') {
+      const body = JSON.parse(options.body)
+      assert.equal(options.headers.Prefer, 'return=representation')
+      return Response.json([{ id: 'patient-1', avatar_url: body.avatar_url }])
+    }
+
+    throw new Error(`URL inesperada: ${requestUrl}`)
+  }
+
+  const { patientRepository } = await import('../src/repositories/patientRepository.js')
+  const result = await patientRepository.uploadAvatar('patient-1', file)
+
+  assert.match(result.avatarUrl, /\/object\/public\/avatars\/patients\/patient-1\/avatar\.png$/)
+  assert.equal(calls.length, 2)
+})
+
+test('patientRepository.uploadAvatar falha quando a API nao confirma avatar do paciente', async () => {
+  const file = new Blob(['avatar'], { type: 'image/png' })
+  file.name = 'foto.png'
+
+  globalThis.fetch = async (url, options = {}) => {
+    const requestUrl = String(url)
+
+    if (requestUrl.includes('/storage/v1/object/avatars/patients/patient-1/avatar.png')) {
+      return Response.json({ Key: 'ok' })
+    }
+
+    if (requestUrl.includes('/rest/v1/patients?id=eq.patient-1') && options.method === 'PATCH') {
+      return Response.json([])
+    }
+
+    throw new Error(`URL inesperada: ${requestUrl}`)
+  }
+
+  const { patientRepository } = await import('../src/repositories/patientRepository.js')
+
+  await assert.rejects(
+    () => patientRepository.uploadAvatar('patient-1', file),
+    /API nao confirmou/,
+  )
+})
+
+test('patientRepository.update falha quando a API recusa campo enviado', async () => {
   const bodies = []
 
   globalThis.fetch = async (url, options = {}) => {
@@ -229,23 +288,22 @@ test('patientRepository.update tenta payload menor quando a API recusa coluna op
   }
 
   const { patientRepository } = await import('../src/repositories/patientRepository.js')
-  await patientRepository.update('patient-1', {
-    email: 'ana@exemplo.com',
-    name: 'Ana Souza',
-    phone: '(11) 99999-8888',
-    lgpdOptIn: true,
-  })
+  await assert.rejects(
+    () => patientRepository.update('patient-1', {
+      email: 'ana@exemplo.com',
+      name: 'Ana Souza',
+      phone: '(11) 99999-8888',
+      lgpdOptIn: true,
+    }),
+    /Erro ao atualizar paciente/,
+  )
 
   assert.deepEqual(bodies[0], {
     email: 'ana@exemplo.com',
     full_name: 'Ana Souza',
     phone_mobile: '11999998888',
   })
-  assert.deepEqual(bodies[1], {
-    full_name: 'Ana Souza',
-    phone_mobile: '11999998888',
-  })
-  assert.equal(bodies.some((body) => body.lgpd_opt_in === true), true)
+  assert.equal(bodies.length, 1)
 })
 
 test('patientRepository.update persiste campos estendidos quando a API suporta', async () => {

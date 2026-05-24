@@ -946,6 +946,33 @@ button:disabled {
   --shadow-elevated-val: 0 0 0 1px rgba(255, 255, 255, 0.4), 0 12px 40px rgba(0, 0, 0, 0.8);
 }
 
+/* Alto Contraste no MODO ESCURO */
+.dark[data-contrast="high"], 
+[data-theme="dark"][data-contrast="high"] {
+  --background: 0 0% 0%; /* Fundo 100% Preto */
+  --foreground: 0 0% 100%; /* Texto 100% Branco */
+  
+  --card: 0 0% 0%;
+  --card-foreground: 0 0% 100%;
+  
+  --popover: 0 0% 0%;
+  --popover-foreground: 0 0% 100%;
+  
+  --muted: 0 0% 12%; /* Fundo levemente cinza para não sumir no preto */
+  --muted-foreground: 0 0% 100%; /* Textos secundários brancos */
+  
+  --secondary: 0 0% 20%;
+  --secondary-foreground: 0 0% 100%;
+
+  /* === A CORREÇÃO CRÍTICA DAS LINHAS E BORDAS === */
+  --border: 0 0% 100%; /* Bordas e separadores 100% Brancos */
+  --input: 0 0% 100%; /* Bordas de formulário 100% Brancas */
+  --ring: 0 0% 100%; /* Anel de foco 100% Branco */
+  /* ============================================== */
+
+  /* Nota: Mantenha --primary inalterada para não perder o brilho da sidebar */
+}
+
 /* ── Global border reinforcement in high-contrast ── */
 .high-contrast *,
 .high-contrast *::before,

@@ -182,7 +182,7 @@ export function AgendaPage({ navigate }) {
 
   return (
     <div className="mx-auto flex w-full max-w-none flex-col gap-8 text-text-body">
-      <section className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <section className="flex flex-col gap-4 md:flex-row md:flex-wrap md:items-center md:justify-between">
         <div>
           <h1 className="text-[32px] font-bold leading-8 tracking-[-0.02em] text-text-body">
             Agenda
@@ -193,9 +193,9 @@ export function AgendaPage({ navigate }) {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1 rounded-sm border border-border-default-v2 bg-surface-card p-1">
+          <div className="flex shrink-0 items-center gap-1 rounded-sm border border-border-default-v2 bg-surface-card p-1">
             <button
-              className="grid size-7 place-items-center rounded-sm text-text-muted-v2 transition hover:bg-surface-card-hover hover:text-text-body"
+              className="grid size-7 shrink-0 place-items-center rounded-sm text-text-muted-v2 transition hover:bg-surface-card-hover hover:text-text-body"
               onClick={() => {
                 if (activeView === 'Dia') setBaseDate((current) => subDays(current, 1))
                 if (activeView === 'Semana') setBaseDate((current) => subWeeks(current, 1))
@@ -212,7 +212,7 @@ export function AgendaPage({ navigate }) {
               {activeView === 'Mes' && format(baseDate, 'MMMM yyyy', { locale: ptBR })}
             </span>
             <button
-              className="grid size-7 place-items-center rounded-sm text-text-muted-v2 transition hover:bg-surface-card-hover hover:text-text-body"
+              className="grid size-7 shrink-0 place-items-center rounded-sm text-text-muted-v2 transition hover:bg-surface-card-hover hover:text-text-body"
               onClick={() => {
                 if (activeView === 'Dia') setBaseDate((current) => addDays(current, 1))
                 if (activeView === 'Semana') setBaseDate((current) => addWeeks(current, 1))
@@ -224,7 +224,7 @@ export function AgendaPage({ navigate }) {
             </button>
           </div>
           <button
-            className="h-9 rounded-sm border border-border-default-v2 bg-surface-card px-4 text-sm font-medium text-text-body transition hover:bg-surface-card-hover"
+            className="shrink-0 h-9 rounded-sm border border-border-default-v2 bg-surface-card px-4 text-sm font-medium text-text-body transition hover:bg-surface-card-hover"
             onClick={() => setBaseDate(new Date())}
             type="button"
           >
@@ -233,14 +233,14 @@ export function AgendaPage({ navigate }) {
           {!isPatientScope ? (
             <>
               <button
-                className="h-9 rounded-sm border border-border-default-v2 bg-surface-card px-4 text-sm font-medium text-text-body transition hover:bg-surface-card-hover"
+                className="shrink-0 h-9 rounded-sm border border-border-default-v2 bg-surface-card px-4 text-sm font-medium text-text-body transition hover:bg-surface-card-hover"
                 onClick={() => navigate('/consultas')}
                 type="button"
               >
                 Fila de consultas
               </button>
               <button
-                className="h-9 rounded-sm border border-accent-primary bg-accent-primary px-4 text-sm font-semibold text-white shadow-[0_10px_15px_rgba(59,130,246,0.16)] transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:border-border-default-v2 disabled:bg-surface-card-hover disabled:text-text-muted-v2 disabled:shadow-none"
+                className="shrink-0 h-9 rounded-sm border border-accent-primary bg-accent-primary px-4 text-sm font-semibold text-white shadow-[0_10px_15px_rgba(59,130,246,0.16)] transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:border-border-default-v2 disabled:bg-surface-card-hover disabled:text-text-muted-v2 disabled:shadow-none"
                 disabled={!canCreateAppointment}
                 onClick={() => openCreate()}
                 type="button"
@@ -293,11 +293,11 @@ export function AgendaPage({ navigate }) {
             </div>
 
             {!isPatientScope ? (
-            <div className="mt-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-end">
-              <div className="flex shrink-0 gap-2">
+            <div className="mt-3 flex flex-col flex-wrap gap-2 lg:flex-row lg:items-center lg:justify-end">
+              <div className="flex shrink-0 flex-wrap gap-2">
                 {viewFilters.map((view) => (
                   <button
-                    className={`h-8 rounded-sm border px-3 text-sm font-semibold transition ${
+                    className={`shrink-0 h-8 rounded-sm border px-3 text-sm font-semibold transition ${
                       activeView === view.value
                         ? 'border-accent-primary bg-accent-primary text-white'
                         : 'border-border-default-v2 bg-surface-card-hover text-text-muted-v2 hover:text-text-body'
@@ -311,8 +311,8 @@ export function AgendaPage({ navigate }) {
                 ))}
               </div>
               {!isDoctorScope ? (
-                <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
-                  <label className="flex items-center gap-2 text-xs font-semibold text-text-muted-v2">
+                <div className="flex w-full flex-col flex-wrap gap-2 sm:flex-row lg:w-auto">
+                  <label className="flex shrink-0 items-center gap-2 text-xs font-semibold text-text-muted-v2">
                     <span className="shrink-0">Médico</span>
                     <select
                       className="h-8 min-w-0 rounded-sm border border-border-default-v2 bg-surface-card-hover px-3 text-sm font-medium text-text-body outline-none transition focus:border-accent-primary sm:w-72"
@@ -330,7 +330,7 @@ export function AgendaPage({ navigate }) {
                       ))}
                     </select>
                   </label>
-                  <label className="flex items-center gap-2 text-xs font-semibold text-text-muted-v2">
+                  <label className="flex shrink-0 items-center gap-2 text-xs font-semibold text-text-muted-v2">
                     <span className="shrink-0">Unidade</span>
                     <select
                       className="h-8 min-w-0 rounded-sm border border-border-default-v2 bg-surface-card-hover px-3 text-sm font-medium text-text-body outline-none transition focus:border-accent-primary sm:w-44"

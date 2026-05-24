@@ -275,11 +275,11 @@ export function AgendaPage({ navigate }) {
               </div>
 
               {!isPatientScope ? (
-              <div className="flex max-w-full flex-wrap items-center justify-start gap-2 lg:justify-end">
-                <div className="flex min-w-0 flex-nowrap gap-2 overflow-x-auto pb-1">
+              <div className="flex w-full flex-wrap items-center justify-start gap-2 lg:justify-end">
+                <div className="flex flex-wrap items-center gap-2">
                   {statusFilters.map((filter) => (
                     <button
-                      className={`agenda-status-filter agenda-status-filter-${filter.tone} ${status === filter.value ? 'is-active' : ''} h-8 shrink-0 rounded-sm border px-3 text-sm font-semibold transition`}
+                      className={`agenda-status-filter agenda-status-filter-${filter.tone} ${status === filter.value ? 'is-active' : ''} shrink-0 whitespace-nowrap h-8 rounded-sm border px-3 text-sm font-semibold transition`}
                       key={filter.value}
                       onClick={() => setStatus(filter.value)}
                       type="button"

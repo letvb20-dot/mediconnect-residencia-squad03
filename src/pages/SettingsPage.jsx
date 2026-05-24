@@ -61,7 +61,7 @@ export function SettingsPage() {
 
 function AppearanceSection() {
   const [theme, setTheme] = useState(() => getStoredTheme())
-  const { ui, updateUi } = useAccessibility()
+  const { ui, updateUi, toggleHighContrast, isHighContrast } = useAccessibility()
 
   function handleThemeChange(nextTheme) {
     setTheme(setStoredTheme(nextTheme))
@@ -110,7 +110,7 @@ function AppearanceSection() {
 
       <SettingsGroup>
         <ToggleRow checked={ui.animations} description="Transições suaves entre telas e componentes" label="Animações de interface" onChange={(value) => updateUi('animations', value)} />
-        <ToggleRow checked={ui.contrast} description="Aumenta o contraste dos elementos para melhor acessibilidade" label="Modo de alto contraste" onChange={(value) => updateUi('contrast', value)} />
+        <ToggleRow checked={isHighContrast} description="Aumenta o contraste dos elementos para melhor acessibilidade" label="Modo de alto contraste" onChange={toggleHighContrast} />
         
         <SettingRow description="Define o tamanho base da interface" label="Escala Tipográfica">
           <div className="w-48">

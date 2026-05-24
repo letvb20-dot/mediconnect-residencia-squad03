@@ -902,17 +902,108 @@ button:disabled {
   transition-duration: 0.01ms !important;
 }
 
-.settings-high-contrast {
-  --text-muted: #ffffff;
-  --text-secondary: #ffffff;
+/* ===================================================================
+   HIGH CONTRAST MODE — Dark theme (default)
+   Overrides ALL design tokens for maximum readability / WCAG AAA.
+   Applied via class "high-contrast" on <html> by AccessibilityContext.
+   =================================================================== */
+.high-contrast {
+  /* ── Surfaces ── */
+  --surface-page: #000000;
+  --surface-card: #0a0a0a;
+  --surface-card-hover: #1a1a1a;
+  --surface-inset: #000000;
+  --surface-elevated: #1a1a1a;
+  --surface-elevated-v2: #1a1a1a;
+
+  /* ── Text ── */
+  --text-heading: #ffffff;
+  --text-body: #ffffff;
+  --text-muted: #e5e5e5;
+  --text-muted-v2: #e5e5e5;
+  --text-primary: #ffffff;
+  --text-secondary: #e5e5e5;
+
+  /* ── Borders ── */
+  --border-subtle: #6b7280;
   --border-default: #9ca3af;
-  border-width: 2px !important;
+  --border-default-v2: #9ca3af;
+  --border-strong: #d1d5db;
+
+  /* ── Accent ── */
+  --accent-primary: #60a5fa;
+  --accent-primary-v2: #60a5fa;
+  --accent-hover: #3b82f6;
+  --accent-muted: rgba(96, 165, 250, 0.3);
+
+  /* ── Shadows (stronger for visible boundaries) ── */
+  --shadow-xs-val: 0 1px 3px rgba(255, 255, 255, 0.08);
+  --shadow-card-val: 0 0 0 1px rgba(255, 255, 255, 0.15), 0 2px 8px rgba(0, 0, 0, 0.6);
+  --shadow-card-hover-val: 0 0 0 1px rgba(255, 255, 255, 0.22), 0 6px 20px rgba(0, 0, 0, 0.7);
+  --shadow-elevated-val: 0 0 0 1px rgba(255, 255, 255, 0.25), 0 12px 40px rgba(0, 0, 0, 0.8);
 }
 
-[data-theme='light'].settings-high-contrast {
-  --text-muted: #000000;
-  --text-secondary: #000000;
-  --border-default: #4b5563;
+/* ── Global border reinforcement in high-contrast ── */
+.high-contrast *,
+.high-contrast *::before,
+.high-contrast *::after {
+  border-color: var(--border-default-v2) !important;
+}
+
+/* Re-allow colored semantic borders (status indicators, accents) */
+.high-contrast [class*="border-red"],
+.high-contrast [class*="border-green"],
+.high-contrast [class*="border-amber"],
+.high-contrast [class*="border-emerald"],
+.high-contrast [class*="border-purple"],
+.high-contrast [class*="border-blue"],
+.high-contrast [class*="border-accent"] {
+  border-color: revert-layer !important;
+}
+
+/* Increase outline visibility for focus states */
+.high-contrast :focus-visible {
+  outline: 2px solid #60a5fa !important;
+  outline-offset: 2px !important;
+}
+
+/* ===================================================================
+   HIGH CONTRAST MODE — Light theme
+   =================================================================== */
+[data-theme='light'].high-contrast {
+  /* ── Surfaces ── */
+  --surface-page: #ffffff;
+  --surface-card: #ffffff;
+  --surface-card-hover: #f3f4f6;
+  --surface-inset: #f9fafb;
+  --surface-elevated: #ffffff;
+  --surface-elevated-v2: #ffffff;
+
+  /* ── Text ── */
+  --text-heading: #000000;
+  --text-body: #000000;
+  --text-muted: #1f2937;
+  --text-muted-v2: #1f2937;
+  --text-primary: #000000;
+  --text-secondary: #1f2937;
+
+  /* ── Borders ── */
+  --border-subtle: #6b7280;
+  --border-default: #374151;
+  --border-default-v2: #374151;
+  --border-strong: #111827;
+
+  /* ── Accent ── */
+  --accent-primary: #1e3a5f;
+  --accent-primary-v2: #1e3a5f;
+  --accent-hover: #0f2940;
+  --accent-muted: rgba(30, 58, 95, 0.15);
+
+  /* ── Shadows (subtle but defined) ── */
+  --shadow-xs-val: 0 1px 2px rgba(0, 0, 0, 0.12);
+  --shadow-card-val: 0 0 0 1px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.1);
+  --shadow-card-hover-val: 0 0 0 1px rgba(0, 0, 0, 0.24), 0 6px 20px rgba(0, 0, 0, 0.14);
+  --shadow-elevated-val: 0 0 0 1px rgba(0, 0, 0, 0.28), 0 12px 40px rgba(0, 0, 0, 0.18);
 }
 
 html.text-scale-sm { font-size: 14px; }

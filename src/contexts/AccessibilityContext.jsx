@@ -26,6 +26,11 @@ export function AccessibilityProvider({ children }) {
     // This single class activates the comprehensive CSS token overrides in index.css
     // Because it lives on the root <html> element, it affects ALL routes globally
     document.documentElement.classList.toggle('high-contrast', ui.contrast)
+    if (ui.contrast) {
+      document.documentElement.setAttribute('data-contrast', 'high')
+    } else {
+      document.documentElement.removeAttribute('data-contrast')
+    }
 
     // Typographic scale
     document.documentElement.classList.remove('text-scale-sm', 'text-scale-standard', 'text-scale-lg')

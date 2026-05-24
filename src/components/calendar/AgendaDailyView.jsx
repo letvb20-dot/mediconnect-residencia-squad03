@@ -118,7 +118,7 @@ export function AgendaDailyView({
               )}
 
               <div className="flex shrink-0 flex-wrap items-start justify-start gap-2 md:justify-end">
-                <span className="agenda-slot-status rounded-full border border-current/30 bg-black/25 px-3 py-1 text-xs font-bold shadow-sm">
+                <span className="agenda-slot-status shrink-0 whitespace-nowrap rounded-full border border-current/30 bg-black/25 px-3 py-1 text-xs font-bold shadow-sm">
                   {slotStatus || (hasHiddenAppointment ? 'Ocupado' : isPast ? 'Encerrado' : 'Livre')}
                 </span>
                 {canCreateSlot ? (

@@ -48,7 +48,7 @@ export function AgendaMonthlyView({ baseDate, appointments, onDayClick }) {
             <button
               key={day.toISOString()}
               onClick={() => onDayClick && onDayClick(day)}
-              className={`agenda-month-day flex min-h-[72px] flex-col rounded-lg border p-1.5 text-left transition hover:border-border-strong xl:min-h-[78px] ${
+              className={`agenda-month-day flex min-h-20 flex-col rounded-lg border p-1.5 text-left transition hover:border-border-strong ${
                 isCurrentMonth
                   ? 'border-border-default-v2 bg-surface-inset'
                   : 'border-transparent bg-transparent opacity-40 hover:opacity-80'
@@ -68,10 +68,10 @@ export function AgendaMonthlyView({ baseDate, appointments, onDayClick }) {
                 {dayAppointments.slice(0, 2).map((appointment) => (
                   <div
                     key={appointment.id}
-                    className={`agenda-month-event ${getStatusToneClass(appointment)} flex items-center gap-1 truncate rounded bg-surface-card-hover px-1 py-0.5 text-[9px] font-semibold leading-4 text-text-muted-v2`}
+                    className={`agenda-month-event ${getStatusToneClass(appointment)} flex min-w-0 items-center gap-1 rounded bg-surface-card-hover px-1 py-0.5 text-[9px] font-semibold leading-4 text-text-muted-v2`}
                   >
                     <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${getDotColor(appointment)}`} />
-                    <span className="truncate">
+                    <span className="min-w-0 truncate whitespace-nowrap">
                       {appointment.time} - {appointment.patient}
                     </span>
                   </div>

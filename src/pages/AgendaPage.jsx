@@ -669,22 +669,22 @@ function PatientAgendaList({ appointments, currentPatient, onAppointmentClick })
           type="button"
         >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0">
-              <p className="text-sm font-bold text-text-body">{appointment.type || 'Consulta'}</p>
-              <p className="mt-1 text-sm text-text-muted-v2">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-bold text-text-body">{appointment.type || 'Consulta'}</p>
+              <p className="mt-1 truncate text-sm text-text-muted-v2">
                 {appointment.professional || 'Médico(a) não informado'}
               </p>
             </div>
             <div className="shrink-0 text-left sm:text-right">
-              <p className="text-lg font-bold text-accent-primary">{appointment.time || '--:--'}</p>
-              <span className="mt-1 inline-flex rounded-full border border-border-default-v2 bg-surface-card px-2.5 py-1 text-xs font-semibold text-text-body">
+              <p className="whitespace-nowrap text-lg font-bold text-accent-primary">{appointment.time || '--:--'}</p>
+              <span className="mt-1 inline-flex whitespace-nowrap rounded-full border border-border-default-v2 bg-surface-card px-2.5 py-1 text-xs font-semibold text-text-body">
                 {appointment.status || 'Agendado'}
               </span>
             </div>
           </div>
           <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-text-muted-v2">
-            {appointment.mode ? <span className="rounded-full bg-surface-card-hover px-2.5 py-1">{appointment.mode}</span> : null}
-            {appointment.room ? <span className="rounded-full bg-surface-card-hover px-2.5 py-1">{appointment.room}</span> : null}
+            {appointment.mode ? <span className="whitespace-nowrap rounded-full bg-surface-card-hover px-2.5 py-1">{appointment.mode}</span> : null}
+            {appointment.room ? <span className="whitespace-nowrap rounded-full bg-surface-card-hover px-2.5 py-1">{appointment.room}</span> : null}
           </div>
         </button>
       ))}

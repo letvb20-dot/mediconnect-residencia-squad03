@@ -1906,6 +1906,29 @@ html.text-scale-lg { font-size: 18px; }
   color: #717c8d;
 }
 
+.auth-light-input,
+[data-theme='light'] .auth-light-input,
+[data-theme='dark'] .auth-light-input {
+  border-color: #e5e7eb;
+  background: #ffffff;
+  color: #111827;
+  caret-color: #000000;
+  color-scheme: light;
+}
+
+.auth-light-input::placeholder,
+[data-theme='light'] .auth-light-input::placeholder,
+[data-theme='dark'] .auth-light-input::placeholder {
+  color: #9ca3af;
+}
+
+.auth-light-input:focus,
+[data-theme='light'] .auth-light-input:focus,
+[data-theme='dark'] .auth-light-input:focus {
+  border-color: #1b3f6c;
+  box-shadow: 0 0 0 2px rgba(27, 63, 108, 0.2);
+}
+
 /* Dark theme color consolidation */
 [data-theme='dark'] .metric-tone-blue,
 [data-theme='dark'] .metric-tone-violet,

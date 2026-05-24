@@ -17,13 +17,13 @@ const dotPanelStyle = {
 }
 
 const lightInputClass =
-  'h-12 w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-[#1b3f6c] focus:ring-2 focus:ring-[#1b3f6c]/20'
+  'auth-light-input h-12 w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-[#1b3f6c] focus:ring-2 focus:ring-[#1b3f6c]/20'
 
 const lightPasswordInputClass =
-  'h-12 w-full rounded-xl border border-gray-200 bg-white pl-10 pr-11 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-[#1b3f6c] focus:ring-2 focus:ring-[#1b3f6c]/20'
+  'auth-light-input h-12 w-full rounded-xl border border-gray-200 bg-white pl-10 pr-11 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-[#1b3f6c] focus:ring-2 focus:ring-[#1b3f6c]/20'
 
 const lightInputSimpleClass =
-  'h-12 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-[#1b3f6c] focus:ring-2 focus:ring-[#1b3f6c]/20'
+  'auth-light-input h-12 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-[#1b3f6c] focus:ring-2 focus:ring-[#1b3f6c]/20'
 
 const authPrimaryButtonClass =
   'inline-flex h-12 w-full items-center justify-center rounded-xl bg-[#1b3f6c] text-sm font-semibold text-white shadow-[0_2px_8px_rgba(27,63,108,0.28)] transition-all hover:bg-[#153255] hover:shadow-[0_4px_12px_rgba(27,63,108,0.36)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1b3f6c] disabled:opacity-60'

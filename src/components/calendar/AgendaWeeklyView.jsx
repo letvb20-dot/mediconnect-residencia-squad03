@@ -49,7 +49,7 @@ export function AgendaWeeklyView({ baseDate, appointments, canCreateAppointment 
         })}
       </div>
 
-      <div className="mt-2 grid min-h-[300px] grid-cols-7 gap-2 xl:min-h-[340px]">
+      <div className="mt-2 grid min-h-fit grid-cols-7 gap-2">
         {days.map((day) => {
           const dayIsPast = isBefore(startOfDay(day), startOfDay(new Date()))
           const dayAppointments = weeklyAppointments.filter((appointment) => {
@@ -66,7 +66,7 @@ export function AgendaWeeklyView({ baseDate, appointments, canCreateAppointment 
             >
               {dayAppointments.length === 0 ? (
                 <button
-                  className="flex h-full min-h-16 items-center justify-center rounded-md border border-dashed border-border-default-v2 p-2 text-center text-xs font-semibold text-text-muted-v2 transition hover:border-accent-primary/50 hover:text-blue-200 disabled:cursor-not-allowed disabled:hover:border-border-default-v2 disabled:hover:text-text-muted-v2"
+                  className="flex min-h-16 flex-1 items-center justify-center rounded-md border border-dashed border-border-default-v2 p-2 text-center text-xs font-semibold text-text-muted-v2 transition hover:border-accent-primary/50 hover:text-blue-200 disabled:cursor-not-allowed disabled:hover:border-border-default-v2 disabled:hover:text-text-muted-v2"
                   disabled={!canCreateAppointment || dayIsPast}
                   onClick={() => onSlotCreate?.(day)}
                   type="button"
@@ -82,11 +82,11 @@ export function AgendaWeeklyView({ baseDate, appointments, canCreateAppointment 
                       className={`agenda-event ${getStatusToneClass(appointment)} flex w-full min-w-0 flex-col items-start overflow-hidden rounded-md border px-1.5 py-1 text-left shadow-sm transition hover:brightness-110`}
                       type="button"
                     >
-                      <div className="mb-0.5 flex w-full min-w-0 items-center gap-1 overflow-hidden">
-                        <span className="shrink-0 rounded bg-black/20 px-1.5 py-0.5 text-[10px] font-bold leading-none">
+                      <div className="mb-0.5 flex w-full min-w-0 flex-wrap items-center gap-1 overflow-hidden">
+                        <span className="shrink-0 whitespace-nowrap rounded bg-black/20 px-1.5 py-0.5 text-[10px] font-bold leading-none">
                           {appointment.time}
                         </span>
-                        <span className="min-w-0 flex-1 truncate text-[8px] font-semibold uppercase tracking-normal opacity-80">
+                        <span className="min-w-0 flex-1 truncate whitespace-nowrap text-[8px] font-semibold uppercase tracking-normal opacity-80">
                           {appointment.mode}
                         </span>
                       </div>
@@ -102,7 +102,7 @@ export function AgendaWeeklyView({ baseDate, appointments, canCreateAppointment 
                     </button>
                   ))}
                   <button
-                    className="mt-auto rounded-md border border-dashed border-border-default-v2 px-2 py-1.5 text-[11px] font-semibold text-text-muted-v2 transition hover:border-accent-primary/50 hover:text-blue-200 disabled:cursor-not-allowed disabled:hover:border-border-default-v2 disabled:hover:text-text-muted-v2"
+                    className="mt-auto shrink-0 rounded-md border border-dashed border-border-default-v2 px-2 py-1.5 text-[11px] font-semibold text-text-muted-v2 transition hover:border-accent-primary/50 hover:text-blue-200 disabled:cursor-not-allowed disabled:hover:border-border-default-v2 disabled:hover:text-text-muted-v2"
                     disabled={!canCreateAppointment || dayIsPast}
                     onClick={() => onSlotCreate?.(day)}
                     type="button"

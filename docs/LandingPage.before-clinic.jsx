@@ -1,3 +1,7 @@
+// Snapshot historico da landing page anterior ao reposicionamento para clinicas.
+// Este arquivo fica em docs/ apenas como referencia editorial e nao participa do build atual.
+// A landing ativa do sistema esta em src/pages/LandingPage.jsx.
+
 import { useState } from 'react'
 import {
   Activity,

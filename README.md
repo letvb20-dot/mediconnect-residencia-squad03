@@ -42,13 +42,7 @@ cd mediconnect-residencia-squad03
 npm install
 
 # 3. Configurar variaveis de ambiente
-# Criar arquivo .env na raiz com:
-VITE_SUPABASE_URL=https://<projeto>.supabase.co
-VITE_SUPABASE_ANON_KEY=<anon-key>
-VITE_API_BASE_URL=https://<projeto>.supabase.co/functions/v1
-VITE_SUPABASE_REST_URL=https://<projeto>.supabase.co/rest/v1
-VITE_SUPABASE_FUNCTIONS_URL=https://<projeto>.supabase.co/functions/v1
-VITE_SUPABASE_STORAGE_URL=https://<projeto>.supabase.co/storage/v1
+# Criar arquivo .env na raiz.
 
 # 4. Iniciar servidor de desenvolvimento
 npm run dev

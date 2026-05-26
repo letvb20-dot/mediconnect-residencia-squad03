@@ -135,7 +135,7 @@ export function WaitlistPage({ role }) {
   return (
     <div className="mx-auto max-w-7xl space-y-6 text-text-body">
       <div>
-        <h1 className="text-[32px] font-bold leading-8 tracking-[-0.02em]">Lista de espera inteligente</h1>
+        <h1 className="text-[32px] font-bold leading-8 tracking-[-0.02em]">Lista de Espera Inteligente</h1>
         <p className="mt-1 text-sm text-text-muted-v2">
           Priorização por urgência, predição de cancelamentos e sugestão de encaixe em lacunas de agenda.
         </p>
@@ -143,7 +143,7 @@ export function WaitlistPage({ role }) {
 
       {canManage ? (
         <section className={`${cardClass} p-6`}>
-          <h2 className="mb-4 text-lg font-bold text-text-heading">Inscrever na lista</h2>
+          <h2 className="mb-4 text-lg font-bold text-text-heading">Inscrever na Lista</h2>
           {error ? <p className="mb-3 text-sm text-red-400">{error}</p> : null}
           <form className="grid gap-4 md:grid-cols-3" onSubmit={handleSubmit}>
             <Field label="Paciente *">
@@ -197,7 +197,7 @@ export function WaitlistPage({ role }) {
       ) : null}
 
       <section className={`${cardClass} p-6`}>
-        <h2 className="mb-4 text-lg font-bold text-text-heading">Pacientes na espera ({ranked.length})</h2>
+        <h2 className="mb-4 text-lg font-bold text-text-heading">Pacientes na Espera ({ranked.length})</h2>
         <div className="overflow-x-auto rounded-xl border border-border-default-v2">
           <table className="w-full text-left text-sm">
             <thead className="bg-surface-inset text-xs font-semibold uppercase text-text-muted-v2">
@@ -251,7 +251,7 @@ export function WaitlistPage({ role }) {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className={`${cardClass} p-6`}>
-          <h2 className="mb-2 text-lg font-bold text-text-heading">Encaixes sugeridos</h2>
+          <h2 className="mb-2 text-lg font-bold text-text-heading">Encaixes Sugeridos</h2>
           <p className="mb-4 text-xs text-text-muted-v2">Cruza lacunas de agenda (próximos 7 dias) com a lista de espera.</p>
           <select className={`${inputClass} mb-4`} onChange={(event) => analyzeDoctorGaps(event.target.value)} value={gapDoctorId}>
             <option value="">Selecione um médico</option>
@@ -274,7 +274,7 @@ export function WaitlistPage({ role }) {
         </section>
 
         <section className={`${cardClass} p-6`}>
-          <h2 className="mb-2 text-lg font-bold text-text-heading">Risco de cancelamento</h2>
+          <h2 className="mb-2 text-lg font-bold text-text-heading">Risco de Cancelamento</h2>
           <p className="mb-4 text-xs text-text-muted-v2">Agendamentos com maior probabilidade de falta/cancelamento — candidatos a confirmar ou abrir para encaixe.</p>
           <ul className="space-y-2">
             {risks.length ? risks.map((appointment) => (

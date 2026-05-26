@@ -347,7 +347,7 @@ function resolveRoute(pathname, navigate, role, profile, user, isAuthenticated) 
   if (pathname === '/consultas') {
     return {
       element: <VisitsPage navigate={navigate} />,
-      title: 'Fila de Consultas',
+      title: 'Lista de Espera Inteligente',
       withShell: true,
     }
   }
@@ -355,7 +355,7 @@ function resolveRoute(pathname, navigate, role, profile, user, isAuthenticated) 
   if (pathname === '/lista-espera') {
     return {
       element: <WaitlistPage navigate={navigate} role={role} />,
-      title: 'Lista de espera',
+      title: 'Lista de Espera Inteligente',
       withShell: true,
     }
   }

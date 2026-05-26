@@ -99,8 +99,8 @@ export const availabilityRepository = {
     return mapException(requireReturnedItem(await response.json(), 'Falha ao criar excecao de agenda. A API nao retornou confirmacao da alteracao.'))
   },
 
-  // POST /functions/v1/get-available-slots
-  async getAvailableSlots({ appointmentType, date, startDate, endDate, doctorId }) {
+  // O modal de novo agendamento deve refletir somente a disponibilidade cadastrada.
+  async getAvailableSlots({ date, startDate, endDate, doctorId }) {
     const rangeStart = startDate || date
     const rangeEnd = endDate || date || startDate
 
@@ -108,20 +108,7 @@ export const availabilityRepository = {
       throw new Error('Selecione médico e data para calcular os horários disponíveis.')
     }
 
-    try {
-      const apiSlots = await fetchAvailableSlotsFromApi({
-        appointmentType: normalizeAppointmentType(appointmentType),
-        doctorId,
-        endDate: rangeEnd,
-        startDate: rangeStart,
-      })
-      if (apiSlots.length) return apiSlots
-    } catch (error) {
-      if (!canFallbackToLocalSlots(error)) throw error
-    }
-
     return buildSlotsFromConfiguredAvailability({
-      appointmentType: normalizeAppointmentType(appointmentType),
       doctorId,
       endDate: rangeEnd,
       startDate: rangeStart,
@@ -262,102 +249,7 @@ function mapException(item) {
   }
 }
 
-async function fetchAvailableSlotsFromApi({ appointmentType, doctorId, startDate, endDate }) {
-  try {
-    return await fetchAvailableSlotRangeFromApi({ appointmentType, doctorId, endDate, startDate })
-  } catch (error) {
-    if (!canRetryLegacySlotContract(error)) throw error
-  }
-
-  return fetchAvailableSlotsByDateFromApi({ doctorId, endDate, startDate })
-}
-
-async function fetchAvailableSlotRangeFromApi({ appointmentType, doctorId, startDate, endDate }) {
-  const response = await postAvailableSlots({
-    appointment_type: appointmentType,
-    doctor_id: doctorId,
-    end_date: endDate,
-    start_date: startDate,
-  })
-
-  if (!response.ok) {
-    const error = new Error(await getResponseError(response, 'Falha ao calcular horários disponíveis.'))
-    error.status = response.status
-    throw error
-  }
-
-  return normalizeAvailableSlots(await response.json().catch(() => null), startDate)
-}
-
-async function fetchAvailableSlotsByDateFromApi({ doctorId, startDate, endDate }) {
-  const dates = buildDateRange(startDate, endDate)
-  if (!dates.length) return []
-
-  const slotGroups = await Promise.all(dates.map(async (date) => {
-    const response = await postAvailableSlots({ doctor_id: doctorId, date })
-
-    if (!response.ok) {
-      const error = new Error(await getResponseError(response, 'Falha ao calcular horários disponíveis.'))
-      error.status = response.status
-      throw error
-    }
-
-    return normalizeAvailableSlots(await response.json().catch(() => null), date)
-  }))
-
-  return uniqueSlotsByDateTime(slotGroups.flat())
-}
-
-async function postAvailableSlots(payload) {
-  return fetch(`${apiConfig.functionsUrl}/get-available-slots`, {
-    method: 'POST',
-    headers: getAuthenticatedHeaders(),
-    body: JSON.stringify(payload),
-  }).catch((networkError) => {
-    const error = new Error(networkError?.message || 'Falha ao calcular horários disponíveis.')
-    error.status = 0
-    throw error
-  })
-}
-
-function normalizeAvailableSlots(data, fallbackDate) {
-  const rawSlots = normalizeCollection(data?.slots || data?.available_slots || data?.availableSlots || data, ['slots', 'available_slots', 'availableSlots', 'data'])
-
-  return rawSlots
-    .map((slot) => {
-      const datetime = slot.datetime || slot.starts_at || slot.start_at || slot.startAt || ''
-      const date = slot.date || extractDate(datetime) || fallbackDate
-      const time = normalizeTime(slot.time || slot.start_time || slot.startTime || datetime)
-
-      return {
-        available: slot.available !== false && slot.booked !== true,
-        date,
-        datetime: slot.datetime || (date && time ? `${date}T${time}:00` : ''),
-        time,
-      }
-    })
-    .filter((slot) => slot.time)
-}
-
-function extractDate(value) {
-  return String(value || '').match(/\d{4}-\d{2}-\d{2}/)?.[0] || ''
-}
-
-function canFallbackToLocalSlots(error) {
-  return [0, 400, 404, 405, 501, 502, 503, 504].includes(Number(error?.status))
-}
-
-function canRetryLegacySlotContract(error) {
-  return Number(error?.status) === 400
-}
-
-function isMatchingAppointmentType(value, expectedType) {
-  if (!expectedType) return true
-  if (!value) return true
-  return normalizeAppointmentType(value) === expectedType
-}
-
-async function buildSlotsFromConfiguredAvailability({ appointmentType, doctorId, startDate, endDate }) {
+async function buildSlotsFromConfiguredAvailability({ doctorId, startDate, endDate }) {
   const dates = buildDateRange(startDate, endDate)
   if (!dates.length) return []
 
@@ -374,8 +266,7 @@ async function buildSlotsFromConfiguredAvailability({ appointmentType, doctorId,
     const regularSlots = availabilities
       .filter((availability) =>
         Number(availability.weekday) === weekday &&
-        availability.active !== false &&
-        isMatchingAppointmentType(availability.appointmentType, appointmentType),
+        availability.active !== false,
       )
       .flatMap((availability) =>
         buildSlotsForRange({

@@ -1,39 +1,26 @@
 import { apiConfig, getAuthenticatedHeaders } from '../config/api.js'
-import { onlyDigits } from '../utils/brFormatters.js'
 import { getResponseError, normalizeCollection } from './repositoryUtils.js'
 
-const HISTORY_TABLES = ['sms_logs', 'communication_logs', 'message_logs', 'messages']
-const MESSAGE_LOG_TABLES = ['communication_logs', 'message_logs', 'messages']
+const MESSAGE_TABLES = ['communication_logs', 'message_logs', 'messages']
 const TEMPLATE_TABLES = ['communication_templates', 'message_templates']
-const SMS_MAX_LENGTH = 1000
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 export const communicationRepository = {
   async sendSms({ patientId, patientName, phone, content }) {
-    const message = buildSmsMessage({ content, patientName })
+    const message = `[MediConnect] Olá ${patientName}, ${content}`
     const payload = {
-      phone_number: normalizeSmsPhone(phone),
+      phone_number: normalizePhone(phone),
       message,
-      patient_id: normalizeSmsPatientId(patientId),
-    }
-
-    if (!payload.phone_number) {
-      throw new Error('Falha: telefone inválido para SMS.')
+      patient_id: patientId || undefined,
     }
 
     const response = await fetch(`${apiConfig.functionsUrl}/send-sms`, {
       method: 'POST',
       headers: getAuthenticatedHeaders(),
-      body: JSON.stringify(cleanPayload(payload)),
+      body: JSON.stringify(payload),
     })
 
     if (!response.ok) {
       throw new Error(await getResponseError(response, 'Falha no envio de SMS via Twilio.'))
-    }
-
-    const result = await parseJsonResponse(response)
-    if (result?.success === false) {
-      throw new Error(result.message || 'Falha no envio de SMS via Twilio.')
     }
 
     await createMessageLog({
@@ -41,16 +28,11 @@ export const communicationRepository = {
       patientName,
       channel: 'sms',
       template: 'Mensagem avulsa',
-      content: message,
-      response: result?.sid ? `Twilio SID: ${result.sid}` : result?.message || '',
+      content,
       status: 'entregue',
     }).catch(() => null)
 
-    return {
-      message: result?.message || '',
-      sid: result?.sid || '',
-      success: result?.success !== false,
-    }
+    return true
   },
 
   async registerMessage(data) {
@@ -83,7 +65,7 @@ export const communicationRepository = {
   async getInitialMessages() {
     let lastResponse = null
 
-    for (const table of HISTORY_TABLES) {
+    for (const table of MESSAGE_TABLES) {
       const query = new URLSearchParams()
       query.set('select', '*,patients(full_name,phone_mobile,email)')
       query.set('order', 'created_at.desc')
@@ -145,12 +127,11 @@ async function createMessageLog(data) {
     channel: data.channel,
     template: data.template,
     content: data.content,
-    response: data.response,
     status: data.status,
     sent_at: new Date().toISOString(),
   })
 
-  for (const table of MESSAGE_LOG_TABLES) {
+  for (const table of MESSAGE_TABLES) {
     const response = await fetch(`${apiConfig.restUrl}/${table}`, {
       method: 'POST',
       headers: getAuthenticatedHeaders({ Prefer: 'return=minimal' }),
@@ -175,10 +156,10 @@ function mapMessage(message) {
       message.patients?.full_name ||
       'Paciente não identificado',
     channel: normalizeChannel(message.channel || message.canal),
-    template: message.template || message.template_name || message.subject || (message.phone_number ? 'SMS Twilio' : 'Mensagem avulsa'),
+    template: message.template || message.template_name || message.subject || 'Mensagem avulsa',
     sentAt: formatDateTime(message.sent_at || message.created_at || message.updated_at),
     status: normalizeStatus(message.status || message.delivery_status),
-    response: message.response || message.reply || message.sid || message.twilio_sid || '',
+    response: message.response || message.reply || '',
   }
 }
 
@@ -231,61 +212,10 @@ function formatDateTime(value) {
   }).format(date)
 }
 
-export function buildSmsMessage({ patientName, content }) {
-  const body = String(content || '').trim()
-  if (!body) {
-    throw new Error('Falha: mensagem SMS vazia.')
-  }
-
-  const name = String(patientName || '').trim()
-  const message = name ? `[MediConnect] Ol\u00e1 ${name}, ${body}` : `[MediConnect] ${body}`
-
-  if (message.length > SMS_MAX_LENGTH) {
-    throw new Error(`Falha: mensagem SMS excede ${SMS_MAX_LENGTH} caracteres.`)
-  }
-
-  return message
-}
-
-export function normalizeSmsPhone(phone) {
-  const raw = String(phone || '').trim()
-  const digits = onlyDigits(raw)
+function normalizePhone(phone) {
+  const digits = String(phone || '').replace(/\D/g, '')
   if (!digits) return ''
-
-  if (raw.startsWith('+') && isValidInternationalPhone(digits)) {
-    return `+${digits}`
-  }
-
-  if (digits.startsWith('00') && isValidInternationalPhone(digits.slice(2))) {
-    return `+${digits.slice(2)}`
-  }
-
-  const brazilianDigits = digits.startsWith('55') ? digits : `55${digits}`
-  return isValidBrazilianPhone(brazilianDigits) ? `+${brazilianDigits}` : ''
-}
-
-function normalizeSmsPatientId(patientId) {
-  const value = String(patientId || '').trim()
-  return UUID_PATTERN.test(value) ? value : undefined
-}
-
-function isValidBrazilianPhone(digits) {
-  return /^55\d{10,11}$/.test(digits)
-}
-
-function isValidInternationalPhone(digits) {
-  return /^\d{10,15}$/.test(digits)
-}
-
-async function parseJsonResponse(response) {
-  const text = await response.text().catch(() => '')
-  if (!text) return {}
-
-  try {
-    return JSON.parse(text)
-  } catch {
-    return { message: text }
-  }
+  return digits.startsWith('55') ? `+${digits}` : `+55${digits}`
 }
 
 function cleanPayload(payload) {

@@ -273,39 +273,37 @@ test('patientRepository.uploadAvatar falha quando a API nao confirma avatar do p
   )
 })
 
-test('patientRepository.update salva campos suportados quando API recusa campo do paciente', async () => {
+test('patientRepository.update falha quando a API recusa campo enviado', async () => {
   const bodies = []
 
   globalThis.fetch = async (url, options = {}) => {
     assert.match(String(url), /\/patients\?id=eq.patient-1$/)
-    const body = JSON.parse(options.body)
-    bodies.push(body)
+    bodies.push(JSON.parse(options.body))
 
-    if ('email' in body) {
+    if (bodies.length === 1) {
       return Response.json({ message: "Could not find the 'email' column of 'patients' in the schema cache" }, { status: 400 })
     }
 
-    return Response.json([{ id: 'patient-1', ...body }])
+    return Response.json([{ id: 'patient-1', full_name: bodies.at(-1).full_name }])
   }
 
   const { patientRepository } = await import('../src/repositories/patientRepository.js')
-  await patientRepository.update('patient-1', {
-    email: 'ana@exemplo.com',
-    name: 'Ana Souza',
-    phone: '(11) 99999-8888',
-    lgpdOptIn: true,
-  })
+  await assert.rejects(
+    () => patientRepository.update('patient-1', {
+      email: 'ana@exemplo.com',
+      name: 'Ana Souza',
+      phone: '(11) 99999-8888',
+      lgpdOptIn: true,
+    }),
+    /Erro ao atualizar paciente/,
+  )
 
   assert.deepEqual(bodies[0], {
     email: 'ana@exemplo.com',
     full_name: 'Ana Souza',
     phone_mobile: '11999998888',
   })
-  assert.deepEqual(bodies[1], {
-    full_name: 'Ana Souza',
-    phone_mobile: '11999998888',
-  })
-  assert.ok(bodies.some((body) => body.lgpd_opt_in === true))
+  assert.equal(bodies.length, 1)
 })
 
 test('patientRepository.update persiste campos estendidos quando a API suporta', async () => {
@@ -402,52 +400,12 @@ test('patientRepository normaliza aliases completos retornados pela API', async 
   assert.equal(patient.cns, '1234567')
 })
 
-test('availabilityRepository.getAvailableSlots usa a edge function documentada', async () => {
-  const calls = []
-
-  globalThis.fetch = async (url, options = {}) => {
-    const requestUrl = String(url)
-    calls.push({ body: options.body ? JSON.parse(options.body) : null, method: options.method || 'GET', url: requestUrl })
-
-    if (requestUrl.includes('/functions/v1/get-available-slots')) {
-      return Response.json({
-        slots: [
-          { available: true, time: '09:00' },
-          { available: true, time: '09:30' },
-        ],
-      })
-    }
-
-    throw new Error(`URL inesperada: ${requestUrl}`)
-  }
-
-  const { availabilityRepository } = await import('../src/repositories/availabilityRepository.js')
-  const slots = await availabilityRepository.getAvailableSlots({
-    date: '2026-05-18',
-    doctorId: 'doctor-1',
-  })
-
-  assert.deepEqual(slots.map((slot) => slot.time), ['09:00', '09:30'])
-  assert.equal(calls[0].method, 'POST')
-  assert.match(calls[0].url, /\/functions\/v1\/get-available-slots$/)
-  assert.deepEqual(calls[0].body, {
-    appointment_type: 'presencial',
-    doctor_id: 'doctor-1',
-    end_date: '2026-05-18',
-    start_date: '2026-05-18',
-  })
-})
-
-test('availabilityRepository.getAvailableSlots usa disponibilidade cadastrada quando funcao volta vazia', async () => {
+test('availabilityRepository.getAvailableSlots usa a disponibilidade cadastrada do medico', async () => {
   const calls = []
 
   globalThis.fetch = async (url) => {
     const requestUrl = String(url)
     calls.push(requestUrl)
-
-    if (requestUrl.includes('/functions/v1/get-available-slots')) {
-      return Response.json({ slots: [] })
-    }
 
     if (requestUrl.includes('/doctor_availability?')) {
       assert.match(requestUrl, /doctor_id=eq.doctor-1/)
@@ -490,7 +448,7 @@ test('availabilityRepository.getAvailableSlots usa disponibilidade cadastrada qu
   })
 
   assert.deepEqual(slots.map((slot) => slot.time), ['10:00', '10:30', '11:00', '14:00', '14:30', '15:00'])
-  assert.equal(calls.some((url) => url.includes('/functions/v1/get-available-slots')), true)
+  assert.equal(calls.some((url) => url.includes('/functions/v1/get-available-slots')), false)
 })
 
 test('availabilityRepository.create bloqueia intervalo invalido antes do POST', async () => {

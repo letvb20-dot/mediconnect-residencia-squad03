@@ -9,6 +9,8 @@ import { professionalRepository } from '../repositories/professionalRepository.j
 import { profileRepository } from '../repositories/profileRepository.js'
 import { userRepository } from '../repositories/userRepository.js'
 import { visitRepository } from '../repositories/visitRepository.js'
+import { waitlistRepository } from '../repositories/waitlistRepository.js'
+import { aiClient } from '../lib/ai/aiClient.js'
 import { formatLocalDateInput, parseLocalDate, sortAppointmentsByTime } from '../utils/agendaDate.js'
 import { buildPatientFromProfile, resolveCurrentPatient } from '../utils/patientIdentity.js'
 
@@ -180,7 +182,6 @@ export function useAgenda() {
 
       try {
         const slots = await availabilityRepository.getAvailableSlots({
-          appointmentType: form.mode,
           doctorId: targetProfessionalId,
           date: formatLocalDateInput(baseDate),
         })
@@ -552,9 +553,34 @@ export function useAgenda() {
       if (promotionErrorMessage) {
         alert(`O cancelamento foi salvo, mas não foi possível agendar automaticamente o próximo paciente da fila. ${promotionErrorMessage}`)
       }
+      if (!promotedAppointment) {
+        offerSlotToWaitlist(payload)
+      }
       closeAppointmentModal()
     } catch (cancelError) {
       alert(cancelError.message || 'Erro ao cancelar agendamento.')
+    }
+  }
+
+  function offerSlotToWaitlist(payload) {
+    try {
+      const waitlist = waitlistRepository.getAll().filter((entry) => entry.status === 'aguardando')
+      if (!waitlist.length) return
+
+      const slot = { doctorId: payload.professionalId, type: payload.mode, date: payload.date, time: payload.time }
+      const [best] = aiClient.rankWaitlist({ waitlist, slot })
+      if (!best) return
+
+      notificationRepository.notifyCurrentUser({
+        domain: 'agenda',
+        channel: best.channel,
+        title: 'Encaixe disponível na lista de espera',
+        detail: `Horário liberado em ${formatAppointmentDate(payload.date)} às ${payload.time}. ${best.patientName} é o melhor encaixe (prioridade ${best.matchScore}).`,
+        route: '/lista-espera',
+      }).catch(() => null)
+      waitlistRepository.markNotified(best.id, best.channel)
+    } catch (waitlistError) {
+      console.error(waitlistError)
     }
   }
 

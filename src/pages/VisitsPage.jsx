@@ -68,7 +68,7 @@ export function VisitsPage({ navigate }) {
     <div className="mx-auto max-w-7xl space-y-6">
       <header className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-2xl font-bold tracking-tight text-[var(--text-primary)]">Fila de Espera</h1>
+          <h1 className="truncate text-2xl font-bold tracking-tight text-[var(--text-primary)]">Fila de Consultas</h1>
         </div>
         <div className="flex shrink-0 flex-wrap gap-3">
           <button

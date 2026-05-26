@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 import { settingsRepository } from '../repositories/settingsRepository.js'
+import { getNotificationPrefs, saveNotificationPrefs } from '../repositories/notificationRepository.js'
 import { getStoredTheme, setStoredTheme } from '../utils/theme.js'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select.jsx'
 import { Switch } from '../components/ui/switch.jsx'
@@ -161,68 +162,31 @@ function SkeletonToggleRow() {
 }
 
 function NotificationsSection() {
-  const [prefs, setPrefs] = useState(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [prefs, setPrefs] = useState(() => getNotificationPrefs())
+  const isLoading = false
 
-  useEffect(() => {
-    async function loadPreferences() {
-      try {
-        const token = localStorage.getItem('token') || ''
-        const res = await fetch('http://localhost:3333/usuarios/me/preferencias', {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        if (!res.ok) throw new Error('Falha ao buscar')
-        const data = await res.json()
-        setPrefs(data)
-      } catch {
-        // Fallback temporário para manter a UI visualizável em caso de erro local (sem backend rodando)
-        setPrefs({
-          notificacoes_agenda: true,
-          notificacoes_comunicacao: true,
-          notificacoes_prontuario: true,
-          notificacoes_relatorios: true
-        })
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    
-    // Pequeno delay artificial apenas para demonstrar os Skeletons da interface
-    setTimeout(loadPreferences, 800)
-  }, [])
-
-  async function handleToggle(key, newValue) {
+  function handleToggle(key, newValue) {
     const previous = { ...prefs }
-    
-    // 1. Optimistic Update (UI imediata)
-    setPrefs(prev => ({ ...prev, [key]: newValue }))
+    const next = { ...prefs, [key]: newValue }
+
+    // Atualização otimista da UI
+    setPrefs(next)
 
     try {
-      const token = localStorage.getItem('token') || ''
-      const res = await fetch('http://localhost:3333/usuarios/me/preferencias', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ [key]: newValue })
-      })
-
-      if (!res.ok) throw new Error('Erro na rede')
-      
+      saveNotificationPrefs(next)
       window.dispatchEvent(new CustomEvent('app:show_toast', {
-        detail: { 
-          title: 'Preferência atualizada', 
+        detail: {
+          title: 'Preferência atualizada',
           description: 'Sua configuração de notificação foi salva.',
           type: 'success'
         }
       }))
     } catch {
-      // 2. Reversão em caso de falha (Rollback) e Toast de Erro
+      // Reversão em caso de falha (ex.: storage indisponível)
       setPrefs(previous)
       window.dispatchEvent(new CustomEvent('app:show_toast', {
-        detail: { 
-          title: 'Erro ao salvar', 
+        detail: {
+          title: 'Erro ao salvar',
           description: 'Não foi possível salvar sua preferência. Tente novamente.',
           type: 'error'
         }

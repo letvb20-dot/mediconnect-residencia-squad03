@@ -104,31 +104,26 @@ export const patientRepository = {
   },
 
   // PATCH /rest/v1/patients?id=eq.{id}
-  // Salva primeiro o núcleo documentado e tenta campos estendidos em modo tolerante,
-  // porque ambientes diferentes podem expor colunas distintas em patients.
+  // Salva o nucleo documentado e os grupos estendidos sem mascarar falhas.
+  // Se a API recusar um campo enviado pelo usuario, a tela deve exibir erro
+  // em vez de manter uma alteracao apenas local.
   async update(patientId, data) {
     validatePatientPayload(data)
     const body = buildUpdatePatientBody(data)
     const groups = buildUpdateGroups(body)
     let representation = []
-    let patched = false
 
     if (!groups.core.length && !groups.optional.length) return []
 
     if (groups.core.length) {
-      representation = await patchPatientCore(patientId, groups.core[0])
-      patched = true
+      representation = await patchPatient(patientId, groups.core[0])
     }
 
     for (const attempt of groups.optional) {
-      const optionalRepresentation = await patchPatientBestEffort(patientId, attempt)
-      if (optionalRepresentation.length) {
-        representation = optionalRepresentation
-        patched = true
-      }
+      representation = await patchPatient(patientId, attempt)
     }
 
-    return patched ? representation : []
+    return representation
   },
 
   // POST /storage/v1/object/avatars/{path}
@@ -694,62 +689,7 @@ async function patchPatient(patientId, payload) {
     return rows
   }
 
-  const error = new Error(await getResponseError(response, 'Erro ao atualizar paciente.'))
-  error.status = response.status
-  error.payload = payload
-  throw error
-}
-
-async function patchPatientCore(patientId, payload) {
-  const attempts = uniquePayloads([
-    payload,
-    pickPayload(payload, ['full_name', 'phone_mobile']),
-    pickPayload(payload, ['full_name']),
-    pickPayload(payload, ['phone_mobile']),
-    pickPayload(payload, ['email']),
-  ])
-
-  let lastError = null
-
-  for (const attempt of attempts) {
-    try {
-      return await patchPatient(patientId, attempt)
-    } catch (error) {
-      lastError = error
-      if (!isRetryablePatientPatchError(error)) throw error
-    }
-  }
-
-  throw lastError || new Error('Erro ao atualizar paciente.')
-}
-
-async function patchPatientBestEffort(patientId, payload) {
-  try {
-    return await patchPatient(patientId, payload)
-  } catch (error) {
-    if (!isRetryablePatientPatchError(error)) throw error
-  }
-
-  const entries = Object.entries(payload)
-  if (entries.length <= 1) return []
-
-  let representation = []
-
-  for (const [field, value] of entries) {
-    try {
-      const rows = await patchPatient(patientId, { [field]: value })
-      if (rows.length) representation = rows
-    } catch (error) {
-      if (!isRetryablePatientPatchError(error)) throw error
-    }
-  }
-
-  return representation
-}
-
-function isRetryablePatientPatchError(error) {
-  const message = String(error?.message || '')
-  return error?.status === 400 || /schema cache|column|campo|não reconhecido|nao reconhecido|Erro ao atualizar paciente/i.test(message)
+  throw new Error(await getResponseError(response, 'Erro ao atualizar paciente.'))
 }
 
 function buildRegisterPatientWithPasswordPayload(data) {

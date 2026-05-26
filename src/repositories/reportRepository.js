@@ -1,9 +1,6 @@
 import { apiConfig, getAuthenticatedHeaders } from '../config/api.js'
 import { reportMapper } from '../mappers/reportMapper.js'
-import { getResponseError, normalizeCollection, normalizeItem } from './repositoryUtils.js'
-
-const DOCTOR_TABLES = ['doctors', 'medicos']
-const PROFILE_TABLES = ['profiles', 'user_profiles']
+import { getResponseError, normalizeItem } from './repositoryUtils.js'
 
 export const reportRepository = {
   // GET /rest/v1/reports
@@ -41,9 +38,9 @@ export const reportRepository = {
 
     const data = await response.json()
     const reports = Array.isArray(data) ? data : []
-    const requesterNameById = await getRequesterNameMap().catch(() => new Map())
+    const doctorNameById = await getDoctorNameMap().catch(() => new Map())
 
-    return reports.map((report) => reportMapper.toUi(resolveRequester(report, requesterNameById)))
+    return reports.map((report) => reportMapper.toUi(resolveRequester(report, doctorNameById)))
   },
 
   // POST /rest/v1/reports
@@ -101,50 +98,29 @@ function requireReturnedItem(data, message) {
   return item
 }
 
-async function getRequesterNameMap() {
+async function getDoctorNameMap() {
+  const response = await fetch(`${apiConfig.restUrl}/doctors?select=id,user_id,full_name,email`, {
+    headers: getAuthenticatedHeaders(),
+  })
+
+  if (!response.ok) return new Map()
+
+  const doctors = await response.json()
   const entries = []
-  await appendRequesterEntries(entries, DOCTOR_TABLES, ['doctors', 'medicos', 'data'])
-  await appendRequesterEntries(entries, PROFILE_TABLES, ['profiles', 'user_profiles', 'data'])
+
+  for (const doctor of Array.isArray(doctors) ? doctors : []) {
+    const name = doctor.full_name || doctor.email
+    if (!name) continue
+
+    for (const id of [doctor.id, doctor.user_id]) {
+      if (id) entries.push([String(id), name])
+    }
+  }
+
   return new Map(entries)
 }
 
-async function appendRequesterEntries(entries, tables, collectionKeys) {
-  for (const table of tables) {
-    const response = await fetch(`${apiConfig.restUrl}/${table}?select=*`, {
-      headers: getAuthenticatedHeaders(),
-    }).catch(() => null)
-
-    if (!response?.ok) continue
-
-    const rows = normalizeCollection(await response.json().catch(() => null), collectionKeys)
-    for (const row of rows) {
-      appendRequesterEntry(entries, row)
-    }
-  }
-}
-
-function appendRequesterEntry(entries, row) {
-  const name = row.full_name || row.name || row.nome || row.email
-  if (!name) return
-
-  for (const id of [
-    row.id,
-    row.user_id,
-    row.userId,
-    row.auth_user_id,
-    row.authUserId,
-    row.profile_id,
-    row.profileId,
-    row.doctor_id,
-    row.doctorId,
-    row.medico_id,
-    row.email,
-  ]) {
-    if (id) entries.push([String(id), name])
-  }
-}
-
-function resolveRequester(report, requesterNameById) {
+function resolveRequester(report, doctorNameById) {
   const requesterId = String(report.requested_by || '').trim()
   const requesterName =
     report.requested_by_name ||
@@ -152,8 +128,7 @@ function resolveRequester(report, requesterNameById) {
     report.doctor_name ||
     report.doctors?.full_name ||
     report.doctor?.full_name ||
-    requesterNameById.get(requesterId) ||
-    requesterNameById.get(String(report.created_by || '').trim())
+    doctorNameById.get(requesterId)
 
   if (requesterName) {
     return { ...report, requested_by: requesterName, requested_by_id: requesterId }

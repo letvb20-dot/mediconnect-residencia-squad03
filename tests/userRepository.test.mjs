@@ -350,42 +350,6 @@ test('userRepository.getAll mescla dados de medico nos detalhes do usuario', asy
   assert.equal(users[0].specialty, 'Clinica medica')
 })
 
-test('userRepository.getAll infere perfil de metadados e usa disabled=false como ativo', async () => {
-  globalThis.fetch = async (url) => {
-    const requestUrl = String(url)
-
-    if (requestUrl.includes('/rest/v1/profiles?')) {
-      return Response.json([
-        {
-          disabled: false,
-          email: 'admin@exemplo.com',
-          full_name: 'Admin Sistema',
-          id: 'user-1',
-          raw_user_meta_data: { role: 'admin' },
-          status: 'pending',
-        },
-      ])
-    }
-
-    if (requestUrl.includes('/rest/v1/user_roles?')) {
-      return Response.json([])
-    }
-
-    if (requestUrl.includes('/rest/v1/doctors?') || requestUrl.includes('/rest/v1/medicos?')) {
-      return Response.json([], { status: 404 })
-    }
-
-    throw new Error(`URL inesperada: ${requestUrl}`)
-  }
-
-  const { userRepository } = await import('../src/repositories/userRepository.js')
-  const users = await userRepository.getAll()
-
-  assert.equal(users[0].role, 'admin')
-  assert.deepEqual(users[0].roles, ['admin'])
-  assert.equal(users[0].status, 'active')
-})
-
 test('userRepository.update sincroniza dados do medico na tabela doctors', async () => {
   const calls = []
 

@@ -237,7 +237,7 @@ export function AgendaPage({ navigate }) {
                 onClick={() => navigate('/consultas')}
                 type="button"
               >
-                Fila de Espera
+                Fila de consultas
               </button>
               <button
                 className="shrink-0 h-9 rounded-sm border border-accent-primary bg-accent-primary px-4 text-sm font-semibold text-white shadow-[0_10px_15px_rgba(59,130,246,0.16)] transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:border-border-default-v2 disabled:bg-surface-card-hover disabled:text-text-muted-v2 disabled:shadow-none"

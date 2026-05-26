@@ -45,11 +45,15 @@ export const patientRepository = {
     validatePatientPayload(data, { requireRegistrationFields: true })
     const body = buildCreatePatientBody(data)
 
-    const response = await fetch(`${apiConfig.functionsUrl}/create-patient`, {
-      method: 'POST',
-      headers: getAuthenticatedHeaders(),
-      body: JSON.stringify(body),
-    })
+    let response = await postCreatePatient(body)
+
+    if (!response.ok) {
+      const errorText = await response.clone().text().catch(() => '')
+      const minimalBody = buildMinimalCreatePatientBody(data)
+      if (shouldRetryCreateWithMinimalBody(errorText, body, minimalBody)) {
+        response = await postCreatePatient(minimalBody)
+      }
+    }
 
     if (!response.ok) {
       throw new Error(await getResponseError(response, 'Erro ao criar paciente.'))
@@ -104,9 +108,8 @@ export const patientRepository = {
   },
 
   // PATCH /rest/v1/patients?id=eq.{id}
-  // Salva o nucleo documentado e os grupos estendidos sem mascarar falhas.
-  // Se a API recusar um campo enviado pelo usuario, a tela deve exibir erro
-  // em vez de manter uma alteracao apenas local.
+  // Salva o nucleo documentado e tenta os grupos estendidos sem bloquear
+  // cadastro/edicao quando o backend ainda nao tem alguma coluna opcional.
   async update(patientId, data) {
     validatePatientPayload(data)
     const body = buildUpdatePatientBody(data)
@@ -116,11 +119,12 @@ export const patientRepository = {
     if (!groups.core.length && !groups.optional.length) return []
 
     if (groups.core.length) {
-      representation = await patchPatient(patientId, groups.core[0])
+      representation = await patchPatientResilient(patientId, groups.core[0], { allowUnsupportedSchema: true })
     }
 
     for (const attempt of groups.optional) {
-      representation = await patchPatient(patientId, attempt)
+      const optionalRepresentation = await patchPatientResilient(patientId, attempt, { allowUnsupportedSchema: true })
+      if (optionalRepresentation.length) representation = optionalRepresentation
     }
 
     return representation
@@ -551,6 +555,16 @@ function buildCreatePatientBody(data) {
 }
 
 // /functions/v1/register-patient: phone_mobile DEVE ser ^\d{10,11}$ (somente dígitos)
+function buildMinimalCreatePatientBody(data) {
+  return cleanPayload({
+    email: data.email?.trim(),
+    full_name: cleanPersonName(data.name, data.full_name),
+    cpf: onlyDigits(data.cpf),
+    phone_mobile: onlyDigits(data.phone || data.phone_mobile),
+    birth_date: data.birthDate || data.birth_date || undefined,
+  })
+}
+
 function buildRegisterPatientPayload(data) {
   return cleanPayload({
     email: data.email?.trim(),
@@ -689,7 +703,72 @@ async function patchPatient(patientId, payload) {
     return rows
   }
 
-  throw new Error(await getResponseError(response, 'Erro ao atualizar paciente.'))
+  const errorText = await response.clone().text().catch(() => '')
+  const error = new Error(await getResponseError(response, 'Erro ao atualizar paciente.'))
+  error.unsupportedField = getUnsupportedSchemaField(errorText)
+  error.isUnsupportedSchema = isUnsupportedSchemaError(errorText)
+  throw error
+}
+
+async function patchPatientResilient(patientId, payload, { allowUnsupportedSchema = false } = {}) {
+  let remaining = { ...payload }
+  let lastRepresentation = []
+
+  while (Object.keys(remaining).length) {
+    try {
+      lastRepresentation = await patchPatient(patientId, remaining)
+      return lastRepresentation
+    } catch (error) {
+      if (!allowUnsupportedSchema || !error.isUnsupportedSchema) throw error
+
+      if (!error.unsupportedField) return lastRepresentation
+      if (!(error.unsupportedField in remaining)) return lastRepresentation
+
+      remaining = omitField(remaining, error.unsupportedField)
+    }
+  }
+
+  return lastRepresentation
+}
+
+async function postCreatePatient(body) {
+  return fetch(`${apiConfig.functionsUrl}/create-patient`, {
+    method: 'POST',
+    headers: getAuthenticatedHeaders(),
+    body: JSON.stringify(body),
+  })
+}
+
+function shouldRetryCreateWithMinimalBody(errorText, body, minimalBody) {
+  if (!isUnsupportedSchemaError(errorText)) return false
+  return JSON.stringify(body) !== JSON.stringify(minimalBody)
+}
+
+function getUnsupportedSchemaField(errorText) {
+  const text = String(errorText || '')
+  const patterns = [
+    /Could not find the '([^']+)' column/i,
+    /column ["']?([a-zA-Z0-9_]+)["']? does not exist/i,
+    /record .* has no field ["']?([a-zA-Z0-9_]+)["']?/i,
+    /unknown field ["']?([a-zA-Z0-9_]+)["']?/i,
+    /unexpected field ["']?([a-zA-Z0-9_]+)["']?/i,
+  ]
+
+  for (const pattern of patterns) {
+    const match = pattern.exec(text)
+    if (match?.[1]) return match[1]
+  }
+
+  return ''
+}
+
+function isUnsupportedSchemaError(errorText) {
+  const text = String(errorText || '').toLowerCase()
+  return /schema cache|could not find[^.]*column|column [^.]*(does not exist|not found)|unknown field|unexpected field|has no field/.test(text)
+}
+
+function omitField(payload, field) {
+  return Object.fromEntries(Object.entries(payload).filter(([key]) => key !== field))
 }
 
 function buildRegisterPatientWithPasswordPayload(data) {

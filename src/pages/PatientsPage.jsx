@@ -73,6 +73,7 @@ export function PatientsPage({ navigate, role }) {
   const [lastVisitSince, setLastVisitSince] = useState('')
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [openMenuId, setOpenMenuId] = useState(null)
+  const [menuPosition, setMenuPosition] = useState({ left: 0, top: 0 })
   const [page, setPage] = useState(1)
 
   useEffect(() => {
@@ -156,6 +157,7 @@ export function PatientsPage({ navigate, role }) {
   const currentPage = Math.min(page, totalPages)
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
   const paginatedPatients = filteredPatients.slice(startIndex, startIndex + ITEMS_PER_PAGE)
+  const menuPatient = openMenuId ? rows.find((patient) => patient.id === openMenuId) : null
 
   function resetAdvancedFilters() {
     setCity('')
@@ -167,10 +169,38 @@ export function PatientsPage({ navigate, role }) {
     setPage(1)
   }
 
+  function closeActionMenu() {
+    setOpenMenuId(null)
+    setMenuPosition({ left: 0, top: 0 })
+  }
+
+  function toggleActionMenu(event, patient) {
+    event.stopPropagation()
+
+    if (openMenuId === patient.id) {
+      closeActionMenu()
+      return
+    }
+
+    const rect = event.currentTarget.getBoundingClientRect()
+    const menuWidth = 192
+    const menuHeight = canHardDeletePatients ? 184 : 144
+    const gap = 8
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || menuWidth
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || menuHeight
+    const maxLeft = Math.max(gap, viewportWidth - menuWidth - gap)
+    const left = Math.min(Math.max(gap, rect.right - menuWidth), maxLeft)
+    const opensDown = rect.bottom + gap + menuHeight <= viewportHeight
+    const top = opensDown ? rect.bottom + gap : Math.max(gap, rect.top - menuHeight - gap)
+
+    setMenuPosition({ left, top })
+    setOpenMenuId(patient.id)
+  }
+
   function openForm(patientId = null) {
     if (!canEditPatients) return
     setEditingId(patientId)
-    setOpenMenuId(null)
+    closeActionMenu()
     setView('form')
   }
 
@@ -277,14 +307,14 @@ async function uploadPatientAttachments(patientId, files = []) {
     try {
       await patientRepository.remove(patient.detailId || patient.id)
       setRows((currentRows) => currentRows.filter((item) => item.id !== patient.id))
-      setOpenMenuId(null)
+      closeActionMenu()
     } catch (err) {
       window.alert(`Erro ao excluir paciente: ${translateErrorMessage(err.message, 'Erro ao excluir paciente.')}`)
     }
   }
 
   function openDetail(patient) {
-    setOpenMenuId(null)
+    closeActionMenu()
     if (patient.detailId) {
       navigate(`/pacientes/${patient.detailId}`)
       return
@@ -444,39 +474,11 @@ async function uploadPatientAttachments(patientId, files = []) {
                       <button
                         aria-label={`Ações de ${patient.name}`}
                         className="rounded p-1 text-text-muted-v2 transition hover:bg-surface-card-hover hover:text-text-heading"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          setOpenMenuId(openMenuId === patient.id ? null : patient.id)
-                        }}
+                        onClick={(event) => toggleActionMenu(event, patient)}
                         type="button"
                       >
                         <PatientIcon className="size-5" name="more" />
                       </button>
-                      {openMenuId === patient.id ? (
-                        <>
-                          <button
-                            aria-label="Fechar menu"
-                            className="fixed inset-0 z-40 cursor-default"
-                            onClick={() => setOpenMenuId(null)}
-                            type="button"
-                          />
-                          <div className="fixed right-8 z-50 w-48 rounded-md border border-border-default-v2 bg-surface-card p-1 text-left shadow-lg">
-                            <ActionItem icon="file" label="Ver detalhes" onClick={() => openDetail(patient)} />
-                            {canEditPatients ? <ActionItem icon="edit" label="Editar" onClick={() => openForm(patient.id)} /> : null}
-                            <ActionItem
-                              icon="calendar"
-                              label="Marcar consulta"
-                              onClick={() => {
-                                setOpenMenuId(null)
-                                navigate(`/agenda?new=1&patientId=${encodeURIComponent(patient.detailId || patient.id)}`)
-                              }}
-                            />
-                            {canHardDeletePatients ? (
-                              <ActionItem danger icon="trash" label="Excluir" onClick={() => deletePatient(patient)} />
-                            ) : null}
-                          </div>
-                        </>
-                      ) : null}
                     </td>
                   </tr>
                 ))
@@ -520,6 +522,35 @@ async function uploadPatientAttachments(patientId, files = []) {
           </div>
         </div>
       </section>
+
+      {menuPatient ? (
+        <>
+          <button
+            aria-label="Fechar menu"
+            className="fixed inset-0 z-40 cursor-default"
+            onClick={closeActionMenu}
+            type="button"
+          />
+          <div
+            className="fixed z-50 w-48 rounded-md border border-border-default-v2 bg-surface-card p-1 text-left shadow-lg"
+            style={{ left: `${menuPosition.left}px`, top: `${menuPosition.top}px` }}
+          >
+            <ActionItem icon="file" label="Ver detalhes" onClick={() => openDetail(menuPatient)} />
+            {canEditPatients ? <ActionItem icon="edit" label="Editar" onClick={() => openForm(menuPatient.id)} /> : null}
+            <ActionItem
+              icon="calendar"
+              label="Marcar consulta"
+              onClick={() => {
+                closeActionMenu()
+                navigate(`/agenda?new=1&patientId=${encodeURIComponent(menuPatient.detailId || menuPatient.id)}`)
+              }}
+            />
+            {canHardDeletePatients ? (
+              <ActionItem danger icon="trash" label="Excluir" onClick={() => deletePatient(menuPatient)} />
+            ) : null}
+          </div>
+        </>
+      ) : null}
 
       {advancedOpen ? (
         <AdvancedFilterModal

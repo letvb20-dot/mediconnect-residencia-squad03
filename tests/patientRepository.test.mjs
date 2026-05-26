@@ -190,6 +190,43 @@ test('patientRepository.create envia apenas campos aceitos pelo create-patient',
   assert.equal('lgpd_opt_in' in body, false)
 })
 
+test('patientRepository.create tenta payload minimo quando create-patient recusa campos extras', async () => {
+  const bodies = []
+
+  globalThis.fetch = async (url, options = {}) => {
+    if (String(url).includes('/create-patient')) {
+      const body = JSON.parse(options.body)
+      bodies.push(body)
+
+      if (bodies.length === 1) {
+        return Response.json({ message: "Could not find the 'social_name' column in the schema cache" }, { status: 400 })
+      }
+
+      return Response.json({ id: 'patient-1', full_name: body.full_name })
+    }
+
+    throw new Error(`URL inesperada: ${url}`)
+  }
+
+  const { patientRepository } = await import('../src/repositories/patientRepository.js')
+  await patientRepository.create({
+    cpf: '123.456.789-01',
+    email: 'ana@exemplo.com',
+    full_name: 'Ana Souza',
+    phone: '(11) 99999-8888',
+    socialName: 'Ana',
+  })
+
+  assert.equal(bodies.length, 2)
+  assert.equal(bodies[0].social_name, 'Ana')
+  assert.deepEqual(bodies[1], {
+    email: 'ana@exemplo.com',
+    full_name: 'Ana Souza',
+    cpf: '12345678901',
+    phone_mobile: '11999998888',
+  })
+})
+
 test('patientRepository.uploadAttachment tenta buckets de anexos antes de avatars', async () => {
   const calls = []
   const file = new Blob(['conteudo'], { type: 'application/pdf' })
@@ -273,7 +310,7 @@ test('patientRepository.uploadAvatar falha quando a API nao confirma avatar do p
   )
 })
 
-test('patientRepository.update falha quando a API recusa campo enviado', async () => {
+test('patientRepository.update remove coluna inexistente e preserva campos suportados', async () => {
   const bodies = []
 
   globalThis.fetch = async (url, options = {}) => {
@@ -288,22 +325,25 @@ test('patientRepository.update falha quando a API recusa campo enviado', async (
   }
 
   const { patientRepository } = await import('../src/repositories/patientRepository.js')
-  await assert.rejects(
-    () => patientRepository.update('patient-1', {
-      email: 'ana@exemplo.com',
-      name: 'Ana Souza',
-      phone: '(11) 99999-8888',
-      lgpdOptIn: true,
-    }),
-    /Erro ao atualizar paciente/,
-  )
+  await patientRepository.update('patient-1', {
+    email: 'ana@exemplo.com',
+    name: 'Ana Souza',
+    phone: '(11) 99999-8888',
+    lgpdOptIn: true,
+  })
 
   assert.deepEqual(bodies[0], {
     email: 'ana@exemplo.com',
     full_name: 'Ana Souza',
     phone_mobile: '11999998888',
   })
-  assert.equal(bodies.length, 1)
+  assert.deepEqual(bodies[1], {
+    full_name: 'Ana Souza',
+    phone_mobile: '11999998888',
+  })
+  assert.deepEqual(bodies[2], {
+    lgpd_opt_in: true,
+  })
 })
 
 test('patientRepository.update persiste campos estendidos quando a API suporta', async () => {

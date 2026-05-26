@@ -84,7 +84,7 @@ test('sendAppointmentConfirmationMessages dispara WhatsApp e SMS para agendament
     assert.equal(calls[1].patientName, 'Maria')
     assert.equal(
       buildAppointmentConfirmationContent(payload, { professional: { name: 'Dra. Ana' } }),
-      'sua consulta Presencial foi agendada para 30/05/2026 \u00e0s 14:00 com Dra. Ana.',
+      'sua consulta Presencial foi agendada para 30/05/2026 as 14:00 com Dra. Ana. Este e um lembrete da sua consulta. Responda SIM para confirmar sua presenca ou fale com nossa equipe para reagendar.',
     )
   } finally {
     communicationRepository.sendSms = originalSendSms

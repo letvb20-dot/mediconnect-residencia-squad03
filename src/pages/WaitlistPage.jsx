@@ -9,7 +9,14 @@ import { availabilityRepository } from '../repositories/availabilityRepository.j
 import { notificationRepository } from '../repositories/notificationRepository.js'
 import { patientRepository } from '../repositories/patientRepository.js'
 import { professionalRepository } from '../repositories/professionalRepository.js'
+import { translateErrorMessage } from '../repositories/repositoryUtils.js'
 import { waitlistRepository, WAITLIST_CHANGED_EVENT } from '../repositories/waitlistRepository.js'
+import {
+  findWaitlistPatient,
+  getWaitlistPatientEmail,
+  getWaitlistPatientPhone,
+  sendWaitlistNotification,
+} from '../utils/waitlistNotification.js'
 
 const CHANNELS = [
   { value: 'whatsapp', label: 'WhatsApp' },
@@ -39,6 +46,7 @@ export function WaitlistPage({ role }) {
   const [gaps, setGaps] = useState([])
   const [gapLoading, setGapLoading] = useState(false)
   const [error, setError] = useState('')
+  const [sendingId, setSendingId] = useState('')
 
   useEffect(() => {
     let active = true
@@ -113,23 +121,36 @@ export function WaitlistPage({ role }) {
       return
     }
 
+    const selectedPatient = findWaitlistPatient(form.patientId, patients)
     waitlistRepository.add({
       ...form,
+      patientEmail: getWaitlistPatientEmail(selectedPatient),
       patientName: patientName(form.patientId),
+      patientPhone: getWaitlistPatientPhone(selectedPatient),
       doctorName: doctorName(form.doctorId),
     })
     setForm(emptyForm)
   }
 
-  function notify(entry) {
-    notificationRepository.notifyCurrentUser({
-      domain: 'agenda',
-      channel: entry.channel,
-      title: 'Encaixe disponível',
-      detail: `${entry.patientName} pode ser encaixado(a)${entry.doctorName ? ` com ${entry.doctorName}` : ''} via ${channelLabel(entry.channel)}.`,
-      route: '/lista-espera',
-    }).catch(() => null)
-    waitlistRepository.markNotified(entry.id, entry.channel)
+  async function notify(entry) {
+    setError('')
+    setSendingId(entry.id)
+
+    try {
+      await sendWaitlistNotification(entry, { patients })
+      notificationRepository.notifyCurrentUser({
+        domain: 'agenda',
+        channel: entry.channel,
+        title: 'Encaixe disponível',
+        detail: `${entry.patientName} pode ser encaixado(a)${entry.doctorName ? ` com ${entry.doctorName}` : ''} via ${channelLabel(entry.channel)}.`,
+        route: '/lista-espera',
+      }).catch(() => null)
+      waitlistRepository.markNotified(entry.id, entry.channel)
+    } catch (notifyError) {
+      setError(translateErrorMessage(notifyError.message, 'Falha ao enviar mensagem para o paciente.'))
+    } finally {
+      setSendingId('')
+    }
   }
 
   return (
@@ -229,8 +250,8 @@ export function WaitlistPage({ role }) {
                   {canManage ? (
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-2">
-                        <button className="rounded-lg border border-border-default-v2 bg-surface-inset px-3 py-1.5 text-xs font-semibold transition hover:bg-surface-card-hover" onClick={() => notify(entry)} type="button">
-                          Notificar
+                        <button className="rounded-lg border border-border-default-v2 bg-surface-inset px-3 py-1.5 text-xs font-semibold transition hover:bg-surface-card-hover disabled:cursor-not-allowed disabled:opacity-60" disabled={sendingId === entry.id} onClick={() => notify(entry)} type="button">
+                          {sendingId === entry.id ? 'Enviando...' : 'Notificar'}
                         </button>
                         <button className="rounded-lg border border-border-default-v2 bg-surface-inset px-3 py-1.5 text-xs font-semibold text-red-300 transition hover:bg-red-950/30" onClick={() => waitlistRepository.remove(entry.id)} type="button">
                           Remover

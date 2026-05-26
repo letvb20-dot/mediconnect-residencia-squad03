@@ -734,7 +734,7 @@ export async function sendAppointmentConfirmationMessages(payload, { patients = 
   const content = buildAppointmentConfirmationContent(payload, {
     professional: findProfessionalById(payload.professionalId, professionals),
   })
-  const template = 'Confirmacao de agendamento'
+  const template = 'Confirmacao e lembrete de agendamento'
 
   if (!phone) {
     await Promise.all(['whatsapp', 'sms'].map((channel) =>
@@ -805,7 +805,7 @@ export function buildAppointmentConfirmationContent(payload, { professional = nu
   const professionalName = getProfessionalName(professional)
   const professionalPart = professionalName ? ` com ${professionalName}` : ''
 
-  return `sua consulta${mode} foi agendada para ${formatAppointmentDate(payload.date)} \u00e0s ${time}${professionalPart}.`
+  return `sua consulta${mode} foi agendada para ${formatAppointmentDate(payload.date)} as ${time}${professionalPart}. Este e um lembrete da sua consulta. Responda SIM para confirmar sua presenca ou fale com nossa equipe para reagendar.`
 }
 
 function filterAppointmentsByProfessional(appointments, professionalId) {

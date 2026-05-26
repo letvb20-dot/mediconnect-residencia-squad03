@@ -649,8 +649,8 @@ function onlyDigits(value) {
 }
 
 function normalizeListedUser(user) {
-  const role = resolveUserRole(user)
   const metadata = getUserMetadata(user)
+  const role = resolveUserRole(user, metadata)
   const emailConfirmedAt = firstValue(user, [
     'email_confirmed_at',
     'confirmed_at',
@@ -680,7 +680,7 @@ function normalizeListedUser(user) {
   }
 }
 
-function resolveUserRole(user) {
+function resolveUserRole(user, metadata = getUserMetadata(user)) {
   const candidates = [
     user.role,
     user.cargo,
@@ -698,13 +698,30 @@ function resolveUserRole(user) {
     user.profile_roles,
     user.role_data,
     user.profile_data,
+    metadata.role,
+    metadata.cargo,
+    metadata.perfil,
+    metadata.profile,
+    metadata.profile_name,
+    metadata.profile_slug,
+    metadata.access_profile,
+    metadata.access_level,
+    metadata.user_role,
+    metadata.tipo_usuario,
+    metadata.user_type,
+    metadata.roles,
+    metadata.user_roles,
+    metadata.profile_roles,
+    metadata.role_data,
+    metadata.profile_data,
   ]
 
   if (user.is_admin || user.admin) candidates.push('admin')
-  if (user.is_manager || user.manager || user.gestor) candidates.push('gestor')
-  if (user.is_doctor || user.doctor_id || user.crm) candidates.push('medico')
-  if (user.is_secretary || user.secretary) candidates.push('secretaria')
-  if (user.is_patient || user.patient_id) candidates.push('paciente')
+  if (metadata.is_admin || metadata.admin) candidates.push('admin')
+  if (user.is_manager || user.manager || user.gestor || metadata.is_manager || metadata.manager || metadata.gestor) candidates.push('gestor')
+  if (user.is_doctor || user.doctor_id || user.doctorId || user.medico_id || user.crm || metadata.is_doctor || metadata.doctor_id || metadata.doctorId || metadata.medico_id || metadata.crm) candidates.push('medico')
+  if (user.is_secretary || user.secretary || metadata.is_secretary || metadata.secretary) candidates.push('secretaria')
+  if (user.is_patient || user.patient_id || user.patientId || user.paciente_id || metadata.is_patient || metadata.patient_id || metadata.patientId || metadata.paciente_id) candidates.push('paciente')
 
   for (const candidate of flattenRoleCandidates(candidates)) {
     const role = normalizeRole(candidate)
@@ -739,6 +756,7 @@ function flattenRoleCandidates(candidates) {
 function resolveUserStatus(user, emailConfirmedAt) {
   if (user.deleted_at || user.blocked_at || user.banned_until) return 'blocked'
   if (emailConfirmedAt || user.email_confirmed === true || user.confirmed === true || user.active === true || user.is_active === true) return 'active'
+  if (user.disabled === false || user.is_disabled === false) return 'active'
 
   const rawStatus = String(
     firstValue(user, ['status', 'situacao', 'account_status', 'invite_status']) || '',

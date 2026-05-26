@@ -11,6 +11,7 @@ const AgendaPage = lazyPage(() => import('./pages/AgendaPage.jsx'), 'AgendaPage'
 const AnalyticsPage = lazyPage(() => import('./pages/AnalyticsPage.jsx'), 'AnalyticsPage')
 const HomePage = lazyPage(() => import('./pages/HomePage.jsx'), 'HomePage')
 const LandingPage = lazyPage(() => import('./pages/LandingPage.jsx'), 'LandingPage')
+const MedicalRecordsPage = lazyPage(() => import('./pages/MedicalRecordsPage.jsx'), 'MedicalRecordsPage')
 const MessagesPage = lazyPage(() => import('./pages/MessagesPage.jsx'), 'MessagesPage')
 const PatientDetailPage = lazyPage(() => import('./pages/PatientsPage.jsx'), 'PatientDetailPage')
 const PatientsPage = lazyPage(() => import('./pages/PatientsPage.jsx'), 'PatientsPage')
@@ -355,6 +356,31 @@ function resolveRoute(pathname, navigate, role, profile, user, isAuthenticated) 
     return {
       element: <ReportsPage navigate={navigate} role={role} />,
       title: 'Relatórios',
+      withShell: true,
+    }
+  }
+
+  if (pathname === '/prontuario') {
+    return {
+      element: <MedicalRecordsPage navigate={navigate} />,
+      title: 'ProntuÃ¡rio',
+      withShell: true,
+    }
+  }
+
+  if (pathname === '/prontuario/novo') {
+    return {
+      element: <MedicalRecordsPage mode="new" navigate={navigate} />,
+      title: 'Novo ProntuÃ¡rio',
+      withShell: true,
+    }
+  }
+
+  if (pathname.startsWith('/prontuario/')) {
+    const [, , recordId, action] = pathname.split('/')
+    return {
+      element: <MedicalRecordsPage mode={action === 'editar' ? 'edit' : 'detail'} navigate={navigate} recordId={recordId} />,
+      title: action === 'editar' ? 'Editar ProntuÃ¡rio' : 'ProntuÃ¡rio',
       withShell: true,
     }
   }

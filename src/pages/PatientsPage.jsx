@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 import { apiConfig } from '../config/api.js'
 import { hasCapability } from '../config/permissions.js'
@@ -73,6 +74,7 @@ export function PatientsPage({ navigate, role }) {
   const [lastVisitSince, setLastVisitSince] = useState('')
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [openMenuId, setOpenMenuId] = useState(null)
+  const [menuAnchor, setMenuAnchor] = useState(null)
   const [page, setPage] = useState(1)
 
   useEffect(() => {
@@ -167,10 +169,25 @@ export function PatientsPage({ navigate, role }) {
     setPage(1)
   }
 
+  function closeActionMenu() {
+    setOpenMenuId(null)
+    setMenuAnchor(null)
+  }
+
+  function toggleActionMenu(patientId, event) {
+    if (openMenuId === patientId) {
+      closeActionMenu()
+      return
+    }
+
+    setOpenMenuId(patientId)
+    setMenuAnchor(getPatientActionMenuAnchor(event.currentTarget))
+  }
+
   function openForm(patientId = null) {
     if (!canEditPatients) return
     setEditingId(patientId)
-    setOpenMenuId(null)
+    closeActionMenu()
     setView('form')
   }
 
@@ -277,14 +294,14 @@ async function uploadPatientAttachments(patientId, files = []) {
     try {
       await patientRepository.remove(patient.detailId || patient.id)
       setRows((currentRows) => currentRows.filter((item) => item.id !== patient.id))
-      setOpenMenuId(null)
+      closeActionMenu()
     } catch (err) {
       window.alert(`Erro ao excluir paciente: ${translateErrorMessage(err.message, 'Erro ao excluir paciente.')}`)
     }
   }
 
   function openDetail(patient) {
-    setOpenMenuId(null)
+    closeActionMenu()
     if (patient.detailId) {
       navigate(`/pacientes/${patient.detailId}`)
       return
@@ -446,28 +463,31 @@ async function uploadPatientAttachments(patientId, files = []) {
                         className="rounded p-1 text-text-muted-v2 transition hover:bg-surface-card-hover hover:text-text-heading"
                         onClick={(event) => {
                           event.stopPropagation()
-                          setOpenMenuId(openMenuId === patient.id ? null : patient.id)
+                          toggleActionMenu(patient.id, event)
                         }}
                         type="button"
                       >
                         <PatientIcon className="size-5" name="more" />
                       </button>
-                      {openMenuId === patient.id ? (
+                      {openMenuId === patient.id && menuAnchor ? createPortal(
                         <>
                           <button
                             aria-label="Fechar menu"
                             className="fixed inset-0 z-40 cursor-default"
-                            onClick={() => setOpenMenuId(null)}
+                            onClick={closeActionMenu}
                             type="button"
                           />
-                          <div className="fixed right-8 z-50 w-48 rounded-md border border-border-default-v2 bg-surface-card p-1 text-left shadow-lg">
+                          <div
+                            className="fixed z-50 w-48 overflow-hidden rounded-md border border-border-default-v2 bg-surface-card p-1 text-left shadow-2xl"
+                            style={{ left: menuAnchor.left, top: menuAnchor.top }}
+                          >
                             <ActionItem icon="file" label="Ver detalhes" onClick={() => openDetail(patient)} />
                             {canEditPatients ? <ActionItem icon="edit" label="Editar" onClick={() => openForm(patient.id)} /> : null}
                             <ActionItem
                               icon="calendar"
                               label="Marcar consulta"
                               onClick={() => {
-                                setOpenMenuId(null)
+                                closeActionMenu()
                                 navigate(`/agenda?new=1&patientId=${encodeURIComponent(patient.detailId || patient.id)}`)
                               }}
                             />
@@ -475,7 +495,8 @@ async function uploadPatientAttachments(patientId, files = []) {
                               <ActionItem danger icon="trash" label="Excluir" onClick={() => deletePatient(patient)} />
                             ) : null}
                           </div>
-                        </>
+                        </>,
+                        document.body,
                       ) : null}
                     </td>
                   </tr>
@@ -1750,6 +1771,26 @@ function PageButton({ children, disabled, onClick }) {
       {children}
     </button>
   )
+}
+
+function getPatientActionMenuAnchor(button) {
+  const rect = button.getBoundingClientRect()
+  const menuWidth = 192
+  const menuHeight = 188
+  const gap = 8
+  const padding = 12
+  const viewportWidth = window.innerWidth || document.documentElement.clientWidth
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight
+  const left = Math.min(
+    viewportWidth - menuWidth - padding,
+    Math.max(padding, rect.right - menuWidth),
+  )
+  const bottomTop = rect.bottom + gap
+  const top = bottomTop + menuHeight > viewportHeight - padding
+    ? Math.max(padding, rect.top - menuHeight - gap)
+    : bottomTop
+
+  return { left, top }
 }
 
 function ActionItem({ danger = false, icon, label, onClick }) {

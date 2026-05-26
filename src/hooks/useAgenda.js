@@ -180,6 +180,7 @@ export function useAgenda() {
 
       try {
         const slots = await availabilityRepository.getAvailableSlots({
+          appointmentType: form.mode,
           doctorId: targetProfessionalId,
           date: formatLocalDateInput(baseDate),
         })

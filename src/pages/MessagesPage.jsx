@@ -400,11 +400,13 @@ export function MessagesPage({ role }) {
   }
 
   async function sendCommunicationToPatient({ channel, content, patient, template }) {
+    const renderedContent = renderCommunicationContent(content, patient)
+
     if (channel === 'sms') {
       if (!patient.phone) {
         await communicationRepository.registerMessage({
           channel,
-          content,
+          content: renderedContent,
           patientId: patient.id,
           patientName: patient.name,
           status: 'falha',
@@ -414,17 +416,23 @@ export function MessagesPage({ role }) {
       }
 
       try {
-        await communicationRepository.sendSms({
-          content,
+        const smsResult = await communicationRepository.sendSms({
+          content: renderedContent,
           patientId: patient.id,
           patientName: patient.name,
           phone: patient.phone,
         })
-        return { channel, patient, response: '', status: 'entregue', template }
+        return {
+          channel,
+          patient,
+          response: smsResult.sid ? `Twilio SID: ${smsResult.sid}` : smsResult.message || '',
+          status: 'entregue',
+          template,
+        }
       } catch (sendError) {
         await communicationRepository.registerMessage({
           channel,
-          content,
+          content: renderedContent,
           patientId: patient.id,
           patientName: patient.name,
           status: 'falha',
@@ -442,7 +450,7 @@ export function MessagesPage({ role }) {
 
     await communicationRepository.registerMessage({
       channel,
-      content,
+      content: renderedContent,
       patientId: patient.id,
       patientName: patient.name,
       status: 'pendente',
@@ -1254,6 +1262,13 @@ function createLocalMessage({ channel, patient, response, status, template }) {
     status,
     template,
   }
+}
+
+function renderCommunicationContent(content, patient) {
+  return String(content || '')
+    .replace(/\{paciente\}/gi, patient.name || '')
+    .replace(/\{telefone\}/gi, patient.phone || '')
+    .replace(/\{email\}/gi, patient.email || '')
 }
 
 function mergeTemplates(baseTemplates, apiTemplates) {

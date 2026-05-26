@@ -163,7 +163,8 @@ Impacto: caminho de prontuario nao esta funcional como rota do app no estado atu
 |---|---|---|
 | `/rest/v1/reports` | GET/POST | Laudos |
 | `/rest/v1/reports?id=eq.{id}` | PATCH/DELETE | Update/remocao |
-| `/functions/v1/send-sms` | POST | SMS |
+| `/functions/v1/send-sms` | POST | SMS via Twilio |
+| `/rest/v1/sms_logs` | GET | Historico oficial do endpoint de SMS |
 | `/rest/v1/communication_logs`, `/message_logs`, `/messages` | GET/POST | Historico de comunicacao |
 | `/rest/v1/communication_templates`, `/message_templates` | GET | Templates |
 | `/rest/v1/medical_records`, `/patient_records`, `/records` | GET/POST/PATCH | Prontuarios |

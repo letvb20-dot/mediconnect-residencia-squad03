@@ -765,5 +765,5 @@ function getUserStatus(user) {
 }
 
 function getUserRole(user) {
-  return Array.isArray(user.roles) ? user.roles[0] : (user.role ?? '—')
+  return Array.isArray(user.roles) && user.roles.length ? user.roles[0] : (user.role ?? '—')
 }

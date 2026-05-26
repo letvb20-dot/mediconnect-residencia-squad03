@@ -155,9 +155,9 @@ Arquivo: `src/repositories/communicationRepository.js`
 
 | Metodo | Chamada atual | Observacao |
 |---|---|---|
-| `sendSms` | `POST /functions/v1/send-sms` | Prefixa mensagem com `[MediConnect]` |
+| `sendSms` | `POST /functions/v1/send-sms` | Envia `phone_number`, `message` e `patient_id` opcional; trata `503 service-disabled` |
 | `registerMessage` | `POST /rest/v1/{communication_logs|message_logs|messages}` | Tabelas candidatas |
-| `getInitialMessages` | `GET /rest/v1/{communication_logs|message_logs|messages}` | Retorna `[]` se tabelas candidatas nao existem |
+| `getInitialMessages` | `GET /rest/v1/{sms_logs|communication_logs|message_logs|messages}` | Prioriza o historico oficial de SMS do endpoint Twilio |
 | `getInitialTemplates` | `GET /rest/v1/{communication_templates|message_templates}` | Retorna `[]` se tabelas candidatas nao existem |
 | `getCampaigns` | Sem rede | Gera campanhas a partir de pacientes carregados |
 

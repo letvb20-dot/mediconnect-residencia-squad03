@@ -80,9 +80,14 @@ export const professionalRepository = {
 
 function mapProfessional(doctor) {
   const specialty = doctor.specialty || doctor.speciality || doctor.especialidade || doctor.specialidade
+  const id = String(doctor.id || doctor.medico_id || doctor.doctor_id || doctor.user_id || doctor.name || doctor.nome)
 
   return {
-    id: String(doctor.id || doctor.medico_id || doctor.user_id || doctor.name || doctor.nome),
+    id,
+    authUserId: doctor.auth_user_id || doctor.authUserId || null,
+    doctorId: doctor.doctor_id || doctor.medico_id || doctor.id || id,
+    medicoId: doctor.medico_id || doctor.doctor_id || doctor.id || id,
+    profileId: doctor.profile_id || doctor.profileId || null,
     userId: doctor.user_id || doctor.userId || doctor.usuario_id || doctor.auth_user_id || null,
     name: doctor.full_name || doctor.name || doctor.nome || 'Medico(a)',
     full_name: doctor.full_name || doctor.name || doctor.nome || '',
@@ -147,11 +152,16 @@ function mergeProfessionalProfile(professional, profiles) {
 
   return {
     ...professional,
+    authUserId: professional.authUserId || profile.auth_user_id || profile.authUserId || '',
+    doctorId: professional.doctorId || profile.doctor_id || profile.doctorId || profile.medico_id || '',
     name,
     full_name: name,
     email: professional.email || profile.email || '',
+    medicoId: professional.medicoId || profile.medico_id || profile.doctor_id || '',
     phone,
+    profileId: professional.profileId || profile.id || profile.profile_id || '',
     unit: profile.unit || profile.unidade || professional.unit,
+    userId: professional.userId || profile.user_id || profile.auth_user_id || profile.id || '',
   }
 }
 

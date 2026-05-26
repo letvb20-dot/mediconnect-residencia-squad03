@@ -6,6 +6,7 @@ import { StethoscopeIcon } from '../components/Brand.jsx'
 import { RichTextEditor } from '../components/RichTextEditor.jsx'
 import { DarkField, appCardClass as cardClass, appInputClass as inputClass, appLabelClass as labelClass, appTextareaClass as textareaClass } from '../components/ui.jsx'
 import { reportTemplates } from '../data/reportTemplates.js'
+import { aiClient } from '../lib/ai/aiClient.js'
 import { patientRepository } from '../repositories/patientRepository.js'
 import { notificationRepository } from '../repositories/notificationRepository.js'
 import { translateErrorMessage } from '../repositories/repositoryUtils.js'
@@ -767,6 +768,8 @@ function ReportEditorModalV3({
   const [requesterSearch, setRequesterSearch] = useState(editor.requestedBy || doctorRequesterName)
   const [templateSearch, setTemplateSearch] = useState('')
   const [templatesOpen, setTemplatesOpen] = useState(false)
+  const [aiComplaint, setAiComplaint] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
   const isValid = isReportEditorValid(editor)
   const requesterQuery = normalizeSearch(requesterSearch)
   const selectedRequesterQuery = normalizeSearch(editor.requestedBy)
@@ -820,6 +823,31 @@ function ReportEditorModalV3({
       ...current,
       [field]: (current[field] || []).filter((_, fileIndex) => fileIndex !== index),
     }))
+  }
+
+  async function handleGenerateAI() {
+    if (aiLoading) return
+    setAiLoading(true)
+    try {
+      const draft = await aiClient.generateReport({
+        patientName: selectedPatient?.name || patientSearch,
+        exam: editor.exam,
+        complaint: aiComplaint,
+        templateTitle: editor.contentJson?.templateTitle,
+      })
+      onChange((current) => ({
+        ...current,
+        exam: draft.exam || current.exam,
+        cidCode: draft.cidCode || current.cidCode,
+        diagnosis: draft.diagnosis || current.diagnosis,
+        conclusion: draft.conclusion || current.conclusion,
+        contentHtml: current.contentHtml ? `${current.contentHtml}<hr>${draft.contentHtml}` : draft.contentHtml,
+      }))
+    } catch {
+      alert('Não foi possível gerar o rascunho com IA. Tente novamente.')
+    } finally {
+      setAiLoading(false)
+    }
   }
 
   function applyTemplate(template) {
@@ -914,6 +942,30 @@ function ReportEditorModalV3({
                     </div>
                   </div>
                 ) : null}
+              </div>
+            </div>
+
+            <div className="mb-5 rounded-xl border border-accent-primary/30 bg-accent-primary/5 p-4">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-text-heading">Assistente de IA {aiClient.isLive() ? '' : '(rascunho local)'}</p>
+              </div>
+              <p className="mb-3 text-xs text-text-muted-v2">Descreva a queixa/observação e gere um rascunho de exame, CID, diagnóstico e conclusão. Revise antes de salvar.</p>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  className={`${inputClass} flex-1`}
+                  maxLength={255}
+                  onChange={(event) => setAiComplaint(sanitizePlainText(event.target.value))}
+                  placeholder="Ex.: febre e dor de garganta há 3 dias"
+                  value={aiComplaint}
+                />
+                <button
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-sm bg-accent-primary px-4 text-sm font-semibold text-white transition hover:bg-accent-hover disabled:opacity-50"
+                  disabled={aiLoading}
+                  onClick={handleGenerateAI}
+                  type="button"
+                >
+                  {aiLoading ? 'Gerando...' : 'Gerar com IA'}
+                </button>
               </div>
             </div>
 

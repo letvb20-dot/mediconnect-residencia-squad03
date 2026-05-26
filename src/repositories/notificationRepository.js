@@ -1,15 +1,36 @@
 import { profileRepository } from './profileRepository.js'
 
 const STORAGE_KEY = 'mediconnect.notifications.v1'
+const PREFS_KEY = 'mediconnect.notificationPrefs.v1'
 export const NOTIFICATIONS_CHANGED_EVENT = 'mediconnect:notifications-changed'
 export const NOTIFICATION_ACTION_EVENT = 'mediconnect:notification-action'
 export const PENDING_NOTIFICATION_ACTION_KEY = 'mediconnect.pendingNotificationAction'
 
+const DOMAIN_PREF_MAP = {
+  agenda: 'notificacoes_agenda',
+  communication: 'notificacoes_comunicacao',
+  comunicacao: 'notificacoes_comunicacao',
+  'medical-records': 'notificacoes_prontuario',
+  medical_records: 'notificacoes_prontuario',
+  prontuario: 'notificacoes_prontuario',
+  reports: 'notificacoes_relatorios',
+  relatorios: 'notificacoes_relatorios',
+}
+
+const DEFAULT_PREFS = {
+  notificacoes_agenda: true,
+  notificacoes_comunicacao: true,
+  notificacoes_prontuario: true,
+  notificacoes_relatorios: true,
+}
+
 export const notificationRepository = {
   async getForCurrentUser() {
     const profile = await profileRepository.getCurrentUserProfile().catch(() => null)
+    const prefs = getNotificationPrefs()
     return getStoredNotifications()
       .filter((notification) => isNotificationForProfile(notification, profile))
+      .filter((notification) => isDomainEnabled(notification.domain, prefs))
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
   },
 
@@ -33,6 +54,15 @@ export const notificationRepository = {
     const notifications = [notification, ...getStoredNotifications()].slice(0, 80)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(notifications))
     window.dispatchEvent(new CustomEvent(NOTIFICATIONS_CHANGED_EVENT))
+
+    // Entrega em "tempo real": alimenta o socket para exibir o toast,
+    // respeitando as preferências de notificação do usuário.
+    if (isDomainEnabled(notification.domain, getNotificationPrefs()) && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('simulated_socket_push', {
+        detail: { event: 'nova_notificacao', payload: notification },
+      }))
+    }
+
     return notification
   },
 
@@ -46,6 +76,33 @@ export const notificationRepository = {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(notifications))
     window.dispatchEvent(new CustomEvent(NOTIFICATIONS_CHANGED_EVENT))
   },
+}
+
+export function getNotificationPrefs() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}')
+    return {
+      notificacoes_agenda: stored.notificacoes_agenda !== false,
+      notificacoes_comunicacao: stored.notificacoes_comunicacao !== false,
+      notificacoes_prontuario: stored.notificacoes_prontuario !== false,
+      notificacoes_relatorios: stored.notificacoes_relatorios !== false,
+    }
+  } catch {
+    return { ...DEFAULT_PREFS }
+  }
+}
+
+export function saveNotificationPrefs(prefs) {
+  const normalized = { ...DEFAULT_PREFS, ...prefs }
+  localStorage.setItem(PREFS_KEY, JSON.stringify(normalized))
+  window.dispatchEvent(new CustomEvent(NOTIFICATIONS_CHANGED_EVENT))
+  return normalized
+}
+
+function isDomainEnabled(domain, prefs) {
+  const key = DOMAIN_PREF_MAP[String(domain || '').toLowerCase()]
+  if (!key) return true
+  return prefs[key] !== false
 }
 
 function getStoredNotifications() {

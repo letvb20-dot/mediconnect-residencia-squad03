@@ -4,7 +4,6 @@ import {
   getAnonHeaders,
   getAuthenticatedHeaders,
   getAuthSession,
-  getPublicHeaders,
   hasAuthenticatedSession,
   saveAuthSession,
 } from '../config/api.js'
@@ -40,7 +39,7 @@ export const authRepository = {
     }
     const response = await fetch(`${apiConfig.functionsUrl}/request-password-reset`, {
       method: 'POST',
-      headers: getPublicHeaders(),
+      headers: getAnonHeaders(),
       body: JSON.stringify(payload),
     })
 
@@ -66,31 +65,18 @@ export const authRepository = {
     return true
   },
 
-  // POST /functions/v1/user-info com fallback para GET /auth/v1/user
+  // POST /functions/v1/user-info
   async getUser() {
     const response = await fetch(`${apiConfig.functionsUrl}/user-info`, {
       method: 'POST',
       headers: getAuthenticatedHeaders(),
     })
 
-    if (response.ok) {
-      return response.json()
-    }
-
-    if (!canFallbackToSupabaseUser(response.status)) {
+    if (!response.ok) {
       throw new Error(await getResponseError(response, 'Erro ao resgatar perfil de usuário.'))
     }
 
-    const authResponse = await fetch(`${apiConfig.supabaseUrl}/auth/v1/user`, {
-      method: 'GET',
-      headers: getAuthenticatedHeaders(),
-    })
-
-    if (!authResponse.ok) {
-      throw new Error(await getResponseError(authResponse, 'Erro ao resgatar perfil de usuário.'))
-    }
-
-    return authResponse.json()
+    return response.json()
   },
 
   getSession() {
@@ -114,10 +100,6 @@ export const authRepository = {
       clearAuthSession()
     }
   },
-}
-
-function canFallbackToSupabaseUser(status) {
-  return [404, 405, 500, 502, 503, 504].includes(Number(status))
 }
 
 function getDefaultRedirectUrl(path) {

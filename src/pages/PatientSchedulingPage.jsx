@@ -262,13 +262,8 @@ export function PatientSchedulingDetailPage({ navigate, professionalId }) {
   }, [])
 
   const professional = useMemo(
-    () => professionals.find((item) => getProfessionalIdCandidates(item).some((id) => sameIdentifier(id, decodedProfessionalId))) || null,
+    () => professionals.find((item) => sameIdentifier(item.id, decodedProfessionalId)) || null,
     [decodedProfessionalId, professionals],
-  )
-
-  const doctorIdCandidates = useMemo(
-    () => getProfessionalIdCandidates(professional),
-    [professional],
   )
 
   useEffect(() => {
@@ -281,7 +276,10 @@ export function PatientSchedulingDetailPage({ navigate, professionalId }) {
       setAvailabilityError('')
 
       try {
-        const rows = await getFirstAvailableRowsForDoctor(doctorIdCandidates)
+        const rows = await availabilityRepository.getAll({
+          doctorId: professional.id,
+          order: 'weekday.asc,start_time.asc',
+        })
         if (active) setAvailabilityRows(rows)
       } catch (err) {
         if (active) {
@@ -300,7 +298,7 @@ export function PatientSchedulingDetailPage({ navigate, professionalId }) {
       active = false
       window.removeEventListener(AGENDA_EXCEPTIONS_CHANGED_EVENT, loadAvailability)
     }
-  }, [doctorIdCandidates, professional?.id])
+  }, [professional?.id])
 
   useEffect(() => {
     if (!modalOpen || !professional?.id) return undefined
@@ -313,23 +311,17 @@ export function PatientSchedulingDetailPage({ navigate, professionalId }) {
 
       try {
         const date = bookingForm.date
-        const resolvedDoctorId = resolveDoctorIdForDate(availabilityRows, doctorIdCandidates) || doctorIdCandidates[0] || professional.id
         const [slots, doctorAppointments, patientAppointments] = await Promise.all([
-          getFirstAvailableSlotsForDoctor(doctorIdCandidates, {
-            appointmentType: bookingForm.mode,
-            date,
-            preferredDoctorId: resolvedDoctorId,
-          }),
-          getAppointmentsForDoctorCandidates(doctorIdCandidates),
+          availabilityRepository.getAvailableSlots({ doctorId: professional.id, date }),
+          appointmentRepository.getAll({ doctorId: professional.id }).catch(() => []),
           currentPatient?.id ? appointmentRepository.getAll({ patientId: currentPatient.id }).catch(() => []) : [],
         ])
         if (!active) return
 
-        const slotDoctorId = slots.find((slot) => slot.doctorId)?.doctorId || resolvedDoctorId
         const bookableSlots = filterBookableAvailableSlots(slots, {
           appointments: uniqueAppointments([...doctorAppointments, ...patientAppointments]),
           date,
-          doctorId: slotDoctorId,
+          doctorId: professional.id,
         })
         setAvailableSlots(bookableSlots)
         setBookingForm((current) => {
@@ -352,7 +344,7 @@ export function PatientSchedulingDetailPage({ navigate, professionalId }) {
     return () => {
       active = false
     }
-  }, [availabilityRows, bookingForm.date, bookingForm.mode, currentPatient?.id, doctorIdCandidates, modalOpen, professional?.id])
+  }, [bookingForm.date, currentPatient?.id, modalOpen, professional?.id])
 
   if (loading) {
     return <p className="p-8 text-center text-text-muted-v2">Carregando agendamento...</p>
@@ -380,40 +372,21 @@ export function PatientSchedulingDetailPage({ navigate, professionalId }) {
   const specialty = getSpecialty(professional)
   const canOpenBooking = Boolean(currentPatient?.id)
   const timeOptions = getTimeOptions(bookingForm.time, availableSlots)
-  const bookingModeOptions = getBookingModeOptions(availabilityRows, bookingForm.date)
 
   function updateBookingForm(field, value) {
     setSubmitError('')
-    setBookingForm((current) => {
-      const next = {
-        ...current,
-        [field]: value,
-      }
-
-      if (field === 'date') {
-        const modeForDate = getPreferredBookingMode(availabilityRows, value)
-        next.time = ''
-        if (modeForDate && !isBookingModeAvailableOnDate(availabilityRows, value, current.mode)) {
-          next.mode = modeForDate
-        }
-      }
-
-      if (field === 'mode') {
-        next.time = ''
-      }
-
-      return next
-    })
+    setBookingForm((current) => ({
+      ...current,
+      [field]: value,
+      ...(field === 'date' ? { time: '' } : {}),
+    }))
   }
 
   function openBookingModal() {
-    const date = getInitialBookingDate(availabilityRows)
-    const mode = getPreferredBookingMode(availabilityRows, date) || initialBookingForm.mode
-
     setSubmitError('')
     setSlotsError('')
     setAvailableSlots([])
-    setBookingForm({ ...initialBookingForm, date, mode })
+    setBookingForm({ ...initialBookingForm, date: formatLocalDateInput(new Date()) })
     setModalOpen(true)
   }
 
@@ -574,7 +547,6 @@ export function PatientSchedulingDetailPage({ navigate, professionalId }) {
         slotsLoading={slotsLoading}
         submitError={submitError}
         submitting={submitting}
-        modeOptions={bookingModeOptions}
         timeOptions={timeOptions}
       />
     </div>
@@ -593,13 +565,9 @@ function PatientBookingModal({
   slotsLoading,
   submitError,
   submitting,
-  modeOptions = ['Presencial', 'Teleconsulta'],
   timeOptions,
 }) {
   if (!open) return null
-  const visibleModeOptions = modeOptions.includes(form.mode)
-    ? modeOptions
-    : [form.mode, ...modeOptions].filter(Boolean)
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center">
@@ -651,18 +619,6 @@ function PatientBookingModal({
               />
             </DarkField>
 
-            <DarkField label="Formato">
-              <select
-                className="h-11 rounded-md border border-border-default-v2 bg-surface-card-hover px-3 text-sm text-text-body outline-none focus:border-accent-primary"
-                onChange={(event) => onUpdate('mode', event.target.value)}
-                value={form.mode}
-              >
-                {visibleModeOptions.map((mode) => (
-                  <option key={mode} value={mode}>{mode}</option>
-                ))}
-              </select>
-            </DarkField>
-
             <DarkField label="Horario">
               <select
                 className="h-11 rounded-md border border-border-default-v2 bg-surface-card-hover px-3 text-sm text-text-body outline-none focus:border-accent-primary disabled:cursor-not-allowed disabled:text-text-muted-v2"
@@ -683,6 +639,17 @@ function PatientBookingModal({
               {!slotsLoading && !timeOptions.length ? (
                 <span className="text-xs font-normal text-amber-400">Nenhum horario disponivel para este medico nesta data.</span>
               ) : null}
+            </DarkField>
+
+            <DarkField label="Formato">
+              <select
+                className="h-11 rounded-md border border-border-default-v2 bg-surface-card-hover px-3 text-sm text-text-body outline-none focus:border-accent-primary"
+                onChange={(event) => onUpdate('mode', event.target.value)}
+                value={form.mode}
+              >
+                <option>Teleconsulta</option>
+                <option>Presencial</option>
+              </select>
             </DarkField>
 
             <DarkField label="Tipo de consulta">
@@ -836,70 +803,6 @@ function getTimeOptions(selectedTime, slots) {
   ].sort()
 }
 
-function getInitialBookingDate(availabilityRows) {
-  const today = parseLocalDate(formatLocalDateInput(new Date()))
-  const activeRows = getActiveAvailabilityRows(availabilityRows)
-  if (!today || !activeRows.length) return formatLocalDateInput(new Date())
-
-  for (let offset = 0; offset < 14; offset += 1) {
-    const candidate = new Date(today)
-    candidate.setDate(today.getDate() + offset)
-    const weekday = candidate.getDay()
-
-    if (activeRows.some((row) => Number(row.weekday) === weekday)) {
-      return formatLocalDateInput(candidate)
-    }
-  }
-
-  return formatLocalDateInput(new Date())
-}
-
-function getBookingModeOptions(availabilityRows, date) {
-  const activeRows = getActiveAvailabilityRows(availabilityRows)
-  const dayRows = getAvailabilityRowsForDate(activeRows, date)
-  const sourceRows = dayRows.length ? dayRows : activeRows
-  const modes = [
-    ...new Set(sourceRows.map((row) => toBookingMode(row.appointmentType)).filter(Boolean)),
-  ]
-
-  return modes.length ? modes : ['Presencial', 'Teleconsulta']
-}
-
-function getPreferredBookingMode(availabilityRows, date) {
-  return getBookingModeOptions(availabilityRows, date)[0] || ''
-}
-
-function isBookingModeAvailableOnDate(availabilityRows, date, mode) {
-  const normalizedMode = normalizeAppointmentTypeKey(mode)
-  const dayRows = getAvailabilityRowsForDate(getActiveAvailabilityRows(availabilityRows), date)
-  if (!dayRows.length || !normalizedMode) return false
-
-  return dayRows.some((row) => normalizeAppointmentTypeKey(row.appointmentType) === normalizedMode)
-}
-
-function getAvailabilityRowsForDate(rows, date) {
-  const weekday = parseLocalDate(date)?.getDay()
-  if (!Number.isInteger(weekday)) return []
-  return rows.filter((row) => Number(row.weekday) === weekday)
-}
-
-function getActiveAvailabilityRows(rows) {
-  return (rows || []).filter((row) => {
-    const weekday = Number(row.weekday)
-    return row.active !== false && Number.isInteger(weekday) && weekday >= 0 && weekday <= 6
-  })
-}
-
-function toBookingMode(type) {
-  return normalizeAppointmentTypeKey(type) === 'telemedicina' ? 'Teleconsulta' : 'Presencial'
-}
-
-function normalizeAppointmentTypeKey(type) {
-  const normalized = normalizeSearch(type)
-  if (!normalized) return ''
-  return normalized.includes('tele') ? 'telemedicina' : 'presencial'
-}
-
 function hasPatientAppointmentOnDate(appointments, patientId, date) {
   return appointments.some((appointment) => {
     if (String(appointment.patientId || '') !== String(patientId || '')) return false
@@ -948,160 +851,6 @@ function normalizeSearch(value) {
     .replace(/[\u0300-\u036f]/g, '')
     .trim()
     .toLowerCase()
-}
-
-// Funções auxiliares para disponibilidades múltiplas
-function getProfessionalIdCandidates(professional) {
-  if (!professional) return []
-
-  const candidates = [
-    professional.id,
-    professional.doctorId,
-    professional.doctor_id,
-    professional.medicoId,
-    professional.medico_id,
-    professional.userId,
-    professional.user_id,
-    professional.authUserId,
-    professional.auth_user_id,
-    professional.profileId,
-    professional.profile_id,
-  ]
-
-  return candidates.filter((id, index) =>
-    id && candidates.findIndex((candidate) => sameIdentifier(candidate, id)) === index,
-  )
-}
-
-async function getFirstAvailableRowsForDoctor(doctorIdCandidates) {
-  if (!doctorIdCandidates || doctorIdCandidates.length === 0) return []
-
-  try {
-    // Tenta buscar disponibilidades para o primeiro candidato
-    // Se não encontrar, tenta os próximos
-    for (const doctorId of doctorIdCandidates) {
-      try {
-        const rows = await availabilityRepository.getAll({
-          doctorId,
-          order: 'weekday.asc,start_time.asc',
-        })
-        if (rows && rows.length > 0) {
-          return rows
-        }
-      } catch {
-        // Continua com o próximo candidato
-        continue
-      }
-    }
-    // Se nenhum candidato tiver disponibilidades, tenta o primeiro
-    return await availabilityRepository.getAll({
-      doctorId: doctorIdCandidates[0],
-      order: 'weekday.asc,start_time.asc',
-    })
-  } catch {
-    return []
-  }
-}
-
-async function getFirstAvailableSlotsForDoctor(doctorIdCandidates, options) {
-  if (!doctorIdCandidates || doctorIdCandidates.length === 0) return []
-
-  const { date, appointmentType, preferredDoctorId } = options
-
-  try {
-    // Tenta usar o doctorId preferido primeiro
-    if (preferredDoctorId && doctorIdCandidates.includes(preferredDoctorId)) {
-      try {
-        const slots = await availabilityRepository.getAvailableSlots({
-          appointmentType,
-          date,
-          doctorId: preferredDoctorId,
-        })
-        if (slots && slots.length > 0) {
-          return slots
-        }
-      } catch {
-        // Continua com outro candidato
-      }
-    }
-
-    // Tenta os outros candidatos
-    for (const doctorId of doctorIdCandidates) {
-      if (doctorId === preferredDoctorId) continue // Já tentou este
-      try {
-        const slots = await availabilityRepository.getAvailableSlots({
-          appointmentType,
-          date,
-          doctorId,
-        })
-        if (slots && slots.length > 0) {
-          return slots
-        }
-      } catch {
-        // Continua com o próximo candidato
-        continue
-      }
-    }
-
-    // Se nenhum candidato funcionou, tenta o preferido ou o primeiro
-    return await availabilityRepository.getAvailableSlots({
-      appointmentType,
-      date,
-      doctorId: preferredDoctorId || doctorIdCandidates[0],
-    })
-  } catch {
-    return []
-  }
-}
-
-async function getAppointmentsForDoctorCandidates(doctorIdCandidates) {
-  if (!doctorIdCandidates || doctorIdCandidates.length === 0) return []
-
-  try {
-    // Coleta agendamentos de todos os candidatos
-    const allAppointments = []
-    for (const doctorId of doctorIdCandidates) {
-      try {
-        const appointments = await appointmentRepository.getAll({ doctorId }).catch(() => [])
-        if (appointments && appointments.length > 0) {
-          allAppointments.push(...appointments)
-        }
-      } catch {
-        // Continua com o próximo candidato
-        continue
-      }
-    }
-    return uniqueAppointments(allAppointments)
-  } catch {
-    return []
-  }
-}
-
-function resolveDoctorIdForDate(availabilityRows, doctorIdCandidates) {
-  if (!availabilityRows || !doctorIdCandidates) return null
-
-  // Se houver apenas um candidato, retorna ele
-  if (doctorIdCandidates.length === 1) {
-    return doctorIdCandidates[0]
-  }
-
-  // Tenta encontrar o melhor candidato baseado nas disponibilidades
-  // Retorna o ID mais comum nas linhas de disponibilidade
-  const doctorIdCount = {}
-  availabilityRows.forEach((row) => {
-    if (row.doctorId) {
-      doctorIdCount[row.doctorId] = (doctorIdCount[row.doctorId] || 0) + 1
-    }
-  })
-
-  // Se algum doctorId foi contado, retorna o mais frequente
-  const bestDoctorId = Object.keys(doctorIdCount).sort((a, b) => doctorIdCount[b] - doctorIdCount[a])[0]
-  if (bestDoctorId && doctorIdCandidates.includes(bestDoctorId)) {
-    return bestDoctorId
-  }
-
-  // Se não encontrou, retorna o primeiro candidato
-  return doctorIdCandidates[0]
 }
 
 function SchedulingIcon({ className = 'size-4', name }) {

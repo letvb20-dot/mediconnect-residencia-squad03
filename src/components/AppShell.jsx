@@ -11,6 +11,7 @@ import {
 import { PROFILE_AVATAR_CHANGED_EVENT, profileRepository } from '../repositories/profileRepository.js'
 import { useSocketEvent } from '../providers/socketContext.js'
 import { BrandLogo } from './Brand.jsx'
+import { ChatbotWidget } from './ai/ChatbotWidget.jsx'
 
 // Todos os itens de navegação com seus ícones e metadados
 const ALL_NAV_ITEMS = [
@@ -20,6 +21,7 @@ const ALL_NAV_ITEMS = [
   { href: '/profissionais', label: 'Profissionais', icon: 'doctor' },
   { href: '/pacientes', label: 'Pacientes', icon: 'users', exact: true },
   { href: '/laudos', label: 'Relatórios', icon: 'clipboard' },
+  { href: '/lista-espera', label: 'Lista de espera', icon: 'users' },
   {
     href: '/comunicacao',
     label: 'Comunicação',
@@ -36,8 +38,9 @@ const titles = {
   '/dashboard': 'Painel',
   '/agenda': 'Agenda',
   '/agendamento': 'Agendamento',
-  '/consultas': 'Fila de Espera',
+  '/consultas': 'Fila de Consultas',
   '/laudos': 'Relatórios',
+  '/lista-espera': 'Lista de espera',
   '/pacientes': 'Pacientes',
   '/profissionais': 'Profissionais',
   '/comunicacao': 'Comunicação',
@@ -451,6 +454,8 @@ export function AppShell({ children, currentPath, navigate, role, routeTitle }) 
           {children}
         </main>
       </div>
+
+      <ChatbotWidget navigate={navigate} role={role} />
     </div>
   )
 }

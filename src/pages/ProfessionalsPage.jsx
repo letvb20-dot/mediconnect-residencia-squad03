@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { AvailabilityPanel } from '../components/availability/AvailabilityPanel.jsx'
+import { StethoscopeIcon } from '../components/Brand.jsx'
 import { normalizeRole } from '../config/permissions.js'
 import {
   AGENDA_EXCEPTIONS_CHANGED_EVENT,
@@ -142,7 +143,7 @@ export function ProfessionalsPage({ navigate }) {
               >
                 <span className="flex items-start gap-4">
                   <span className="grid size-12 shrink-0 place-items-center rounded-full border border-[#60a5fa]/35 bg-[#3b82f6]/20 text-[var(--professional-blue-text)]">
-                    <ProfessionalIcon className="size-6" name="user" />
+                    <ProfessionalIcon className="size-6" name="doctor" />
                   </span>
                   <span className="min-w-0">
                     <span className="block break-words text-base font-bold text-text-heading">{professional.name}</span>
@@ -344,7 +345,7 @@ export function ProfessionalDetailPage({ navigate, professionalId, role, selfPro
         <div className="rounded-2xl border border-[#60a5fa]/20 bg-[#3b82f6]/5 p-5 shadow-sm shadow-[#3b82f6]/5">
           <div className="flex items-start gap-5">
             <div className="grid size-16 shrink-0 place-items-center rounded-full border border-[#60a5fa]/35 bg-[#3b82f6]/20 text-[var(--professional-blue-text)]">
-              <ProfessionalIcon className="size-10" name="user" />
+              <ProfessionalIcon className="size-10" name="doctor" />
             </div>
             <div className="min-w-0">
               <p className="break-words text-xl font-bold text-text-heading">{professional.name}</p>
@@ -562,6 +563,10 @@ function ProfessionalIcon({ className = 'size-4', name }) {
         <path d="M19 12H5M12 19l-7-7 7-7" />
       </svg>
     )
+  }
+
+  if (name === 'doctor') {
+    return <StethoscopeIcon className={className} />
   }
 
   return (

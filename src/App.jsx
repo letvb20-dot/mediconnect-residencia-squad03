@@ -347,7 +347,7 @@ function resolveRoute(pathname, navigate, role, profile, user, isAuthenticated) 
   if (pathname === '/consultas') {
     return {
       element: <VisitsPage navigate={navigate} />,
-      title: 'Fila de Consultas',
+      title: 'Fila de Espera',
       withShell: true,
     }
   }

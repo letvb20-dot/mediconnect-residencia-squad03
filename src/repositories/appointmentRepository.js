@@ -76,8 +76,8 @@ function requireReturnedItem(data, message) {
 // Constrói apenas com os campos documentados no contrato OpenAPI
 function buildAppointmentPayload(uiData, { requireCreatedBy = false } = {}) {
   const fullPayload = appointmentMapper.toApi(uiData, 'supabase')
-  if (requireCreatedBy && !fullPayload.created_by) {
-    fullPayload.created_by = getCurrentUserId()
+  if (requireCreatedBy) {
+    fullPayload.created_by = getCurrentUserId() || fullPayload.created_by
   }
 
   if (requireCreatedBy && !fullPayload.created_by) {

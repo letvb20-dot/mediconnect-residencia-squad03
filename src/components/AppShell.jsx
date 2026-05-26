@@ -36,7 +36,7 @@ const titles = {
   '/dashboard': 'Painel',
   '/agenda': 'Agenda',
   '/agendamento': 'Agendamento',
-  '/consultas': 'Fila de Consultas',
+  '/consultas': 'Fila de Espera',
   '/laudos': 'Relatórios',
   '/pacientes': 'Pacientes',
   '/profissionais': 'Profissionais',

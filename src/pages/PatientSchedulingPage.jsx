@@ -313,7 +313,7 @@ export function PatientSchedulingDetailPage({ navigate, professionalId }) {
 
       try {
         const date = bookingForm.date
-        const resolvedDoctorId = resolveDoctorIdForDate(availabilityRows, doctorIdCandidates, date) || doctorIdCandidates[0] || professional.id
+        const resolvedDoctorId = resolveDoctorIdForDate(availabilityRows, doctorIdCandidates) || doctorIdCandidates[0] || professional.id
         const [slots, doctorAppointments, patientAppointments] = await Promise.all([
           getFirstAvailableSlotsForDoctor(doctorIdCandidates, {
             appointmentType: bookingForm.mode,
@@ -353,73 +353,6 @@ export function PatientSchedulingDetailPage({ navigate, professionalId }) {
       active = false
     }
   }, [availabilityRows, bookingForm.date, bookingForm.mode, currentPatient?.id, doctorIdCandidates, modalOpen, professional?.id])
-          order: 'weekday.asc,start_time.asc',
-        })
-        if (active) setAvailabilityRows(rows)
-      } catch (err) {
-        if (active) {
-          setAvailabilityRows([])
-          setAvailabilityError(translateErrorMessage(err.message, 'Falha ao carregar disponibilidade.'))
-        }
-      } finally {
-        if (active) setAvailabilityLoading(false)
-      }
-    }
-
-    loadAvailability()
-    window.addEventListener(AGENDA_EXCEPTIONS_CHANGED_EVENT, loadAvailability)
-
-    return () => {
-      active = false
-      window.removeEventListener(AGENDA_EXCEPTIONS_CHANGED_EVENT, loadAvailability)
-    }
-  }, [professional?.id])
-
-  useEffect(() => {
-    if (!modalOpen || !professional?.id) return undefined
-
-    let active = true
-
-    async function loadSlots() {
-      setSlotsLoading(true)
-      setSlotsError('')
-
-      try {
-        const date = bookingForm.date
-        const [slots, doctorAppointments, patientAppointments] = await Promise.all([
-          availabilityRepository.getAvailableSlots({ appointmentType: bookingForm.mode, doctorId: professional.id, date }),
-          appointmentRepository.getAll({ doctorId: professional.id }).catch(() => []),
-          currentPatient?.id ? appointmentRepository.getAll({ patientId: currentPatient.id }).catch(() => []) : [],
-        ])
-        if (!active) return
-
-        const bookableSlots = filterBookableAvailableSlots(slots, {
-          appointments: uniqueAppointments([...doctorAppointments, ...patientAppointments]),
-          date,
-          doctorId: professional.id,
-        })
-        setAvailableSlots(bookableSlots)
-        setBookingForm((current) => {
-          if (current.time && bookableSlots.some((slot) => slot.time === current.time)) return current
-          return { ...current, time: bookableSlots[0]?.time || '' }
-        })
-      } catch (err) {
-        if (active) {
-          setAvailableSlots([])
-          setSlotsError(translateErrorMessage(err.message, 'Nao foi possivel calcular horarios disponiveis.'))
-          setBookingForm((current) => ({ ...current, time: '' }))
-        }
-      } finally {
-        if (active) setSlotsLoading(false)
-      }
-    }
-
-    loadSlots()
-
-    return () => {
-      active = false
-    }
-  }, [bookingForm.date, bookingForm.mode, currentPatient?.id, modalOpen, professional?.id])
 
   if (loading) {
     return <p className="p-8 text-center text-text-muted-v2">Carregando agendamento...</p>
@@ -447,21 +380,40 @@ export function PatientSchedulingDetailPage({ navigate, professionalId }) {
   const specialty = getSpecialty(professional)
   const canOpenBooking = Boolean(currentPatient?.id)
   const timeOptions = getTimeOptions(bookingForm.time, availableSlots)
+  const bookingModeOptions = getBookingModeOptions(availabilityRows, bookingForm.date)
 
   function updateBookingForm(field, value) {
     setSubmitError('')
-    setBookingForm((current) => ({
-      ...current,
-      [field]: value,
-      ...(field === 'date' ? { time: '' } : {}),
-    }))
+    setBookingForm((current) => {
+      const next = {
+        ...current,
+        [field]: value,
+      }
+
+      if (field === 'date') {
+        const modeForDate = getPreferredBookingMode(availabilityRows, value)
+        next.time = ''
+        if (modeForDate && !isBookingModeAvailableOnDate(availabilityRows, value, current.mode)) {
+          next.mode = modeForDate
+        }
+      }
+
+      if (field === 'mode') {
+        next.time = ''
+      }
+
+      return next
+    })
   }
 
   function openBookingModal() {
+    const date = getInitialBookingDate(availabilityRows)
+    const mode = getPreferredBookingMode(availabilityRows, date) || initialBookingForm.mode
+
     setSubmitError('')
     setSlotsError('')
     setAvailableSlots([])
-    setBookingForm({ ...initialBookingForm, date: formatLocalDateInput(new Date()) })
+    setBookingForm({ ...initialBookingForm, date, mode })
     setModalOpen(true)
   }
 
@@ -622,6 +574,7 @@ export function PatientSchedulingDetailPage({ navigate, professionalId }) {
         slotsLoading={slotsLoading}
         submitError={submitError}
         submitting={submitting}
+        modeOptions={bookingModeOptions}
         timeOptions={timeOptions}
       />
     </div>
@@ -640,9 +593,13 @@ function PatientBookingModal({
   slotsLoading,
   submitError,
   submitting,
+  modeOptions = ['Presencial', 'Teleconsulta'],
   timeOptions,
 }) {
   if (!open) return null
+  const visibleModeOptions = modeOptions.includes(form.mode)
+    ? modeOptions
+    : [form.mode, ...modeOptions].filter(Boolean)
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center">
@@ -694,6 +651,18 @@ function PatientBookingModal({
               />
             </DarkField>
 
+            <DarkField label="Formato">
+              <select
+                className="h-11 rounded-md border border-border-default-v2 bg-surface-card-hover px-3 text-sm text-text-body outline-none focus:border-accent-primary"
+                onChange={(event) => onUpdate('mode', event.target.value)}
+                value={form.mode}
+              >
+                {visibleModeOptions.map((mode) => (
+                  <option key={mode} value={mode}>{mode}</option>
+                ))}
+              </select>
+            </DarkField>
+
             <DarkField label="Horario">
               <select
                 className="h-11 rounded-md border border-border-default-v2 bg-surface-card-hover px-3 text-sm text-text-body outline-none focus:border-accent-primary disabled:cursor-not-allowed disabled:text-text-muted-v2"
@@ -714,17 +683,6 @@ function PatientBookingModal({
               {!slotsLoading && !timeOptions.length ? (
                 <span className="text-xs font-normal text-amber-400">Nenhum horario disponivel para este medico nesta data.</span>
               ) : null}
-            </DarkField>
-
-            <DarkField label="Formato">
-              <select
-                className="h-11 rounded-md border border-border-default-v2 bg-surface-card-hover px-3 text-sm text-text-body outline-none focus:border-accent-primary"
-                onChange={(event) => onUpdate('mode', event.target.value)}
-                value={form.mode}
-              >
-                <option>Teleconsulta</option>
-                <option>Presencial</option>
-              </select>
             </DarkField>
 
             <DarkField label="Tipo de consulta">
@@ -878,6 +836,70 @@ function getTimeOptions(selectedTime, slots) {
   ].sort()
 }
 
+function getInitialBookingDate(availabilityRows) {
+  const today = parseLocalDate(formatLocalDateInput(new Date()))
+  const activeRows = getActiveAvailabilityRows(availabilityRows)
+  if (!today || !activeRows.length) return formatLocalDateInput(new Date())
+
+  for (let offset = 0; offset < 14; offset += 1) {
+    const candidate = new Date(today)
+    candidate.setDate(today.getDate() + offset)
+    const weekday = candidate.getDay()
+
+    if (activeRows.some((row) => Number(row.weekday) === weekday)) {
+      return formatLocalDateInput(candidate)
+    }
+  }
+
+  return formatLocalDateInput(new Date())
+}
+
+function getBookingModeOptions(availabilityRows, date) {
+  const activeRows = getActiveAvailabilityRows(availabilityRows)
+  const dayRows = getAvailabilityRowsForDate(activeRows, date)
+  const sourceRows = dayRows.length ? dayRows : activeRows
+  const modes = [
+    ...new Set(sourceRows.map((row) => toBookingMode(row.appointmentType)).filter(Boolean)),
+  ]
+
+  return modes.length ? modes : ['Presencial', 'Teleconsulta']
+}
+
+function getPreferredBookingMode(availabilityRows, date) {
+  return getBookingModeOptions(availabilityRows, date)[0] || ''
+}
+
+function isBookingModeAvailableOnDate(availabilityRows, date, mode) {
+  const normalizedMode = normalizeAppointmentTypeKey(mode)
+  const dayRows = getAvailabilityRowsForDate(getActiveAvailabilityRows(availabilityRows), date)
+  if (!dayRows.length || !normalizedMode) return false
+
+  return dayRows.some((row) => normalizeAppointmentTypeKey(row.appointmentType) === normalizedMode)
+}
+
+function getAvailabilityRowsForDate(rows, date) {
+  const weekday = parseLocalDate(date)?.getDay()
+  if (!Number.isInteger(weekday)) return []
+  return rows.filter((row) => Number(row.weekday) === weekday)
+}
+
+function getActiveAvailabilityRows(rows) {
+  return (rows || []).filter((row) => {
+    const weekday = Number(row.weekday)
+    return row.active !== false && Number.isInteger(weekday) && weekday >= 0 && weekday <= 6
+  })
+}
+
+function toBookingMode(type) {
+  return normalizeAppointmentTypeKey(type) === 'telemedicina' ? 'Teleconsulta' : 'Presencial'
+}
+
+function normalizeAppointmentTypeKey(type) {
+  const normalized = normalizeSearch(type)
+  if (!normalized) return ''
+  return normalized.includes('tele') ? 'telemedicina' : 'presencial'
+}
+
 function hasPatientAppointmentOnDate(appointments, patientId, date) {
   return appointments.some((appointment) => {
     if (String(appointment.patientId || '') !== String(patientId || '')) return false
@@ -931,16 +953,24 @@ function normalizeSearch(value) {
 // Funções auxiliares para disponibilidades múltiplas
 function getProfessionalIdCandidates(professional) {
   if (!professional) return []
-  const candidates = [professional.id]
-  // Adiciona o userId se existir e for diferente do ID principal
-  if (professional.userId && professional.userId !== professional.id) {
-    candidates.push(professional.userId)
-  }
-  // Adiciona o authUserId se existir e for diferente do ID principal
-  if (professional.authUserId && professional.authUserId !== professional.id && professional.authUserId !== professional.userId) {
-    candidates.push(professional.authUserId)
-  }
-  return candidates.filter(Boolean)
+
+  const candidates = [
+    professional.id,
+    professional.doctorId,
+    professional.doctor_id,
+    professional.medicoId,
+    professional.medico_id,
+    professional.userId,
+    professional.user_id,
+    professional.authUserId,
+    professional.auth_user_id,
+    professional.profileId,
+    professional.profile_id,
+  ]
+
+  return candidates.filter((id, index) =>
+    id && candidates.findIndex((candidate) => sameIdentifier(candidate, id)) === index,
+  )
 }
 
 async function getFirstAvailableRowsForDoctor(doctorIdCandidates) {
@@ -968,7 +998,7 @@ async function getFirstAvailableRowsForDoctor(doctorIdCandidates) {
       doctorId: doctorIdCandidates[0],
       order: 'weekday.asc,start_time.asc',
     })
-  } catch (error) {
+  } catch {
     return []
   }
 }
@@ -1019,7 +1049,7 @@ async function getFirstAvailableSlotsForDoctor(doctorIdCandidates, options) {
       date,
       doctorId: preferredDoctorId || doctorIdCandidates[0],
     })
-  } catch (error) {
+  } catch {
     return []
   }
 }
@@ -1042,12 +1072,12 @@ async function getAppointmentsForDoctorCandidates(doctorIdCandidates) {
       }
     }
     return uniqueAppointments(allAppointments)
-  } catch (error) {
+  } catch {
     return []
   }
 }
 
-function resolveDoctorIdForDate(availabilityRows, doctorIdCandidates, date) {
+function resolveDoctorIdForDate(availabilityRows, doctorIdCandidates) {
   if (!availabilityRows || !doctorIdCandidates) return null
 
   // Se houver apenas um candidato, retorna ele

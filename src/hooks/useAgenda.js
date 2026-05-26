@@ -3,6 +3,7 @@ import { isSameDay } from 'date-fns'
 
 import { appointmentRepository } from '../repositories/appointmentRepository.js'
 import { AGENDA_EXCEPTIONS_CHANGED_EVENT, availabilityRepository } from '../repositories/availabilityRepository.js'
+import { communicationRepository } from '../repositories/communicationRepository.js'
 import { notificationRepository } from '../repositories/notificationRepository.js'
 import { patientRepository } from '../repositories/patientRepository.js'
 import { professionalRepository } from '../repositories/professionalRepository.js'
@@ -12,6 +13,7 @@ import { visitRepository } from '../repositories/visitRepository.js'
 import { waitlistRepository } from '../repositories/waitlistRepository.js'
 import { aiClient } from '../lib/ai/aiClient.js'
 import { formatLocalDateInput, parseLocalDate, sortAppointmentsByTime } from '../utils/agendaDate.js'
+import { isCommunicationEligiblePatient } from '../utils/communicationEligibility.js'
 import { buildPatientFromProfile, resolveCurrentPatient } from '../utils/patientIdentity.js'
 
 const BOOKING_DAY_START = '07:00'
@@ -450,6 +452,7 @@ export function useAgenda() {
       const created = await appointmentRepository.create(payload)
       setLocalAppointments((current) => sortAppointmentsByTime([...current, enrichAppointment(created, payload, patients, professionals)]))
       notifyAppointmentAction('Consulta marcada', `Consulta de ${getPatientName(payload.patientId, patients)} marcada para ${formatAppointmentDate(payload.date)} as ${payload.time}.`, payload, created)
+      queueAppointmentConfirmationMessages(payload)
       closeAppointmentModal()
     } catch (createError) {
       alert(createError.message || 'Erro ao criar agendamento.')
@@ -549,6 +552,7 @@ export function useAgenda() {
           promotedPayload,
           promotedAppointment,
         )
+        queueAppointmentConfirmationMessages(promotedPayload)
       }
       if (promotionErrorMessage) {
         alert(`O cancelamento foi salvo, mas não foi possível agendar automaticamente o próximo paciente da fila. ${promotionErrorMessage}`)
@@ -560,6 +564,12 @@ export function useAgenda() {
     } catch (cancelError) {
       alert(cancelError.message || 'Erro ao cancelar agendamento.')
     }
+  }
+
+  function queueAppointmentConfirmationMessages(payload) {
+    sendAppointmentConfirmationMessages(payload, { patients, professionals }).catch((sendError) => {
+      console.warn('Falha ao enviar comunicacao automatica de agendamento.', sendError)
+    })
   }
 
   function offerSlotToWaitlist(payload) {
@@ -711,6 +721,91 @@ function notifyAppointmentAction(title, detail, payload, appointment = null) {
     route: '/agenda',
     relatedUserIds: [payload.professionalId, payload.createdBy],
   }).catch(() => null)
+}
+
+export async function sendAppointmentConfirmationMessages(payload, { patients = [], professionals = [] } = {}) {
+  const patient = findPatientById(payload.patientId, patients)
+  if (!patient || !isCommunicationEligiblePatient(patient)) {
+    return { failed: [], sent: [], skipped: true }
+  }
+
+  const phone = getPatientPhone(patient)
+  const patientName = getPatientDisplayName(patient)
+  const content = buildAppointmentConfirmationContent(payload, {
+    professional: findProfessionalById(payload.professionalId, professionals),
+  })
+  const template = 'Confirmacao de agendamento'
+
+  if (!phone) {
+    await Promise.all(['whatsapp', 'sms'].map((channel) =>
+      communicationRepository.registerMessage({
+        channel,
+        content,
+        patientId: payload.patientId,
+        patientName,
+        response: 'Telefone ausente',
+        status: 'falha',
+        template,
+      }).catch(() => null),
+    ))
+    return { failed: ['whatsapp', 'sms'], sent: [], skipped: true }
+  }
+
+  const deliveries = [
+    {
+      channel: 'whatsapp',
+      promise: Promise.resolve().then(() => communicationRepository.sendWhatsApp({
+        content,
+        fallbackSms: false,
+        patientId: payload.patientId,
+        patientName,
+        phone,
+      })),
+    },
+    {
+      channel: 'sms',
+      promise: Promise.resolve().then(() => communicationRepository.sendSms({
+        content,
+        patientId: payload.patientId,
+        patientName,
+        phone,
+      })),
+    },
+  ]
+
+  const results = await Promise.allSettled(deliveries.map((delivery) => delivery.promise))
+  const failed = deliveries
+    .map((delivery, index) => ({ ...delivery, result: results[index] }))
+    .filter((delivery) => delivery.result.status === 'rejected')
+
+  await Promise.all(failed.map((delivery) =>
+    communicationRepository.registerMessage({
+      channel: delivery.channel,
+      content,
+      patientId: payload.patientId,
+      patientName,
+      response: delivery.result.reason?.message || 'Falha no envio automatico.',
+      status: 'falha',
+      template,
+    }).catch(() => null),
+  ))
+
+  return {
+    failed: failed.map((delivery) => delivery.channel),
+    sent: deliveries
+      .filter((delivery, index) => results[index].status === 'fulfilled')
+      .map((delivery) => delivery.channel),
+    skipped: false,
+  }
+}
+
+export function buildAppointmentConfirmationContent(payload, { professional = null } = {}) {
+  const time = normalizeTime(payload.time) || payload.time || ''
+  const mode = payload.mode ? ` ${payload.mode}` : ''
+  const professionalName = getProfessionalName(professional)
+  const professionalPart = professionalName ? ` com ${professionalName}` : ''
+
+  return `sua consulta${mode} foi agendada para ${formatAppointmentDate(payload.date)} \u00e0s ${time}${professionalPart}.`
 }
 
 function filterAppointmentsByProfessional(appointments, professionalId) {
@@ -1141,6 +1236,46 @@ function formatMinutes(totalMinutes) {
 function getPatientName(patientId, patients) {
   const patient = patients.find((item) => String(item.id) === String(patientId))
   return patient?.name || patient?.full_name || patient?.nome || 'paciente selecionado'
+}
+
+function findPatientById(patientId, patients) {
+  const normalizedPatientId = normalizeValue(patientId)
+  return patients.find((item) =>
+    [
+      item.id,
+      item.patientId,
+      item.patient_id,
+      item.paciente_id,
+      item.detailId,
+    ].map(normalizeValue).includes(normalizedPatientId),
+  ) || null
+}
+
+function findProfessionalById(professionalId, professionals) {
+  const normalizedProfessionalId = normalizeValue(professionalId)
+  return professionals.find((item) =>
+    [
+      item.id,
+      item.professionalId,
+      item.professional_id,
+      item.doctorId,
+      item.doctor_id,
+      item.userId,
+      item.user_id,
+    ].map(normalizeValue).includes(normalizedProfessionalId),
+  ) || null
+}
+
+function getPatientPhone(patient) {
+  return patient?.phone || patient?.phone_mobile || patient?.telefone || patient?.celular || ''
+}
+
+function getPatientDisplayName(patient) {
+  return patient?.name || patient?.full_name || patient?.nome || 'Paciente'
+}
+
+function getProfessionalName(professional) {
+  return professional?.name || professional?.full_name || professional?.nome || professional?.professional || professional?.doctor_name || ''
 }
 
 function formatAppointmentDate(value) {

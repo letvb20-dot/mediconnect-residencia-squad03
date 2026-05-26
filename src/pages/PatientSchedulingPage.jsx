@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { StethoscopeIcon } from '../components/Brand.jsx'
-import { filterBookableAvailableSlots, recoverCurrentPatient } from '../hooks/useAgenda.js'
+import { filterBookableAvailableSlots, recoverCurrentPatient, sendAppointmentConfirmationMessages } from '../hooks/useAgenda.js'
 import { appointmentRepository } from '../repositories/appointmentRepository.js'
 import {
   AGENDA_EXCEPTIONS_CHANGED_EVENT,
@@ -444,6 +444,12 @@ export function PatientSchedulingDetailPage({ navigate, professionalId }) {
       }
 
       await appointmentRepository.create(payload)
+      sendAppointmentConfirmationMessages(payload, {
+        patients: [currentPatient],
+        professionals: [professional],
+      }).catch((sendError) => {
+        console.warn('Falha ao enviar comunicacao automatica de agendamento.', sendError)
+      })
       window.alert('Consulta agendada com sucesso.')
       setModalOpen(false)
     } catch (err) {

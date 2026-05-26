@@ -1,26 +1,40 @@
 import { apiConfig, getAuthenticatedHeaders } from '../config/api.js'
+import { onlyDigits } from '../utils/brFormatters.js'
 import { getResponseError, normalizeCollection } from './repositoryUtils.js'
 
-const MESSAGE_TABLES = ['communication_logs', 'message_logs', 'messages']
+const HISTORY_TABLES = ['sms_logs', 'communication_logs', 'message_logs', 'messages']
+const MESSAGE_LOG_TABLES = ['communication_logs', 'message_logs', 'messages']
 const TEMPLATE_TABLES = ['communication_templates', 'message_templates']
+const SMS_MAX_LENGTH = 1000
+const WHATSAPP_MAX_LENGTH = 4000
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 export const communicationRepository = {
   async sendSms({ patientId, patientName, phone, content }) {
-    const message = `[MediConnect] Olá ${patientName}, ${content}`
+    const message = buildSmsMessage({ content, patientName })
     const payload = {
-      phone_number: normalizePhone(phone),
+      phone_number: normalizeSmsPhone(phone),
       message,
-      patient_id: patientId || undefined,
+      patient_id: normalizeSmsPatientId(patientId),
+    }
+
+    if (!payload.phone_number) {
+      throw new Error('Falha: telefone inválido para SMS.')
     }
 
     const response = await fetch(`${apiConfig.functionsUrl}/send-sms`, {
       method: 'POST',
       headers: getAuthenticatedHeaders(),
-      body: JSON.stringify(payload),
+      body: JSON.stringify(cleanPayload(payload)),
     })
 
     if (!response.ok) {
       throw new Error(await getResponseError(response, 'Falha no envio de SMS via Twilio.'))
+    }
+
+    const result = await parseJsonResponse(response)
+    if (result?.success === false) {
+      throw new Error(result.message || 'Falha no envio de SMS via Twilio.')
     }
 
     await createMessageLog({
@@ -28,11 +42,61 @@ export const communicationRepository = {
       patientName,
       channel: 'sms',
       template: 'Mensagem avulsa',
-      content,
+      content: message,
+      response: result?.sid ? `Twilio SID: ${result.sid}` : result?.message || '',
       status: 'entregue',
     }).catch(() => null)
 
-    return true
+    return {
+      message: result?.message || '',
+      sid: result?.sid || '',
+      success: result?.success !== false,
+    }
+  },
+
+  async sendWhatsApp({ patientId, patientName, phone, content, fallbackSms = false }) {
+    const message = buildWhatsAppMessage({ content, patientName })
+    const payload = {
+      phone_number: normalizeWhatsAppPhone(phone),
+      message,
+      fallback_sms: Boolean(fallbackSms),
+    }
+
+    if (!payload.phone_number) {
+      throw new Error('Falha: telefone inválido para WhatsApp.')
+    }
+
+    const response = await fetch(`${apiConfig.functionsUrl}/send-whatsapp`, {
+      method: 'POST',
+      headers: getAuthenticatedHeaders(),
+      body: JSON.stringify(cleanPayload(payload)),
+    })
+
+    if (!response.ok) {
+      throw new Error(await getResponseError(response, 'Falha no envio de WhatsApp.'))
+    }
+
+    const result = await parseJsonResponse(response)
+    if (result?.success === false) {
+      throw new Error(result.message || 'Falha no envio de WhatsApp.')
+    }
+
+    const externalId = getWhatsAppExternalId(result)
+    await createMessageLog({
+      patientId,
+      patientName,
+      channel: 'whatsapp',
+      template: 'Mensagem avulsa',
+      content: message,
+      response: externalId ? `WhatsApp ID: ${externalId}` : result?.message || '',
+      status: 'entregue',
+    }).catch(() => null)
+
+    return {
+      id: externalId,
+      message: result?.message || '',
+      success: result?.success !== false,
+    }
   },
 
   async registerMessage(data) {
@@ -65,7 +129,7 @@ export const communicationRepository = {
   async getInitialMessages() {
     let lastResponse = null
 
-    for (const table of MESSAGE_TABLES) {
+    for (const table of HISTORY_TABLES) {
       const query = new URLSearchParams()
       query.set('select', '*,patients(full_name,phone_mobile,email)')
       query.set('order', 'created_at.desc')
@@ -127,11 +191,12 @@ async function createMessageLog(data) {
     channel: data.channel,
     template: data.template,
     content: data.content,
+    response: data.response,
     status: data.status,
     sent_at: new Date().toISOString(),
   })
 
-  for (const table of MESSAGE_TABLES) {
+  for (const table of MESSAGE_LOG_TABLES) {
     const response = await fetch(`${apiConfig.restUrl}/${table}`, {
       method: 'POST',
       headers: getAuthenticatedHeaders({ Prefer: 'return=minimal' }),
@@ -156,10 +221,10 @@ function mapMessage(message) {
       message.patients?.full_name ||
       'Paciente não identificado',
     channel: normalizeChannel(message.channel || message.canal),
-    template: message.template || message.template_name || message.subject || 'Mensagem avulsa',
+    template: message.template || message.template_name || message.subject || (message.phone_number ? 'SMS Twilio' : 'Mensagem avulsa'),
     sentAt: formatDateTime(message.sent_at || message.created_at || message.updated_at),
     status: normalizeStatus(message.status || message.delivery_status),
-    response: message.response || message.reply || '',
+    response: message.response || message.reply || message.sid || message.twilio_sid || message.message_id || message.messageId || '',
   }
 }
 
@@ -212,10 +277,97 @@ function formatDateTime(value) {
   }).format(date)
 }
 
-function normalizePhone(phone) {
-  const digits = String(phone || '').replace(/\D/g, '')
+export function buildSmsMessage({ patientName, content }) {
+  return buildPatientMessage({
+    content,
+    emptyMessage: 'Falha: mensagem SMS vazia.',
+    maxLength: SMS_MAX_LENGTH,
+    maxLengthMessage: `Falha: mensagem SMS excede ${SMS_MAX_LENGTH} caracteres.`,
+    patientName,
+  })
+}
+
+export function buildWhatsAppMessage({ patientName, content }) {
+  return buildPatientMessage({
+    content,
+    emptyMessage: 'Falha: mensagem WhatsApp vazia.',
+    maxLength: WHATSAPP_MAX_LENGTH,
+    maxLengthMessage: `Falha: mensagem WhatsApp excede ${WHATSAPP_MAX_LENGTH} caracteres.`,
+    patientName,
+  })
+}
+
+function buildPatientMessage({ patientName, content, maxLength, emptyMessage, maxLengthMessage }) {
+  const body = String(content || '').trim()
+  if (!body) {
+    throw new Error(emptyMessage)
+  }
+
+  const name = String(patientName || '').trim()
+  const message = name ? `[MediConnect] Olá ${name}, ${body}` : `[MediConnect] ${body}`
+
+  if (message.length > maxLength) {
+    throw new Error(maxLengthMessage)
+  }
+
+  return message
+}
+
+export function normalizeSmsPhone(phone) {
+  const raw = String(phone || '').trim()
+  const digits = onlyDigits(raw)
   if (!digits) return ''
-  return digits.startsWith('55') ? `+${digits}` : `+55${digits}`
+
+  if (raw.startsWith('+') && isValidInternationalPhone(digits)) {
+    return `+${digits}`
+  }
+
+  if (digits.startsWith('00') && isValidInternationalPhone(digits.slice(2))) {
+    return `+${digits.slice(2)}`
+  }
+
+  const brazilianDigits = digits.startsWith('55') ? digits : `55${digits}`
+  return isValidBrazilianPhone(brazilianDigits) ? `+${brazilianDigits}` : ''
+}
+
+export function normalizeWhatsAppPhone(phone) {
+  return normalizeSmsPhone(phone)
+}
+
+function normalizeSmsPatientId(patientId) {
+  const value = String(patientId || '').trim()
+  return UUID_PATTERN.test(value) ? value : undefined
+}
+
+function getWhatsAppExternalId(result) {
+  return String(
+    result?.message_id ||
+    result?.messageId ||
+    result?.id ||
+    result?.key?.id ||
+    result?.data?.message_id ||
+    result?.data?.messageId ||
+    '',
+  )
+}
+
+function isValidBrazilianPhone(digits) {
+  return /^55\d{10,11}$/.test(digits)
+}
+
+function isValidInternationalPhone(digits) {
+  return /^\d{10,15}$/.test(digits)
+}
+
+async function parseJsonResponse(response) {
+  const text = await response.text().catch(() => '')
+  if (!text) return {}
+
+  try {
+    return JSON.parse(text)
+  } catch {
+    return { message: text }
+  }
 }
 
 function cleanPayload(payload) {

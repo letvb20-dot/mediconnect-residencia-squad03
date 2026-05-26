@@ -400,7 +400,7 @@ export function MessagesPage({ role }) {
   }
 
   async function sendCommunicationToPatient({ channel, content, patient, template }) {
-    if (channel === 'sms') {
+    if (channel === 'sms' || channel === 'whatsapp') {
       if (!patient.phone) {
         await communicationRepository.registerMessage({
           channel,
@@ -414,13 +414,26 @@ export function MessagesPage({ role }) {
       }
 
       try {
-        await communicationRepository.sendSms({
-          content,
-          patientId: patient.id,
-          patientName: patient.name,
-          phone: patient.phone,
-        })
-        return { channel, patient, response: '', status: 'entregue', template }
+        const sendResult = channel === 'sms'
+          ? await communicationRepository.sendSms({
+              content,
+              patientId: patient.id,
+              patientName: patient.name,
+              phone: patient.phone,
+            })
+          : await communicationRepository.sendWhatsApp({
+              content,
+              fallbackSms: false,
+              patientId: patient.id,
+              patientName: patient.name,
+              phone: patient.phone,
+            })
+
+        const response = channel === 'sms'
+          ? (sendResult.sid ? `Twilio SID: ${sendResult.sid}` : sendResult.message || '')
+          : (sendResult.id ? `WhatsApp ID: ${sendResult.id}` : sendResult.message || '')
+
+        return { channel, patient, response, status: 'entregue', template }
       } catch (sendError) {
         await communicationRepository.registerMessage({
           channel,
@@ -433,7 +446,7 @@ export function MessagesPage({ role }) {
         return {
           channel,
           patient,
-          response: translateErrorMessage(sendError.message, 'Falha ao enviar SMS.'),
+          response: translateErrorMessage(sendError.message, channel === 'sms' ? 'Falha ao enviar SMS.' : 'Falha ao enviar WhatsApp.'),
           status: 'falha',
           template,
         }

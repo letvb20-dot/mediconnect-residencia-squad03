@@ -37,13 +37,20 @@ function mockFetch(t, handler) {
 }
 
 test('normalizeSmsPhone formata telefones para o contrato do Twilio', async () => {
-  const { buildSmsMessage, normalizeSmsPhone } = await import('../src/repositories/communicationRepository.js')
+  const {
+    buildSmsMessage,
+    buildWhatsAppMessage,
+    normalizeSmsPhone,
+    normalizeWhatsAppPhone,
+  } = await import('../src/repositories/communicationRepository.js')
 
   assert.equal(normalizeSmsPhone('(11) 99999-9999'), '+5511999999999')
   assert.equal(normalizeSmsPhone('5511988887777'), '+5511988887777')
   assert.equal(normalizeSmsPhone('+12125550199'), '+12125550199')
   assert.equal(normalizeSmsPhone('12345'), '')
+  assert.equal(normalizeWhatsAppPhone('(79) 99114-8174'), '+5579991148174')
   assert.match(buildSmsMessage({ patientName: 'Maria', content: 'Consulta amanha' }), /Ol\u00e1 Maria/)
+  assert.match(buildWhatsAppMessage({ patientName: 'Maria', content: 'Consulta amanha' }), /Ol\u00e1 Maria/)
 })
 
 test('sendSms chama /functions/v1/send-sms com headers autenticados e payload documentado', async (t) => {
@@ -115,6 +122,54 @@ test('sendSms rejeita telefone invalido antes de chamar a API', async (t) => {
     /telefone inválido/,
   )
   assert.equal(fetchCalls, 0)
+})
+
+test('sendWhatsApp chama /functions/v1/send-whatsapp com headers autenticados e fallback_sms false', async (t) => {
+  mockAuthenticatedWindow(t)
+
+  const calls = []
+  mockFetch(t, async (url, options = {}) => {
+    const call = {
+      body: options.body ? JSON.parse(options.body) : null,
+      headers: options.headers || {},
+      method: options.method || 'GET',
+      url: String(url),
+    }
+    calls.push(call)
+
+    if (call.url.endsWith('/functions/v1/send-whatsapp')) {
+      return Response.json({ message: 'WhatsApp enviado', message_id: 'WA123', success: true })
+    }
+
+    if (call.url.includes('/rest/v1/communication_logs')) {
+      return new Response(null, { status: 201 })
+    }
+
+    throw new Error(`URL inesperada: ${call.url}`)
+  })
+
+  const { communicationRepository } = await import('../src/repositories/communicationRepository.js')
+  const result = await communicationRepository.sendWhatsApp({
+    content: 'Consulta amanha as 14h',
+    patientId: 'patient-1',
+    patientName: 'Maria',
+    phone: '(79) 99114-8174',
+  })
+
+  assert.equal(calls[0].method, 'POST')
+  assert.match(calls[0].url, /\/functions\/v1\/send-whatsapp$/)
+  assert.equal(calls[0].headers.apikey, 'anon-key')
+  assert.equal(calls[0].headers.Authorization, 'Bearer access-token')
+  assert.equal(calls[0].body.phone_number, '+5579991148174')
+  assert.equal(calls[0].body.fallback_sms, false)
+  assert.match(calls[0].body.message, /^\[MediConnect\] Ol\u00e1 Maria/)
+  assert.equal(result.id, 'WA123')
+
+  assert.match(calls[1].url, /\/rest\/v1\/communication_logs$/)
+  assert.equal(calls[1].body.channel, 'whatsapp')
+  assert.equal(calls[1].body.content, calls[0].body.message)
+  assert.equal(calls[1].body.response, 'WhatsApp ID: WA123')
+  assert.equal(calls[1].body.status, 'entregue')
 })
 
 test('sendSms preserva erro 503 de servico SMS desabilitado', async (t) => {

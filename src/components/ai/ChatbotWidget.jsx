@@ -1,28 +1,81 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { aiClient } from '../../lib/ai/aiClient.js'
+import { AUTH_SESSION_CHANGED_EVENT, getAuthSession } from '../../config/api.js'
 import { normalizeRole } from '../../config/permissions.js'
 import { appointmentRepository } from '../../repositories/appointmentRepository.js'
 import { profileRepository } from '../../repositories/profileRepository.js'
 import { waitlistRepository } from '../../repositories/waitlistRepository.js'
 import { isCancelledStatus } from '../../utils/appointmentMetrics.js'
 
-const SESSION_KEY = 'mediconnect.chatbot.history.v1'
+const SESSION_KEY_PREFIX = 'mediconnect.chatbot.history.v1'
+const ANON_SCOPE = 'anon'
+
+// Ações rápidas exibidas como chips no chat, por perfil.
+const QUICK_ACTIONS = {
+  admin: [
+    { label: 'Ver agenda', route: '/agenda' },
+    { label: 'Pacientes', route: '/pacientes' },
+    { label: 'Lista de espera', route: '/lista-espera' },
+    { label: 'Relatórios', route: '/laudos' },
+  ],
+  gestor: [
+    { label: 'Painel', route: '/inicio' },
+    { label: 'Agenda', route: '/agenda' },
+    { label: 'Analytics', route: '/relatorios' },
+    { label: 'Lista de espera', route: '/lista-espera' },
+  ],
+  medico: [
+    { label: 'Minha agenda', route: '/agenda' },
+    { label: 'Pacientes', route: '/pacientes' },
+    { label: 'Lista de espera', route: '/lista-espera' },
+    { label: 'Relatórios', route: '/laudos' },
+  ],
+  secretaria: [
+    { label: 'Cadastrar paciente', route: '/pacientes?new=1' },
+    { label: 'Agenda', route: '/agenda' },
+    { label: 'Pacientes', route: '/pacientes' },
+    { label: 'Lista de espera', route: '/lista-espera' },
+  ],
+  paciente: [
+    { label: 'Agendar consulta', route: '/agendamento' },
+    { label: 'Meus laudos', route: '/laudos' },
+    { label: 'Meu perfil', route: '/perfil' },
+  ],
+}
 
 export function ChatbotWidget({ navigate, role }) {
+  const normalizedRole = normalizeRole(role)
+  const [userScope, setUserScope] = useState(() => resolveUserScope())
+  const sessionKey = useMemo(() => `${SESSION_KEY_PREFIX}.${userScope}`, [userScope])
+
   const [open, setOpen] = useState(false)
-  const [messages, setMessages] = useState(() => readHistory())
+  const [messages, setMessages] = useState(() => readHistory(sessionKey))
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const scrollRef = useRef(null)
 
+  // Reage a troca de usuário recarregando o histórico isolado por perfil.
+  useEffect(() => {
+    function handleSessionChange() {
+      const nextScope = resolveUserScope()
+      setUserScope((current) => (current === nextScope ? current : nextScope))
+    }
+    window.addEventListener(AUTH_SESSION_CHANGED_EVENT, handleSessionChange)
+    return () => window.removeEventListener(AUTH_SESSION_CHANGED_EVENT, handleSessionChange)
+  }, [])
+
+  useEffect(() => {
+    setMessages(readHistory(sessionKey))
+  }, [sessionKey])
+
   useEffect(() => {
     try {
-      sessionStorage.setItem(SESSION_KEY, JSON.stringify(messages.slice(-30)))
+      sessionStorage.setItem(sessionKey, JSON.stringify(messages.slice(-30)))
     } catch {
       // ignora indisponibilidade de storage
     }
-  }, [messages])
+  }, [messages, sessionKey])
 
   useEffect(() => {
     if (open && scrollRef.current) {
@@ -30,8 +83,10 @@ export function ChatbotWidget({ navigate, role }) {
     }
   }, [messages, open, loading])
 
-  const send = useCallback(async () => {
-    const trimmed = input.trim()
+  const quickActions = QUICK_ACTIONS[normalizedRole] || []
+
+  const send = useCallback(async (overrideText) => {
+    const trimmed = (overrideText ?? input).trim()
     if (!trimmed || loading) return
 
     const nextMessages = [...messages, { role: 'user', content: trimmed }]
@@ -63,10 +118,15 @@ export function ChatbotWidget({ navigate, role }) {
     }
   }
 
+  function handleQuickAction(action) {
+    setOpen(false)
+    navigate(action.route)
+  }
+
   return (
     <>
       {open ? (
-        <div className="fixed bottom-24 right-4 z-50 flex h-[28rem] w-[min(22rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-border-default-v2 bg-surface-card shadow-elevated">
+        <div className="fixed bottom-24 right-4 z-50 flex h-[30rem] w-[min(22rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-border-default-v2 bg-surface-card shadow-elevated">
           <div className="flex items-center justify-between border-b border-border-default-v2 px-4 py-3">
             <div>
               <p className="text-sm font-bold text-text-heading">Assistente MediConnect</p>
@@ -82,10 +142,30 @@ export function ChatbotWidget({ navigate, role }) {
             </button>
           </div>
 
+          {quickActions.length ? (
+            <div className="border-b border-border-default-v2 px-3 py-2">
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-muted-v2">
+                Ações rápidas
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {quickActions.map((action) => (
+                  <button
+                    className="rounded-full border border-accent-primary/40 bg-accent-primary/10 px-2.5 py-1 text-xs font-semibold text-accent-primary transition hover:bg-accent-primary/20"
+                    key={action.route}
+                    onClick={() => handleQuickAction(action)}
+                    type="button"
+                  >
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3" ref={scrollRef}>
             {messages.length === 0 ? (
               <p className="text-sm leading-6 text-text-muted-v2">
-                Olá! Posso ajudar com agenda, lista de espera, relatórios e navegação. O que você precisa?
+                Olá! Posso ajudar com agenda, lista de espera, relatórios e navegação. Use os atalhos acima ou escreva sua dúvida.
               </p>
             ) : null}
 
@@ -130,7 +210,7 @@ export function ChatbotWidget({ navigate, role }) {
             <button
               className="grid size-10 shrink-0 place-items-center rounded-lg bg-accent-primary text-white transition hover:bg-accent-hover disabled:opacity-50"
               disabled={loading || !input.trim()}
-              onClick={send}
+              onClick={() => send()}
               type="button"
             >
               ➤
@@ -178,13 +258,27 @@ async function buildContext(role) {
   return data
 }
 
-function readHistory() {
+function readHistory(key) {
   try {
-    const stored = JSON.parse(sessionStorage.getItem(SESSION_KEY) || '[]')
+    const stored = JSON.parse(sessionStorage.getItem(key) || '[]')
     return Array.isArray(stored) ? stored : []
   } catch {
     return []
   }
+}
+
+function resolveUserScope() {
+  if (typeof window === 'undefined') return ANON_SCOPE
+  const session = getAuthSession()
+  const user = session?.user || {}
+  const profile = session?.profile || {}
+  return (
+    user.id ||
+    user.email ||
+    profile.id ||
+    profile.email ||
+    ANON_SCOPE
+  )
 }
 
 function formatToday() {

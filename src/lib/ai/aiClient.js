@@ -60,6 +60,117 @@ export const aiClient = {
     }
   },
 
+  // Extrai dados estruturados a partir de um áudio + descrição dos campos.
+  // schema: [{ name, label, type?: 'text'|'number'|'date'|'enum', options?: string[], example? }]
+  // Retorna um objeto { campo: valor } só com os campos que o Gemini conseguiu inferir.
+  async extractFormFromAudio({ blob, mimeType, schema = [], hint = '' } = {}) {
+    if (!API_KEY) throw new Error('Preenchimento por voz indisponível: VITE_GEMINI_API_KEY não configurada.')
+    if (!blob) throw new Error('Áudio vazio.')
+    if (!Array.isArray(schema) || schema.length === 0) throw new Error('Schema do formulário vazio.')
+
+    const base64 = await blobToBase64(blob)
+    const effectiveMime = mimeType || blob.type || 'audio/webm'
+
+    const schemaDescription = schema.map((field) => {
+      const parts = [`- name: ${field.name}`, `  label: ${field.label}`]
+      if (field.type) parts.push(`  type: ${field.type}`)
+      if (Array.isArray(field.options) && field.options.length) {
+        parts.push(`  options: [${field.options.join(', ')}]`)
+      }
+      if (field.example) parts.push(`  example: ${field.example}`)
+      return parts.join('\n')
+    }).join('\n')
+
+    const system =
+      'Você recebe um áudio em português do Brasil onde um operador dita os dados de um formulário.\n' +
+      'Sua tarefa é extrair APENAS os campos que foram realmente mencionados e devolver um JSON.\n' +
+      'Regras estritas:\n' +
+      '1. Devolva SOMENTE JSON válido, sem markdown e sem comentários.\n' +
+      '2. As chaves devem ser exatamente os "name" listados no schema.\n' +
+      '3. Não invente valores. Se um campo não foi mencionado, omita a chave.\n' +
+      '4. Para campos do tipo "enum", escolha o valor mais próximo da lista de options. Se nenhum servir, omita.\n' +
+      '5. Para "date", devolva no formato YYYY-MM-DD.\n' +
+      '6. Para "number", devolva apenas dígitos (números ou números com vírgula decimal).\n' +
+      '7. Preserve acentuação natural dos nomes próprios.\n' +
+      (hint ? `Contexto adicional: ${hint}\n` : '') +
+      'Schema dos campos disponíveis:\n' +
+      schemaDescription
+
+    const response = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(API_KEY)}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: system }] },
+        contents: [{
+          role: 'user',
+          parts: [
+            { text: 'Extraia os campos preenchidos a partir deste áudio. Devolva apenas o JSON.' },
+            { inlineData: { mimeType: effectiveMime, data: base64 } },
+          ],
+        }],
+        generationConfig: {
+          maxOutputTokens: 2048,
+          temperature: 0,
+          responseMimeType: 'application/json',
+        },
+      }),
+    })
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '')
+      throw new Error(`Falha na extração por voz (${response.status}): ${detail.slice(0, 200)}`)
+    }
+
+    const payload = await response.json()
+    const parts = payload?.candidates?.[0]?.content?.parts
+    const text = Array.isArray(parts) ? parts.map((part) => part.text || '').join('').trim() : ''
+    const parsed = safeParseJson(text)
+    if (!parsed || typeof parsed !== 'object') {
+      throw new Error('Resposta da IA não veio em JSON válido.')
+    }
+    return parsed
+  },
+
+  // Transcreve áudio (Blob) usando o Gemini. Cross-browser, não depende da Web Speech API.
+  async transcribeAudio({ blob, mimeType } = {}) {
+    if (!API_KEY) throw new Error('Reconhecimento de voz indisponível: VITE_GEMINI_API_KEY não configurada.')
+    if (!blob) throw new Error('Áudio vazio.')
+
+    const base64 = await blobToBase64(blob)
+    const effectiveMime = mimeType || blob.type || 'audio/webm'
+
+    const response = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(API_KEY)}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        system_instruction: {
+          parts: [{
+            text:
+              'Você é um transcritor. Receba um áudio curto em português do Brasil e devolva APENAS o texto literal falado, sem pontuação extra, sem comentários e sem aspas. Se não houver fala audível, devolva uma string vazia.',
+          }],
+        },
+        contents: [{
+          role: 'user',
+          parts: [
+            { text: 'Transcreva exatamente o que foi falado.' },
+            { inlineData: { mimeType: effectiveMime, data: base64 } },
+          ],
+        }],
+        generationConfig: { maxOutputTokens: 256, temperature: 0 },
+      }),
+    })
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '')
+      throw new Error(`Falha na transcrição (${response.status}): ${detail.slice(0, 200)}`)
+    }
+
+    const payload = await response.json()
+    const parts = payload?.candidates?.[0]?.content?.parts
+    const text = Array.isArray(parts) ? parts.map((part) => part.text || '').join('').trim() : ''
+    return text
+  },
+
   // Ranqueia a lista de espera para um horário liberado. Síncrono local (sem custo).
   rankWaitlist({ waitlist = [], slot = {} } = {}) {
     return rankWaitlistForSlot({ waitlist, slot })
@@ -108,4 +219,17 @@ function safeParseJson(text) {
 function readEnv(name) {
   const env = import.meta.env ?? {}
   return env[name] || ''
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = String(reader.result || '')
+      const commaIndex = result.indexOf(',')
+      resolve(commaIndex >= 0 ? result.slice(commaIndex + 1) : result)
+    }
+    reader.onerror = () => reject(reader.error || new Error('Falha ao ler áudio.'))
+    reader.readAsDataURL(blob)
+  })
 }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+import { VoiceFormFiller } from '../components/ai/VoiceFormFiller.jsx'
 import { apiConfig } from '../config/api.js'
 import { hasCapability } from '../config/permissions.js'
 import { patientRepository } from '../repositories/patientRepository.js'
@@ -56,6 +57,46 @@ const DOCUMENT_TYPE_OPTIONS = ['RG', 'CNH', 'Passaporte', 'RNE', 'Certidão de n
 const NATIONALITY_OPTIONS = ['Brasileira', 'Brasileira naturalizada', 'Estrangeira']
 const NATURALITY_OPTIONS = [...BRAZILIAN_STATES.map((state) => state.label), 'Exterior']
 
+// Schema usado pelo VoiceFormFiller para o Gemini saber quais campos pode preencher.
+const PATIENT_VOICE_SCHEMA = [
+  { name: 'name', label: 'Nome completo', type: 'text' },
+  { name: 'socialName', label: 'Nome social', type: 'text' },
+  { name: 'cpf', label: 'CPF', type: 'text', example: '000.000.000-00' },
+  { name: 'rg', label: 'RG', type: 'text' },
+  { name: 'sex', label: 'Sexo', type: 'enum', options: ['Masculino', 'Feminino', 'Outro'] },
+  { name: 'age', label: 'Idade em anos', type: 'number' },
+  { name: 'birthDate', label: 'Data de nascimento', type: 'date' },
+  { name: 'ethnicity', label: 'Etnia', type: 'text' },
+  { name: 'race', label: 'Raça', type: 'text' },
+  { name: 'maritalStatus', label: 'Estado civil', type: 'enum', options: ['Solteiro', 'Casado', 'Divorciado', 'Viúvo', 'União estável'] },
+  { name: 'nationality', label: 'Nacionalidade', type: 'enum', options: NATIONALITY_OPTIONS },
+  { name: 'naturality', label: 'Naturalidade (estado de nascimento)', type: 'enum', options: NATURALITY_OPTIONS },
+  { name: 'profession', label: 'Profissão', type: 'text' },
+  { name: 'motherName', label: 'Nome da mãe', type: 'text' },
+  { name: 'fatherName', label: 'Nome do pai', type: 'text' },
+  { name: 'spouseName', label: 'Nome do cônjuge', type: 'text' },
+  { name: 'responsibleName', label: 'Nome do responsável (para menores)', type: 'text' },
+  { name: 'responsibleCpf', label: 'CPF do responsável', type: 'text' },
+  { name: 'condition', label: 'Condição médica principal', type: 'text' },
+  { name: 'bloodType', label: 'Tipo sanguíneo', type: 'enum', options: BLOOD_TYPE_OPTIONS },
+  { name: 'weight', label: 'Peso em kg', type: 'number' },
+  { name: 'height', label: 'Altura em metros', type: 'number', example: '1,70' },
+  { name: 'allergies', label: 'Alergias', type: 'text' },
+  { name: 'email', label: 'E-mail', type: 'text' },
+  { name: 'phone', label: 'Celular', type: 'text', example: '(11) 99999-0000' },
+  { name: 'phoneLandline', label: 'Telefone fixo', type: 'text' },
+  { name: 'zipCode', label: 'CEP', type: 'text', example: '00000-000' },
+  { name: 'addressStreet', label: 'Endereço (rua/avenida)', type: 'text' },
+  { name: 'addressNumber', label: 'Número do endereço', type: 'text' },
+  { name: 'addressComplement', label: 'Complemento do endereço', type: 'text' },
+  { name: 'city', label: 'Cidade', type: 'text' },
+  { name: 'state', label: 'UF do estado', type: 'enum', options: BRAZILIAN_STATES.map((s) => s.value) },
+  { name: 'insurance', label: 'Convênio', type: 'enum', options: INSURANCE_OPTIONS },
+  { name: 'plan', label: 'Plano do convênio', type: 'text' },
+  { name: 'insuranceNumber', label: 'Número da matrícula do convênio', type: 'text' },
+  { name: 'cns', label: 'Cartão Nacional de Saúde (SUS)', type: 'text' },
+]
+
 export function PatientsPage({ navigate, role }) {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
@@ -82,6 +123,20 @@ export function PatientsPage({ navigate, role }) {
       .catch((err) => setError(translateErrorMessage(err.message, 'Erro ao carregar pacientes.')))
       .finally(() => setLoading(false))
   }, [])
+
+  // Permite que o assistente abra o formulário de cadastro via /pacientes?new=1.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('new') === '1' && hasCapability(role, 'canEditPatients')) {
+      setEditingId(null)
+      setView('form')
+      params.delete('new')
+      const nextSearch = params.toString()
+      const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}`
+      window.history.replaceState({}, '', nextUrl)
+    }
+  }, [role])
 
   const editingPatient = rows.find((patient) => patient.id === editingId)
   const hasAdvancedFilters = city || state || ageMin || ageMax || lastVisitSince
@@ -668,6 +723,30 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
   const calculatedBmi = calculateBmi(formData.weight, formData.height)
   const isMinorPatient = isMinorPatientRecord(formData)
 
+  function applyVoiceFill(values) {
+    if (!values || typeof values !== 'object') return
+    setFormData((currentData) => {
+      const next = { ...currentData }
+      for (const key of Object.keys(values)) {
+        if (!(key in next)) continue
+        const rawValue = values[key]
+        if (rawValue === undefined || rawValue === null) continue
+        const stringValue = String(rawValue)
+        if (key === 'height') {
+          next.height = maskHeight(stringValue)
+        } else if (key === 'weight') {
+          next.weight = stringValue.replace(/[^\d,.]/g, '').slice(0, 6)
+        } else if (key === 'name') {
+          next.name = sanitizePersonName(stringValue)
+        } else {
+          next[key] = sanitizeFieldValue(key, stringValue)
+        }
+      }
+      next.bmi = calculateBmi(next.weight, next.height)
+      return next
+    })
+  }
+
   function handleChange(event) {
     const { checked, name, type, value } = event.target
     const nextValue = type === 'checkbox'
@@ -803,6 +882,16 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
           </div>
         </div>
       </div>
+
+      {isNewPatient ? (
+        <div className={`${darkCard} mb-6`}>
+          <VoiceFormFiller
+            schema={PATIENT_VOICE_SCHEMA}
+            onFill={applyVoiceFill}
+            hint="Cadastro de paciente em clínica brasileira."
+          />
+        </div>
+      ) : null}
 
       <form className="space-y-6" onSubmit={handleSubmit}>
           <section className={darkCard}>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+import { GuidedVoiceFlow } from '../components/ai/GuidedVoiceFlow.jsx'
 import { VoiceFormFiller } from '../components/ai/VoiceFormFiller.jsx'
 import { apiConfig } from '../config/api.js'
 import { hasCapability } from '../config/permissions.js'
@@ -95,6 +96,30 @@ const PATIENT_VOICE_SCHEMA = [
   { name: 'plan', label: 'Plano do convênio', type: 'text' },
   { name: 'insuranceNumber', label: 'Número da matrícula do convênio', type: 'text' },
   { name: 'cns', label: 'Cartão Nacional de Saúde (SUS)', type: 'text' },
+]
+
+// Sequência usada pelo modo guiado: só os 13 campos obrigatórios, na ordem
+// natural de preenchimento. Cada item tem o "type" certo pra o normalizer.
+const PATIENT_GUIDED_FIELDS = [
+  { name: 'name', label: 'Nome completo', type: 'text', help: 'Diga o nome completo do paciente.' },
+  { name: 'cpf', label: 'CPF', type: 'document', help: 'Pode falar os 11 dígitos seguidos.' },
+  { name: 'birthDate', label: 'Data de nascimento', type: 'date', help: 'Ex.: 15 de março de 1990.' },
+  { name: 'age', label: 'Idade', type: 'number', help: 'Diga só o número de anos.' },
+  { name: 'motherName', label: 'Nome da mãe', type: 'text' },
+  { name: 'phone', label: 'Celular', type: 'phone', help: 'DDD + número, ex.: 11 99999 0000.' },
+  { name: 'email', label: 'E-mail', type: 'email', help: 'Diga "arroba" e "ponto" onde aparecerem.' },
+  { name: 'zipCode', label: 'CEP', type: 'cep', help: '8 dígitos.' },
+  { name: 'addressStreet', label: 'Endereço (rua ou avenida)', type: 'text' },
+  { name: 'addressNumber', label: 'Número do endereço', type: 'text' },
+  { name: 'city', label: 'Cidade', type: 'text' },
+  {
+    name: 'state',
+    label: 'UF do estado',
+    type: 'enum',
+    options: BRAZILIAN_STATES.map((s) => s.value),
+    help: 'Pode falar o nome do estado, ex.: "São Paulo".',
+  },
+  { name: 'plan', label: 'Plano de saúde', type: 'text' },
 ]
 
 export function PatientsPage({ navigate, role }) {
@@ -719,9 +744,32 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
   const [avatarPreview, setAvatarPreview] = useState(formData.avatarUrl)
   const [attachmentFiles, setAttachmentFiles] = useState([])
   const [attachmentsOpen, setAttachmentsOpen] = useState(false)
+  const [voiceMode, setVoiceMode] = useState('idle') // idle | guided
   const isNewPatient = !patient
   const calculatedBmi = calculateBmi(formData.weight, formData.height)
   const isMinorPatient = isMinorPatientRecord(formData)
+
+  function applyVoiceFillField(name, value) {
+    if (!name) return
+    const stringValue = value === undefined || value === null ? '' : String(value)
+    setFormData((currentData) => {
+      if (!(name in currentData)) return currentData
+      const next = { ...currentData }
+      if (name === 'height') {
+        next.height = maskHeight(stringValue)
+      } else if (name === 'weight') {
+        next.weight = stringValue.replace(/[^\d,.]/g, '').slice(0, 6)
+      } else if (name === 'name') {
+        next.name = sanitizePersonName(stringValue)
+      } else {
+        next[name] = sanitizeFieldValue(name, stringValue)
+      }
+      if (name === 'weight' || name === 'height') {
+        next.bmi = calculateBmi(next.weight, next.height)
+      }
+      return next
+    })
+  }
 
   function applyVoiceFill(values) {
     if (!values || typeof values !== 'object') return
@@ -866,7 +914,7 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
   }
 
   return (
-    <div className="relative pb-20 text-text-heading">
+    <div className={`relative text-text-heading ${voiceMode === 'guided' ? 'pb-56' : 'pb-20'}`}>
       <div className="mb-6 flex flex-col items-start justify-between gap-4 border-b border-border-default-v2 pb-6 md:flex-row">
         <div className="flex items-start gap-4">
           <button
@@ -888,9 +936,19 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
           <VoiceFormFiller
             schema={PATIENT_VOICE_SCHEMA}
             onFill={applyVoiceFill}
+            onStartGuided={() => setVoiceMode('guided')}
             hint="Cadastro de paciente em clínica brasileira."
           />
         </div>
+      ) : null}
+
+      {voiceMode === 'guided' && isNewPatient ? (
+        <GuidedVoiceFlow
+          fields={PATIENT_GUIDED_FIELDS}
+          onFieldFilled={applyVoiceFillField}
+          onFinish={() => setVoiceMode('idle')}
+          onCancel={() => setVoiceMode('idle')}
+        />
       ) : null}
 
       <form className="space-y-6" onSubmit={handleSubmit}>

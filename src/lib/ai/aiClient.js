@@ -171,6 +171,46 @@ export const aiClient = {
     return text
   },
 
+  // Normaliza um transcrito curto para um campo tipado (date/enum). Não tenta engenheirar
+  // texto livre — usa Gemini só pra casos onde regex local não resolve.
+  async normalizeViaGemini({ transcript, field } = {}) {
+    if (!API_KEY) return transcript
+    if (!transcript || !field) return transcript
+
+    let instruction
+    if (field.type === 'date') {
+      instruction =
+        'Converta a frase em português para uma data no formato ISO YYYY-MM-DD. ' +
+        'Devolva APENAS a data, sem texto adicional. Se for impossível identificar uma data, devolva uma string vazia.'
+    } else if (field.type === 'enum') {
+      const options = Array.isArray(field.options) ? field.options : []
+      instruction =
+        'Escolha o item da lista que melhor representa a frase falada. Devolva APENAS o item escolhido, exatamente como aparece na lista. ' +
+        `Se nenhum item servir, devolva uma string vazia. Lista: ${JSON.stringify(options)}.`
+    } else {
+      return transcript
+    }
+
+    try {
+      const response = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(API_KEY)}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: instruction }] },
+          contents: [{ role: 'user', parts: [{ text: transcript }] }],
+          generationConfig: { maxOutputTokens: 64, temperature: 0 },
+        }),
+      })
+      if (!response.ok) return transcript
+      const payload = await response.json()
+      const parts = payload?.candidates?.[0]?.content?.parts
+      const text = Array.isArray(parts) ? parts.map((part) => part.text || '').join('').trim() : ''
+      return text || transcript
+    } catch {
+      return transcript
+    }
+  },
+
   // Ranqueia a lista de espera para um horário liberado. Síncrono local (sem custo).
   rankWaitlist({ waitlist = [], slot = {} } = {}) {
     return rankWaitlistForSlot({ waitlist, slot })

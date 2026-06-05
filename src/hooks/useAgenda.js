@@ -566,6 +566,36 @@ export function useAgenda() {
     }
   }
 
+  async function handleConfirmArrival() {
+    if (!canManageAppointment) return
+    if (!editingAppointment) return
+
+    const payload = buildPayload({ status: 'Aguardando' })
+    if (!payload) return
+
+    try {
+      const updated = await appointmentRepository.update(editingAppointment.id, { ...payload, status: 'Aguardando' })
+      setLocalAppointments((current) =>
+        sortAppointmentsByTime(
+          current.map((appointment) =>
+            appointment.id === editingAppointment.id
+              ? enrichAppointment(updated, { ...payload, status: 'Aguardando' }, patients, professionals)
+              : appointment,
+          ),
+        ),
+      )
+      notifyAppointmentAction(
+        'Paciente em sala de espera',
+        `${getPatientName(payload.patientId, patients)} confirmou presença e aguarda atendimento.`,
+        { ...payload, status: 'Aguardando' },
+        updated,
+      )
+      closeAppointmentModal()
+    } catch (arrivalError) {
+      alert(arrivalError.message || 'Erro ao confirmar a chegada do paciente.')
+    }
+  }
+
   function queueAppointmentConfirmationMessages(payload) {
     sendAppointmentConfirmationMessages(payload, { patients, professionals }).catch((sendError) => {
       console.warn('Falha ao enviar comunicacao automatica de agendamento.', sendError)
@@ -696,6 +726,7 @@ export function useAgenda() {
     closeAppointmentModal,
     handleSubmitAppointment,
     handleCancelAppointment,
+    handleConfirmArrival,
     visibleAppointments,
     dailyOccupancyAppointments,
     availableSlots,

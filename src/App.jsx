@@ -9,6 +9,8 @@ import { patientRepository } from './repositories/patientRepository.js'
 
 const AgendaPage = lazyPage(() => import('./pages/AgendaPage.jsx'), 'AgendaPage')
 const AnalyticsPage = lazyPage(() => import('./pages/AnalyticsPage.jsx'), 'AnalyticsPage')
+const AtendimentoPage = lazyPage(() => import('./pages/AtendimentoPage.jsx'), 'AtendimentoPage')
+const ConsultaPage = lazyPage(() => import('./pages/AtendimentoPage.jsx'), 'ConsultaPage')
 const HomePage = lazyPage(() => import('./pages/HomePage.jsx'), 'HomePage')
 const LandingPage = lazyPage(() => import('./pages/LandingPage.jsx'), 'LandingPage')
 const MessagesPage = lazyPage(() => import('./pages/MessagesPage.jsx'), 'MessagesPage')
@@ -285,6 +287,23 @@ function resolveRoute(pathname, navigate, role, profile, user, isAuthenticated) 
     return {
       element: <AgendaPage navigate={navigate} role={role} />,
       title: 'Agenda',
+      withShell: true,
+    }
+  }
+
+  if (pathname === '/atendimento') {
+    return {
+      element: <AtendimentoPage navigate={navigate} role={role} profile={profile} user={user} />,
+      title: 'Atendimento',
+      withShell: true,
+    }
+  }
+
+  if (pathname.startsWith('/atendimento/')) {
+    const appointmentId = pathname.split('/')[2]
+    return {
+      element: <ConsultaPage navigate={navigate} role={role} profile={profile} user={user} appointmentId={appointmentId} />,
+      title: 'Consulta',
       withShell: true,
     }
   }

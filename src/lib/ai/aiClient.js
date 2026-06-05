@@ -171,6 +171,51 @@ export const aiClient = {
     return text
   },
 
+  // Transcreve áudios mais longos (consultas inteiras). Usa maxOutputTokens maior e
+  // pede pontuação/parágrafos para o texto ficar pronto para alimentar generateReport.
+  async transcribeLongAudio({ blob, mimeType } = {}) {
+    if (!API_KEY) throw new Error('Transcrição indisponível: VITE_GEMINI_API_KEY não configurada.')
+    if (!blob) throw new Error('Áudio vazio.')
+
+    const base64 = await blobToBase64(blob)
+    const effectiveMime = mimeType || blob.type || 'audio/webm'
+
+    const response = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(API_KEY)}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        system_instruction: {
+          parts: [{
+            text:
+              'Você é um transcritor de consultas médicas em português do Brasil. ' +
+              'Devolva APENAS o texto literal falado, com pontuação natural e quebras de parágrafo onde fizer sentido. ' +
+              'Não resuma, não adicione comentários, não use markdown e não rotule falantes. ' +
+              'Se houver trechos inaudíveis, marque-os como [inaudível]. ' +
+              'Se não houver fala audível, devolva uma string vazia.',
+          }],
+        },
+        contents: [{
+          role: 'user',
+          parts: [
+            { text: 'Transcreva literalmente o áudio desta consulta.' },
+            { inlineData: { mimeType: effectiveMime, data: base64 } },
+          ],
+        }],
+        generationConfig: { maxOutputTokens: 4096, temperature: 0 },
+      }),
+    })
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '')
+      throw new Error(`Falha na transcrição (${response.status}): ${detail.slice(0, 200)}`)
+    }
+
+    const payload = await response.json()
+    const parts = payload?.candidates?.[0]?.content?.parts
+    const text = Array.isArray(parts) ? parts.map((part) => part.text || '').join('').trim() : ''
+    return text
+  },
+
   // Normaliza um transcrito curto para um campo tipado (date/enum). Não tenta engenheirar
   // texto livre — usa Gemini só pra casos onde regex local não resolve.
   async normalizeViaGemini({ transcript, field } = {}) {

@@ -73,6 +73,7 @@ const ROLE_ROUTES = {
   medico: [
     '/inicio', '/home', '/dashboard',
     '/agenda',
+    '/atendimento',
     '/profissionais',
     '/consultas',
     '/lista-espera',
@@ -181,6 +182,7 @@ export const ROLE_NAV_ITEMS = {
   medico: [
     { path: '/inicio', label: 'Painel' },
     { path: '/agenda', label: 'Agenda' },
+    { path: '/atendimento', label: 'Atendimento' },
     { path: '/profissionais', label: 'Profissionais' },
     { path: '/pacientes', label: 'Pacientes' },
     { path: '/laudos', label: 'Relatórios' },

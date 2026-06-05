@@ -258,6 +258,30 @@ export function ReportsPage({ role }) {
     loadReports()
   }, [loadReports])
 
+  useEffect(() => {
+    if (isPatientRole) return
+    let raw = ''
+    try { raw = sessionStorage.getItem('mediconnect.atendimento.draftReport') || '' } catch { return }
+    if (!raw) return
+    let draft = null
+    try { draft = JSON.parse(raw) } catch { draft = null }
+    try { sessionStorage.removeItem('mediconnect.atendimento.draftReport') } catch { /* ignora */ }
+    if (!draft || typeof draft !== 'object') return
+
+    setEditor({
+      ...emptyEditor,
+      patientId: String(draft.patientId || ''),
+      requestedBy: isDoctorRole ? currentProfessional?.name || viewerProfile?.name || '' : '',
+      digitalSignature: currentProfessional?.crm || viewerProfile?.name || '',
+      exam: draft.exam || '',
+      cidCode: draft.cidCode || '',
+      diagnosis: draft.diagnosis || '',
+      conclusion: draft.conclusion || '',
+      contentHtml: draft.contentHtml || '',
+    })
+    setEditorOpen(true)
+  }, [currentProfessional?.crm, currentProfessional?.name, isDoctorRole, isPatientRole, viewerProfile?.name])
+
   function openNew() {
     setEditor({
       ...emptyEditor,

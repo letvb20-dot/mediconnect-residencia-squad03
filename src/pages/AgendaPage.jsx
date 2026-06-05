@@ -12,6 +12,7 @@ import {
 import { ptBR } from 'date-fns/locale'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { normalizeRole } from '../config/permissions.js'
 import { AvailabilityPanel } from '../components/availability/AvailabilityPanel.jsx'
 import { AgendaDailyView } from '../components/calendar/AgendaDailyView.jsx'
 import { AgendaMonthlyView } from '../components/calendar/AgendaMonthlyView.jsx'
@@ -39,7 +40,7 @@ const viewFilters = [
 ]
 
 const appointmentTypeOptions = ['Retorno', 'Primeira consulta', 'Exame', 'Avaliação pre-op']
-const appointmentStatusOptions = ['Agendado', 'Confirmado', 'Realizado', 'Cancelado']
+const appointmentStatusOptions = ['Agendado', 'Confirmado', 'Aguardando', 'Realizado', 'Cancelado']
 const weekdayOptions = [
   { label: 'Domingo', value: 0 },
   { label: 'Segunda', value: 1 },
@@ -50,7 +51,7 @@ const weekdayOptions = [
   { label: 'Sábado', value: 6 },
 ]
 
-export function AgendaPage({ navigate }) {
+export function AgendaPage({ navigate, role }) {
   const shortcutHandledRef = useRef(false)
   const [modalPatientSearch, setModalPatientSearch] = useState('')
   const [modalDoctorSearch, setModalDoctorSearch] = useState('')
@@ -86,6 +87,7 @@ export function AgendaPage({ navigate }) {
     closeAppointmentModal,
     handleSubmitAppointment,
     handleCancelAppointment,
+    handleConfirmArrival,
     visibleAppointments,
     dailyOccupancyAppointments,
     availableSlots,
@@ -139,6 +141,11 @@ export function AgendaPage({ navigate }) {
   const isDoctorScope = agendaScope === 'doctor'
   const isPatientScope = agendaScope === 'patient'
   const showAvailabilitySidebar = !isPatientScope && !isDoctorScope
+  const isSecretaryRole = normalizeRole(role) === 'secretaria'
+  const canConfirmArrival =
+    isSecretaryRole &&
+    Boolean(editingAppointment) &&
+    !['Aguardando', 'Realizado', 'Cancelado'].includes(form.status)
   const unitOptions = [
     ...new Set(professionals.map((professional) => professional.unit).filter(Boolean)),
   ].sort((a, b) => a.localeCompare(b, 'pt-BR'))
@@ -622,6 +629,20 @@ export function AgendaPage({ navigate }) {
               >
                 Cancelar agendamento
               </button>
+            ) : null}
+            {canConfirmArrival ? (
+              <button
+                className="h-10 rounded-sm border border-emerald-500/40 bg-emerald-950/30 px-4 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-950/50"
+                onClick={handleConfirmArrival}
+                type="button"
+              >
+                Confirmar chegada
+              </button>
+            ) : null}
+            {editingAppointment && isSecretaryRole && form.status === 'Aguardando' ? (
+              <span className="h-10 inline-flex items-center rounded-sm border border-emerald-500/40 bg-emerald-950/20 px-4 text-sm font-semibold text-emerald-200">
+                Em sala de espera
+              </span>
             ) : null}
             <button
               className="h-10 rounded-sm border border-border-default-v2 bg-surface-card-hover px-4 text-sm font-semibold text-text-body transition hover:bg-surface-card-hover"

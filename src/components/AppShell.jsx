@@ -17,6 +17,7 @@ import { ChatbotWidget } from './ai/ChatbotWidget.jsx'
 const ALL_NAV_ITEMS = [
   { href: '/inicio', label: 'Painel', icon: 'pulse', activePaths: ['/inicio', '/home', '/dashboard'] },
   { href: '/agenda', label: 'Agenda', icon: 'calendar' },
+  { href: '/atendimento', label: 'Atendimento', icon: 'pulse', activePaths: ['/atendimento'] },
   { href: '/agendamento', label: 'Agendamento', icon: 'calendar' },
   { href: '/profissionais', label: 'Profissionais', icon: 'doctor' },
   { href: '/pacientes', label: 'Pacientes', icon: 'users', exact: true },
@@ -38,6 +39,7 @@ const titles = {
   '/dashboard': 'Painel',
   '/agenda': 'Agenda',
   '/agendamento': 'Agendamento',
+  '/atendimento': 'Atendimento',
   '/consultas': 'Lista de Espera Inteligente',
   '/laudos': 'Relatórios',
   '/lista-espera': 'Lista de Espera Inteligente',

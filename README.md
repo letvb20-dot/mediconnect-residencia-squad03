@@ -75,7 +75,7 @@ O sistema possui 5 perfis com permissoes granulares:
 | Laudos/Relatorios | sim | sim | sim | - | - |
 | Prontuarios | sim | sim | sim | - | - |
 | Analytics | sim | sim | - | - | - |
-| Comunicacao (3 canais) | sim | sim | sim | WhatsApp/SMS | - |
+| Comunicacao (3 canais) | sim | sim | sim | sim | - |
 | Gestao de usuarios | sim | sim | - | - | - |
 | Criar usuarios admin/gestor | sim | - | - | - | - |
 | Configuracoes | sim | sim | sim | sim | sim |

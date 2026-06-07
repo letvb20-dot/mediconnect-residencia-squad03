@@ -28,6 +28,7 @@ const VisitsPage = lazyPage(() => import('./pages/VisitsPage.jsx'), 'VisitsPage'
 const WaitlistPage = lazyPage(() => import('./pages/WaitlistPage.jsx'), 'WaitlistPage')
 
 const PANEL_PATHS = ['/inicio', '/home', '/dashboard']
+const USERS_PATHS = ['/usuarios', '/usuários']
 const ROLE_HOME_PATHS = {
   paciente: '/agendamento',
 }
@@ -403,7 +404,7 @@ function resolveRoute(pathname, navigate, role, profile, user, isAuthenticated) 
     }
   }
 
-  if (pathname === '/usuarios') {
+  if (USERS_PATHS.includes(pathname)) {
     return {
       element: <UsersPage navigate={navigate} profile={profile} role={role} />,
       title: 'Usuários',
@@ -497,7 +498,13 @@ function normalizePath(pathname) {
     return '/'
   }
 
-  return pathname.replace(/\/+$/, '')
+  const normalizedPathname = pathname.replace(/\/+$/, '')
+
+  try {
+    return decodeURIComponent(normalizedPathname)
+  } catch {
+    return normalizedPathname
+  }
 }
 
 export default App

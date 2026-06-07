@@ -53,7 +53,7 @@ const ROLE_ROUTES = {
     '/configuracoes', '/config',
     '/consultas',
     '/lista-espera',
-    '/usuarios',
+    '/usuarios', '/usuários',
     '/perfil',
   ],
   gestor: [
@@ -67,7 +67,7 @@ const ROLE_ROUTES = {
     '/configuracoes', '/config',
     '/consultas',
     '/lista-espera',
-    '/usuarios',
+    '/usuarios', '/usuários',
     '/perfil',
   ],
   medico: [
@@ -210,8 +210,9 @@ export const ROLE_NAV_ITEMS = {
 export function canAccess(role, pathname) {
   const normalizedRole = normalizeRole(role)
   if (!normalizedRole) return false
+  const comparablePathname = normalizePathname(pathname)
 
-  if (String(pathname || '').startsWith('/prontuario')) {
+  if (String(comparablePathname || '').startsWith('/prontuario')) {
     return ROLE_CAPABILITIES[normalizedRole]?.canViewMedicalRecords === true
   }
 
@@ -220,8 +221,8 @@ export function canAccess(role, pathname) {
   if (!Array.isArray(allowed)) return false
   const exactRoutes = ROLE_EXACT_ROUTES[normalizedRole] || []
   return allowed.some((route) => {
-    if (exactRoutes.includes(route)) return pathname === route
-    return pathname === route || pathname.startsWith(route + '/')
+    if (exactRoutes.includes(route)) return comparablePathname === route
+    return comparablePathname === route || comparablePathname.startsWith(route + '/')
   })
 }
 
@@ -244,6 +245,16 @@ function normalizeRoleKey(role) {
     .trim()
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '')
+}
+
+function normalizePathname(pathname) {
+  const path = String(pathname || '')
+
+  try {
+    return decodeURIComponent(path)
+  } catch {
+    return path
+  }
 }
 
 // Rótulos amigáveis para cada role

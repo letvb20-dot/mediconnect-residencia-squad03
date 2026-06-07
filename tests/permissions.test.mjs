@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
+import {
+  COMMUNICATION_CHANNEL_KEYS,
+  COMMUNICATION_TAB_KEYS,
+  getCommunicationAccess,
+} from '../src/config/communicationAccess.js'
 import { canAccess, hasCapability, normalizeRole, ROLE_NAV_ITEMS } from '../src/config/permissions.js'
 
 test('normaliza aliases de perfis conhecidos', () => {
@@ -48,10 +53,34 @@ test('paciente acessa agendamento, relatorios clinicos, configuracoes e perfil',
   assert.equal(canAccess('paciente', '/pacientes'), false)
   assert.equal(canAccess('paciente', '/relatorios'), false)
   assert.equal(canAccess('paciente', '/comunicacao'), false)
+  assert.equal(ROLE_NAV_ITEMS.paciente.some((item) => item.path === '/comunicacao'), false)
+})
+
+test('perfis internos acessam comunicacao completa, exceto paciente', () => {
+  for (const role of ['admin', 'gestor', 'medico', 'secretaria']) {
+    const access = getCommunicationAccess(role)
+
+    assert.equal(canAccess(role, '/comunicacao'), true)
+    assert.equal(ROLE_NAV_ITEMS[role].some((item) => item.path === '/comunicacao'), true)
+    assert.equal(access.canAccessModule, true)
+    assert.deepEqual(access.channelKeys, COMMUNICATION_CHANNEL_KEYS)
+    assert.deepEqual(access.tabKeys, COMMUNICATION_TAB_KEYS)
+  }
+
+  const patientAccess = getCommunicationAccess('paciente')
+  assert.equal(patientAccess.canAccessModule, false)
+  assert.deepEqual(patientAccess.channelKeys, [])
+  assert.deepEqual(patientAccess.tabKeys, [])
 })
 
 test('roles administrativos mantem capacidades criticas', () => {
   assert.equal(hasCapability('admin', 'manageUsers'), true)
   assert.equal(hasCapability('gestor', 'hardDeletePatients'), true)
   assert.equal(hasCapability('medico', 'hardDeletePatients'), false)
+})
+
+test('roles administrativos acessam usuarios com alias acentuado', () => {
+  assert.equal(canAccess('admin', '/usuários'), true)
+  assert.equal(canAccess('gestor', '/usu%C3%A1rios'), true)
+  assert.equal(canAccess('medico', '/usuários'), false)
 })

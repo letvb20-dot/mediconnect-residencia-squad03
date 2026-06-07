@@ -9,7 +9,6 @@ export function HomePage({ navigate, profile, role, user }) {
   const [overview, setOverview] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [isUsersOpen, setIsUsersOpen] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -45,9 +44,8 @@ export function HomePage({ navigate, profile, role, user }) {
   const canManageUsers = hasCapability(role, 'manageUsers')
 
   return (
-    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-8 text-text-body">
-      <div className="min-w-0 space-y-8">
-        <section className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+    <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-6 text-text-body">
+      <section className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-[32px] font-bold leading-8 tracking-[-0.02em] text-text-heading">
             Visão Geral da Clínica
@@ -64,14 +62,11 @@ export function HomePage({ navigate, profile, role, user }) {
         </div>
       ) : null}
 
-        <section className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+      <section className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         {metrics.map((metric) => (
           <MetricCard key={metric.label} metric={metric} />
         ))}
-      </section>
-
-        <section className="grid items-start gap-6 xl:grid-cols-[1.45fr_1fr]">
-        <div className="self-start rounded-2xl border border-border-default-v2 bg-surface-card p-6 shadow-card">
+        <div className="self-start rounded-2xl border border-border-default-v2 bg-surface-card p-6 shadow-card md:col-span-2 lg:col-span-2">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-4">
               <div className="grid size-12 shrink-0 place-items-center rounded-lg bg-gradient-to-b from-[#4f93f7] to-[#3b82f6] text-white shadow-[0_2px_8px_rgba(59,130,246,0.3)]">
@@ -94,7 +89,7 @@ export function HomePage({ navigate, profile, role, user }) {
           </div>
         </div>
 
-        <div className="grid gap-6">
+        <div className="grid gap-6 md:col-span-2 lg:col-span-1">
           <div className="flex min-h-[246px] flex-col rounded-2xl border border-border-default-v2 bg-surface-card p-6 shadow-card">
             <h2 className="text-base font-bold text-text-heading">Pacientes de hoje</h2>
             <div className="mt-5 grid flex-1 content-start gap-3">
@@ -138,43 +133,24 @@ export function HomePage({ navigate, profile, role, user }) {
             </button>
           </div>
         </div>
-      </section>
 
-      </div>
-      {canManageUsers ? (
-        <section className="flex flex-col gap-4">
+        {canManageUsers ? (
+        <section className="rounded-2xl border border-border-default-v2 bg-surface-card shadow-card md:col-span-2 lg:col-span-3">
           <button
-            className="group flex w-full items-center justify-between rounded-2xl border border-border-default-v2 bg-surface-card p-6 shadow-card transition-all hover:border-accent-primary focus:outline-none"
-            onClick={() => setIsUsersOpen(!isUsersOpen)}
+            className="group flex w-full flex-col gap-4 p-6 text-left transition hover:bg-surface-card-hover focus:outline-none md:flex-row md:items-center md:justify-between"
+            onClick={() => navigate('/usuários')}
             type="button"
           >
             <h2 className="text-base font-bold text-text-heading">Usuários do Sistema</h2>
-            <svg
-              className={`size-5 text-text-muted-v2 transition-transform duration-300 group-hover:text-accent-primary ${isUsersOpen ? 'rotate-180' : ''}`}
-              fill="none"
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              viewBox="0 0 24 24"
-            >
-              <path d="m6 9 6 6 6-6" />
-            </svg>
+            <span className="inline-flex h-10 items-center justify-center rounded-lg border border-border-default-v2 bg-surface-card-hover px-4 text-sm font-semibold text-text-heading transition group-hover:border-accent-primary group-hover:text-accent-primary">
+              Ver usuários
+            </span>
           </button>
           
-          <div
-            className={`grid transition-all duration-300 ease-in-out ${
-              isUsersOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
-            }`}
-          >
-            <div className="overflow-hidden">
-              <div className="rounded-2xl border border-border-default-v2 bg-surface-card p-6 shadow-card">
-                <UsersPage embedded hideHeader navigate={navigate} role={role} />
-              </div>
-            </div>
-          </div>
+          <UsersPage embedded hideHeader navigate={navigate} role={role} surfaceless />
         </section>
       ) : null}
+      </section>
     </div>
   )
 }

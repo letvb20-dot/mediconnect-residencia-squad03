@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { StethoscopeIcon } from '../components/Brand.jsx'
-import { normalizeRole } from '../config/permissions.js'
+import { getCommunicationAccess } from '../config/communicationAccess.js'
 import { communicationRepository } from '../repositories/communicationRepository.js'
 import { notificationRepository } from '../repositories/notificationRepository.js'
 import { patientRepository } from '../repositories/patientRepository.js'
@@ -124,6 +124,13 @@ const emptyCampaign = {
   recurrence: 'none',
 }
 
+const tabLabels = {
+  historico: 'Historico',
+  templates: 'Templates',
+  campanha: 'Campanhas',
+  gerenciamento: 'Gerenciamento',
+}
+
 const cardClass = 'rounded-2xl border border-border-default-v2 bg-surface-card shadow-sm'
 const inputClass =
   'h-10 w-full rounded-sm border border-border-default-v2 bg-surface-page px-3 text-sm text-text-heading outline-none transition placeholder:text-text-muted-v2 focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20'
@@ -132,12 +139,10 @@ const textareaClass =
 const labelClass = 'text-xs font-semibold uppercase tracking-[0.08em] text-text-muted-v2'
 
 export function MessagesPage({ role }) {
-  const normalizedRole = normalizeRole(role)
-  const isSecretary = normalizedRole === 'secretaria'
-  const allowedChannelKeys = useMemo(
-    () => (isSecretary ? ['whatsapp', 'sms'] : Object.keys(channels)),
-    [isSecretary],
-  )
+  const communicationAccess = useMemo(() => getCommunicationAccess(role), [role])
+  const canAccessModule = communicationAccess.canAccessModule
+  const allowedChannelKeys = communicationAccess.channelKeys
+  const communicationTabs = communicationAccess.tabKeys.map((key) => [key, tabLabels[key]])
   const [messages, setMessages] = useState([])
   const [templates, setTemplates] = useState([])
   const [patients, setPatients] = useState([])
@@ -181,6 +186,12 @@ export function MessagesPage({ role }) {
   useEffect(() => {
     let active = true
 
+    if (!canAccessModule) {
+      return () => {
+        active = false
+      }
+    }
+
     Promise.all([
       patientRepository.getDirectoryRows().catch(() => []),
       communicationRepository.getInitialMessages().catch(() => []),
@@ -206,7 +217,7 @@ export function MessagesPage({ role }) {
     return () => {
       active = false
     }
-  }, [])
+  }, [canAccessModule])
 
   useEffect(() => {
     saveStoredCampaigns(campaignHistory)
@@ -465,6 +476,14 @@ export function MessagesPage({ role }) {
     return { channel, patient, response: '', status: 'pendente', template }
   }
 
+  if (!canAccessModule) {
+    return (
+      <div className={`${cardClass} mx-auto max-w-3xl p-8 text-center text-sm text-text-muted-v2`}>
+        Sem acesso ao modulo de comunicacao.
+      </div>
+    )
+  }
+
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
@@ -473,16 +492,14 @@ export function MessagesPage({ role }) {
         </div>
 
         <div className="flex flex-wrap gap-3">
-          {!isSecretary ? (
-            <button
-              className="inline-flex h-12 items-center gap-2 rounded-sm border border-border-default-v2 bg-surface-card px-4 text-sm font-semibold text-text-heading transition hover:bg-surface-card-hover"
-              onClick={() => openCampaignModal()}
-              type="button"
-            >
-              <CommIcon className="size-4" name="send" />
-              Nova campanha
-            </button>
-          ) : null}
+          <button
+            className="inline-flex h-12 items-center gap-2 rounded-sm border border-border-default-v2 bg-surface-card px-4 text-sm font-semibold text-text-heading transition hover:bg-surface-card-hover"
+            onClick={() => openCampaignModal()}
+            type="button"
+          >
+            <CommIcon className="size-4" name="send" />
+            Nova campanha
+          </button>
           <button
             className="inline-flex h-12 items-center gap-2 rounded-sm bg-[#3b82f6] px-4 text-sm font-semibold text-white transition hover:bg-[#2563eb]"
             onClick={() => setComposerOpen(true)}
@@ -512,10 +529,7 @@ export function MessagesPage({ role }) {
       </div>
 
       <div className="flex gap-4 border-b border-border-default-v2">
-        {[
-          ['historico', 'Historico'],
-          ...(!isSecretary ? [['templates', 'Templates'], ['campanha', 'Campanhas'], ['gerenciamento', 'Gerenciamento']] : []),
-        ].map(([key, label]) => (
+        {communicationTabs.map(([key, label]) => (
           <button
             className={`border-b-2 px-2 pb-3 text-sm font-semibold transition ${
               activeTab === key

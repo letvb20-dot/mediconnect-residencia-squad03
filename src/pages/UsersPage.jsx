@@ -43,7 +43,7 @@ const initialUserForm = {
   specialty: '',
 }
 
-export function UsersPage({ embedded = false, embeddedHeaderOnly = false, hideHeader = false, navigate, role: currentRole }) {
+export function UsersPage({ embedded = false, embeddedHeaderOnly = false, hideHeader = false, navigate, role: currentRole, surfaceless = false }) {
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -64,6 +64,9 @@ export function UsersPage({ embedded = false, embeddedHeaderOnly = false, hideHe
   const isDoctorForm = normalizeRole(form.role) === 'medico'
   const filterableRoles = normalizedRole === 'admin' ? ADMIN_CREATABLE_ROLES : GESTOR_CREATABLE_ROLES
   const pageSize = embedded ? 5 : USERS_PER_PAGE
+  const tableShellClass = surfaceless
+    ? 'overflow-hidden border-t border-border-default-v2'
+    : 'rounded-2xl border border-border-default-v2 bg-surface-card shadow-sm'
   const filteredUsers = users.filter((user) => {
     const query = normalizeSearch(search)
     const matchesSearch =
@@ -268,7 +271,7 @@ export function UsersPage({ embedded = false, embeddedHeaderOnly = false, hideHe
       ) : error ? (
         <p className="py-10 text-center text-sm text-red-400">Erro ao carregar usuários: {error}</p>
       ) : (
-        <div className="rounded-2xl border border-border-default-v2 bg-surface-card shadow-sm">
+        <div className={tableShellClass}>
           <div className="flex flex-col gap-3 border-b border-border-default-v2 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-semibold text-text-heading">Filtros</p>

@@ -1,0 +1,37 @@
+# ────────────────────────────────────────────────────────────
+# MediConnect ML Engine — Python dependencies
+# Python 3.11+
+# ────────────────────────────────────────────────────────────
+
+# Web framework
+fastapi==0.111.1
+uvicorn[standard]==0.30.1
+
+# ML & Data Science
+scikit-learn==1.5.0
+xgboost==2.0.3
+imbalanced-learn==0.12.3
+pandas==2.2.2
+numpy==1.26.4
+joblib==1.4.2
+
+# Database
+psycopg2-binary==2.9.9
+sqlalchemy==2.0.31
+
+# Scheduling
+apscheduler==3.10.4
+
+# External APIs & utilities
+httpx==0.27.0        # async HTTP (weather API)
+holidays==0.50        # feriados brasileiros
+geopy==2.4.1          # geocoding CEP → coords (fallback)
+python-dotenv==1.0.1
+
+# Testing
+pytest==8.2.2
+pytest-asyncio==0.23.7
+httpx==0.27.0         # TestClient async
+
+# Optional monitoring
+loguru==0.7.2

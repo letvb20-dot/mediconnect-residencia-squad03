@@ -8,6 +8,10 @@ import { patientRepository } from '../repositories/patientRepository.js'
 import { translateErrorMessage } from '../repositories/repositoryUtils.js'
 import { sanitizePlainText } from '../utils/inputSanitizers.js'
 import { isCommunicationEligiblePatient } from '../utils/communicationEligibility.js'
+import { appointmentRepository } from '../repositories/appointmentRepository.js'
+import { professionalRepository } from '../repositories/professionalRepository.js'
+import { getCommunicationSettings } from '../utils/communicationSettings.js'
+import { formatLocalDateInput } from '../utils/agendaDate.js'
 
 const channels = {
   whatsapp: { label: 'WhatsApp', className: 'bg-emerald-500/20 text-emerald-400', icon: 'message' },
@@ -129,6 +133,7 @@ const tabLabels = {
   templates: 'Templates',
   campanha: 'Campanhas',
   gerenciamento: 'Gerenciamento',
+  lembretes: 'Lembretes',
 }
 
 const cardClass = 'rounded-2xl border border-border-default-v2 bg-surface-card shadow-sm'
@@ -583,6 +588,12 @@ export function MessagesPage({ role }) {
           onResendCampaign={openCampaignModal}
           optedOutCount={optedOutCount}
           totalPatients={patientOptions.length}
+        />
+      ) : null}
+
+      {activeTab === 'lembretes' ? (
+        <RemindersTab
+          patients={patientOptions}
         />
       ) : null}
 
@@ -1461,5 +1472,282 @@ function CommIcon({ className = 'size-4', name }) {
     <svg {...common}>
       <path d="M3 12h4l2-5 4 10 2-5h6" />
     </svg>
+  )
+}
+
+function RemindersTab({ patients }) {
+  const [appointments, setAppointments] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [professionals, setProfessionals] = useState([])
+  const [sentReminders, setSentReminders] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('mediconnect.sent_reminders.v1') || '{}')
+    } catch {
+      return {}
+    }
+  })
+  const [sentConfirmations, setSentConfirmations] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('mediconnect.sent_confirmations.v1') || '{}')
+    } catch {
+      return {}
+    }
+  })
+  const [settings] = useState(() => getCommunicationSettings())
+
+  useEffect(() => {
+    let active = true
+    async function loadData() {
+      try {
+        const [appts, profs] = await Promise.all([
+          appointmentRepository.getAll(),
+          professionalRepository.getAll().catch(() => [])
+        ])
+        if (!active) return
+        setProfessionals(profs)
+
+        // Filter appointments for today and tomorrow
+        const todayStr = formatLocalDateInput(new Date())
+        const tomorrow = new Date()
+        tomorrow.setDate(tomorrow.getDate() + 1)
+        const tomorrowStr = formatLocalDateInput(tomorrow)
+
+        const filtered = appts.filter(appt => appt.date === todayStr || appt.date === tomorrowStr)
+        setAppointments(filtered)
+      } catch (err) {
+        console.error(err)
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    loadData()
+    return () => { active = false }
+  }, [])
+
+  async function handleSendReminder(appt) {
+    const patient = patients.find(p => String(p.id) === String(appt.patientId))
+    const prof = professionals.find(p => String(p.id) === String(appt.professionalId))
+    if (!patient) {
+      alert('Paciente não encontrado.')
+      return
+    }
+    if (!patient.phone) {
+      alert('Paciente não possui telefone cadastrado.')
+      return
+    }
+
+    try {
+      const content = settings.reminder_sms_template
+        .replace('{paciente}', patient.name)
+        .replace('{data}', formatLocalDatePtBr(appt.date))
+        .replace('{hora}', appt.time)
+        .replace('{medico}', prof?.name || appt.professional || 'Médico(a)')
+
+      await communicationRepository.sendSms({
+        patientId: patient.id,
+        patientName: patient.name,
+        phone: patient.phone,
+        content
+      })
+
+      const updated = {
+        ...sentReminders,
+        [appt.id]: {
+          sentAt: new Date().toISOString(),
+          status: 'Sucesso'
+        }
+      }
+      setSentReminders(updated)
+      localStorage.setItem('mediconnect.sent_reminders.v1', JSON.stringify(updated))
+      alert('Lembrete enviado com sucesso!')
+    } catch (err) {
+      const updated = {
+        ...sentReminders,
+        [appt.id]: {
+          sentAt: new Date().toISOString(),
+          status: 'Falha'
+        }
+      }
+      setSentReminders(updated)
+      localStorage.setItem('mediconnect.sent_reminders.v1', JSON.stringify(updated))
+      alert('Falha ao enviar lembrete: ' + err.message)
+    }
+  }
+
+  async function handleSendAllTomorrowReminders() {
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    const tomorrowStr = formatLocalDateInput(tomorrow)
+
+    const tomorrowAppts = appointments.filter(appt => appt.date === tomorrowStr)
+    const pendingAppts = tomorrowAppts.filter(appt => !sentReminders[appt.id] || sentReminders[appt.id].status === 'Falha')
+
+    if (pendingAppts.length === 0) {
+      alert('Não há lembretes pendentes para amanhã.')
+      return
+    }
+
+    let successCount = 0
+    let failCount = 0
+    const updatedReminders = { ...sentReminders }
+
+    for (const appt of pendingAppts) {
+      const patient = patients.find(p => String(p.id) === String(appt.patientId))
+      const prof = professionals.find(p => String(p.id) === String(appt.professionalId))
+      if (!patient || !patient.phone || !patient.communicationEligible) {
+        updatedReminders[appt.id] = {
+          sentAt: new Date().toISOString(),
+          status: 'Falha'
+        }
+        failCount++
+        continue
+      }
+
+      try {
+        const content = settings.reminder_sms_template
+          .replace('{paciente}', patient.name)
+          .replace('{data}', formatLocalDatePtBr(appt.date))
+          .replace('{hora}', appt.time)
+          .replace('{medico}', prof?.name || appt.professional || 'Médico(a)')
+
+        await communicationRepository.sendSms({
+          patientId: patient.id,
+          patientName: patient.name,
+          phone: patient.phone,
+          content
+        })
+
+        updatedReminders[appt.id] = {
+          sentAt: new Date().toISOString(),
+          status: 'Sucesso'
+        }
+        successCount++
+      } catch (err) {
+        updatedReminders[appt.id] = {
+          sentAt: new Date().toISOString(),
+          status: 'Falha'
+        }
+        failCount++
+      }
+    }
+
+    setSentReminders(updatedReminders)
+    localStorage.setItem('mediconnect.sent_reminders.v1', JSON.stringify(updatedReminders))
+
+    alert(`Disparo concluído: ${successCount} enviados com sucesso, ${failCount} falhas.`)
+  }
+
+  function formatLocalDatePtBr(dateStr) {
+    if (!dateStr) return ''
+    const parts = dateStr.split('-')
+    if (parts.length !== 3) return dateStr
+    return `${parts[2]}/${parts[1]}/${parts[0]}`
+  }
+
+  if (loading) {
+    return <p className="text-center text-sm text-text-muted-v2 py-8">Carregando consultas...</p>
+  }
+
+  return (
+    <section className="space-y-6" aria-label="Gerenciamento de Lembretes">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-text-heading">Controle de Lembretes SMS</h2>
+          <p className="text-xs text-text-muted-v2">Visualização de consultas para hoje e amanhã com status de envio de notificações.</p>
+        </div>
+        <button
+          className="inline-flex h-11 items-center gap-2 rounded-sm bg-[#3b82f6] px-4 text-sm font-semibold text-white transition hover:bg-[#2563eb]"
+          onClick={handleSendAllTomorrowReminders}
+          type="button"
+        >
+          <CommIcon className="size-4" name="send" />
+          Disparar Lembretes de Amanhã
+        </button>
+      </div>
+
+      <div className="rounded-xl border border-border-default-v2 bg-surface-inset p-4">
+        <h3 className="text-sm font-bold text-text-heading mb-2">Template Atual do Lembrete</h3>
+        <p className="text-xs text-text-muted-v2 mb-2">Configure este template nas configurações de Notificações.</p>
+        <div className="rounded-lg bg-surface-page p-3 text-sm text-text-body border border-border-default-v2">
+          {settings.reminder_sms_template}
+        </div>
+      </div>
+
+      <div className="overflow-x-auto rounded-sm border border-border-default-v2">
+        <table className="w-full min-w-[920px] text-left text-sm">
+          <thead className="bg-surface-page text-xs font-semibold uppercase tracking-[0.02em] text-text-body">
+            <tr>
+              <th className="px-5 py-4">Data/Horário</th>
+              <th className="px-5 py-4">Paciente</th>
+              <th className="px-5 py-4">Profissional</th>
+              <th className="px-5 py-4">Confirmação (Imediata)</th>
+              <th className="px-5 py-4">Lembrete (24h)</th>
+              <th className="px-5 py-4 text-right">Ações</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border-default-v2 bg-surface-card">
+            {appointments.map((appt) => {
+              const reminder = sentReminders[appt.id]
+              const confirmation = sentConfirmations[appt.id]
+              const patient = patients.find(p => String(p.id) === String(appt.patientId))
+
+              return (
+                <tr className="transition hover:bg-surface-card-hover" key={appt.id}>
+                  <td className="px-5 py-4">
+                    <span className="block font-semibold text-text-heading">{formatLocalDatePtBr(appt.date)}</span>
+                    <span className="text-xs text-text-muted-v2">{appt.time}</span>
+                  </td>
+                  <td className="px-5 py-4">
+                    <span className="block font-semibold text-text-heading">{appt.patient}</span>
+                    <span className="text-xs text-text-muted-v2">{patient?.phone || 'Sem telefone'}</span>
+                  </td>
+                  <td className="px-5 py-4 text-text-body">{appt.professional}</td>
+                  <td className="px-5 py-4">
+                    {confirmation ? (
+                      <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${
+                        confirmation.status === 'Sucesso' ? 'text-emerald-400' :
+                        confirmation.status === 'Parcial' ? 'text-amber-400' : 'text-red-400'
+                      }`}>
+                        {confirmation.status}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-text-muted-v2">Não registrado</span>
+                    )}
+                  </td>
+                  <td className="px-5 py-4">
+                    {reminder ? (
+                      <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${
+                        reminder.status === 'Sucesso' ? 'text-emerald-400' : 'text-red-400'
+                      }`}>
+                        {reminder.status}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-amber-400 font-semibold">Pendente</span>
+                    )}
+                  </td>
+                  <td className="px-5 py-4 text-right">
+                    <button
+                      className="h-8 rounded-sm bg-[#3b82f6]/10 px-3 text-xs font-semibold text-[#3b82f6] transition hover:bg-[#3b82f6]/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={!patient?.phone || (reminder && reminder.status === 'Sucesso')}
+                      onClick={() => handleSendReminder(appt)}
+                      type="button"
+                    >
+                      Enviar Lembrete
+                    </button>
+                  </td>
+                </tr>
+              )
+            })}
+            {appointments.length === 0 && (
+              <tr>
+                <td className="px-5 py-8 text-center text-sm text-text-muted-v2" colSpan={6}>
+                  Nenhuma consulta agendada para hoje ou amanhã.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
   )
 }

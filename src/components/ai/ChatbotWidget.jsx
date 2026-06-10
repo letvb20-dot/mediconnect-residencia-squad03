@@ -3,10 +3,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { aiClient } from '../../lib/ai/aiClient.js'
 import { AUTH_SESSION_CHANGED_EVENT, getAuthSession } from '../../config/api.js'
 import { normalizeRole } from '../../config/permissions.js'
+import { buildContext } from '../../utils/chatbotContext.js'
+import { createSpeechRecognizer, isVoiceCaptureAvailable } from '../../lib/ai/speechRecognition.js'
 import { appointmentRepository } from '../../repositories/appointmentRepository.js'
-import { profileRepository } from '../../repositories/profileRepository.js'
-import { waitlistRepository } from '../../repositories/waitlistRepository.js'
-import { isCancelledStatus } from '../../utils/appointmentMetrics.js'
 
 const SESSION_KEY_PREFIX = 'mediconnect.chatbot.history.v1'
 const ANON_SCOPE = 'anon'
@@ -99,7 +98,13 @@ export function ChatbotWidget({ navigate, role }) {
       const reply = await aiClient.chat({ messages: nextMessages, role, data })
       setMessages((current) => [
         ...current,
-        { role: 'assistant', content: reply.text, route: reply.route || '' },
+        {
+          role: 'assistant',
+          content: reply.text,
+          route: reply.route || '',
+          action: reply.action || null,
+          appointmentData: reply.appointmentData || null,
+        },
       ])
     } catch {
       setMessages((current) => [
@@ -110,6 +115,76 @@ export function ChatbotWidget({ navigate, role }) {
       setLoading(false)
     }
   }, [input, loading, messages, role])
+
+  const voiceAvailable = useMemo(() => isVoiceCaptureAvailable(), [])
+  const [recording, setRecording] = useState(false)
+  const recognizerRef = useRef(null)
+
+  const toggleRecording = useCallback(() => {
+    if (recording) {
+      if (recognizerRef.current) {
+        recognizerRef.current.stop()
+      }
+      setRecording(false)
+    } else {
+      const recognizer = createSpeechRecognizer()
+      recognizerRef.current = recognizer
+      recognizer.start({
+        onStart: () => {
+          setRecording(true)
+        },
+        onTranscript: (text) => {
+          setRecording(false)
+          if (text) {
+            setInput((prev) => (prev ? prev + ' ' + text : text))
+          }
+        },
+        onError: (err) => {
+          setRecording(false)
+          console.error('Erro de reconhecimento de voz:', err)
+          alert('Não foi possível capturar sua voz ou transcrever o áudio.')
+        }
+      })
+    }
+  }, [recording])
+
+  const handleExecuteAction = useCallback(async (message) => {
+    if (!message.appointmentData) return
+    setLoading(true)
+    try {
+      const { patientId, doctorId, scheduledAt } = message.appointmentData
+      const datePart = scheduledAt.split('T')[0]
+      const timePart = scheduledAt.split('T')[1]?.substring(0, 5) || '09:00'
+
+      const payload = {
+        patientId,
+        professionalId: doctorId,
+        date: datePart,
+        time: timePart,
+        status: 'Agendado',
+      }
+
+      await appointmentRepository.create(payload)
+
+      setMessages((current) =>
+        current.map((msg) =>
+          msg === message ? { ...msg, action: null, appointmentData: null } : msg
+        )
+      )
+
+      setMessages((current) => [
+        ...current,
+        { role: 'assistant', content: '✓ Consulta agendada com sucesso no MediConnect!' },
+      ])
+    } catch (error) {
+      setMessages((current) => [
+        ...current,
+        { role: 'assistant', content: `Falha ao realizar agendamento: ${error.message}` },
+      ])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
   function handleKeyDown(event) {
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -191,6 +266,16 @@ export function ChatbotWidget({ navigate, role }) {
                       Abrir →
                     </button>
                   ) : null}
+                  {message.action === 'confirm_appointment' && message.appointmentData ? (
+                    <button
+                      className="mt-2 flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                      disabled={loading}
+                      onClick={() => handleExecuteAction(message)}
+                      type="button"
+                    >
+                      ✓ Confirmar Agendamento
+                    </button>
+                  ) : null}
                 </div>
               </div>
             ))}
@@ -207,6 +292,21 @@ export function ChatbotWidget({ navigate, role }) {
               rows={1}
               value={input}
             />
+            {voiceAvailable ? (
+              <button
+                className={`grid size-10 shrink-0 place-items-center rounded-lg transition disabled:opacity-50 ${
+                  recording
+                    ? 'bg-red-600 text-white animate-pulse'
+                    : 'bg-surface-inset border border-border-default-v2 text-text-muted-v2 hover:text-text-body'
+                }`}
+                disabled={loading}
+                onClick={toggleRecording}
+                type="button"
+                aria-label={recording ? 'Parar gravação' : 'Gravar voz'}
+              >
+                {recording ? <MicOffIcon /> : <MicIcon />}
+              </button>
+            ) : null}
             <button
               className="grid size-10 shrink-0 place-items-center rounded-lg bg-accent-primary text-white transition hover:bg-accent-hover disabled:opacity-50"
               disabled={loading || !input.trim()}
@@ -229,33 +329,6 @@ export function ChatbotWidget({ navigate, role }) {
       </button>
     </>
   )
-}
-
-async function buildContext(role) {
-  const normalizedRole = normalizeRole(role)
-  const data = {}
-
-  let doctorId = ''
-  if (normalizedRole === 'medico') {
-    const profile = await profileRepository.getCurrentUserProfile().catch(() => null)
-    doctorId = profile?.doctorId || ''
-  }
-
-  const appointments = await appointmentRepository
-    .getAll(doctorId ? { doctorId } : {})
-    .catch(() => [])
-
-  const today = formatToday()
-  data.appointmentsTotal = appointments.length
-  data.appointmentsToday = appointments.filter((appointment) => appointment.date === today && !isCancelledStatus(appointment.status)).length
-
-  const cancelled = appointments.filter((appointment) => isCancelledStatus(appointment.status)).length
-  data.cancelRate = appointments.length ? Math.round((cancelled / appointments.length) * 1000) / 10 : 0
-
-  const waitlist = waitlistRepository.getAll()
-  data.waitlistCount = waitlist.filter((entry) => entry.status === 'aguardando').length
-
-  return data
 }
 
 function readHistory(key) {
@@ -281,18 +354,27 @@ function resolveUserScope() {
   )
 }
 
-function formatToday() {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
 function ChatIcon() {
   return (
     <svg className="size-6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  )
+}
+
+function MicIcon() {
+  return (
+    <svg className="size-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+      <path d="M12 1v11m0 0a3.5 3.5 0 0 0 7 0V5.5m-7 6.5a3.5 3.5 0 0 1-7 0V5.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4m-4 0h8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function MicOffIcon() {
+  return (
+    <svg className="size-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+      <path d="M12 1a3.5 3.5 0 0 0-3.5 3.5v2.8m2.5 5.7A3.5 3.5 0 0 0 12 12M19 10v1a7 7 0 0 1-3.6 6.1m-3.4 1v4M8 22h8M1 1l22 22" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }

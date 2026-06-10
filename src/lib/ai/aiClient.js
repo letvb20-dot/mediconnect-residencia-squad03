@@ -15,20 +15,44 @@ export const aiClient = {
     return Boolean(API_KEY)
   },
 
-  // Conversa do chatbot. Retorna { text, route? }.
+  // Conversa do chatbot. Retorna { text, route?, action?, appointmentData? }.
   async chat({ messages = [], role, data = {} } = {}) {
     const local = runChatEngine({ messages, role, data })
 
-    if (!API_KEY) return local
+    if (local.matched || !API_KEY) return local
 
     try {
       const system =
-        `Você é o assistente do MediConnect, um sistema de gestão de clínica. ` +
-        `O usuário tem o perfil "${role}". Responda em português do Brasil, de forma curta e objetiva. ` +
-        `Use estes dados de contexto quando úteis: ${JSON.stringify(data).slice(0, 4000)}. ` +
-        `Não invente dados que não estejam no contexto.`
-      const text = await callGemini({ system, messages })
-      return { text, route: local.route }
+        `Você é o assistente do MediConnect, um sistema de gestão de clínica.\n` +
+        `O usuário tem o perfil "${role}". Responda em português do Brasil, de forma curta e objetiva.\n` +
+        `Use estes dados de contexto quando úteis: ${JSON.stringify(data).slice(0, 4000)}.\n` +
+        `Não invente dados que não estejam no contexto.\n\n` +
+        `Sua resposta deve ser obrigatoriamente um JSON válido contendo as seguintes chaves:\n` +
+        `- "text": A resposta de texto curta e amigável para o usuário.\n` +
+        `- "action": Uma string indicando uma ação a ser realizada, ou null. Ação suportada: "confirm_appointment" (somente quando todos os dados obrigatórios para agendamento estiverem preenchidos e forem válidos).\n` +
+        `- "appointmentData": Um objeto com os dados da consulta ou null. Se action for "confirm_appointment", este objeto deve conter: "patientId" (string), "doctorId" (string), "scheduledAt" (data/hora ISO string formatada no fuso local/UTC YYYY-MM-DDTHH:mm:ss).\n\n` +
+        `Regras importantes:\n` +
+        `1. Se o perfil do usuário for 'paciente', o patientId do agendamento deve ser obrigatoriamente o ID do próprio paciente (fornecido em data.patients[0].id). Se ele tentar agendar para outra pessoa, informe no "text" que ele só pode agendar consultas para si mesmo.\n` +
+        `2. Se o usuário pedir para agendar mas faltar alguma informação (como médico, paciente, data ou hora), ou se a informação for ambígua, peça os dados restantes no campo "text", deixe "action" como null e "appointmentData" como null.\n` +
+        `3. Se houver mais de um paciente ou médico com o mesmo nome na pesquisa, peça para o usuário especificar.\n\n` +
+        `Exemplo de resposta de confirmação de agendamento:\n` +
+        `{\n` +
+        `  "text": "Perfeito! Posso agendar a consulta de João Silva com o Dr. Pedro para amanhã às 14:00. Deseja confirmar?",\n` +
+        `  "action": "confirm_appointment",\n` +
+        `  "appointmentData": {\n` +
+        `    "patientId": "p-1",\n` +
+        `    "doctorId": "d-2",\n` +
+        `    "scheduledAt": "2026-06-10T14:00:00"\n` +
+        `  }\n` +
+        `}`
+      const text = await callGemini({ system, messages, responseMimeType: 'application/json' })
+      const parsed = safeParseJson(text) || {}
+      return {
+        text: parsed.text || text,
+        route: local.route,
+        action: parsed.action || null,
+        appointmentData: parsed.appointmentData || null,
+      }
     } catch {
       return local
     }
@@ -267,7 +291,12 @@ export const aiClient = {
   },
 }
 
-async function callGemini({ system, messages }) {
+async function callGemini({ system, messages, responseMimeType }) {
+  const generationConfig = { maxOutputTokens: 1024 }
+  if (responseMimeType) {
+    generationConfig.responseMimeType = responseMimeType
+  }
+
   const response = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(API_KEY)}`, {
     method: 'POST',
     headers: {
@@ -279,7 +308,7 @@ async function callGemini({ system, messages }) {
         role: message.role === 'assistant' || message.role === 'model' ? 'model' : 'user',
         parts: [{ text: String(message.content || message.text || '') }],
       })),
-      generationConfig: { maxOutputTokens: 1024 },
+      generationConfig,
     }),
   })
 
@@ -303,7 +332,8 @@ function safeParseJson(text) {
 
 function readEnv(name) {
   const env = import.meta.env ?? {}
-  return env[name] || ''
+  const processEnv = typeof process !== 'undefined' ? process.env : {}
+  return env[name] || processEnv[name] || ''
 }
 
 function blobToBase64(blob) {

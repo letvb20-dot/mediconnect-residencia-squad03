@@ -25,7 +25,7 @@ export const homeRepository = {
 
     const todayKey = formatDateKey(now)
     const todayAppointments = appointments
-      .filter((appointment) => appointment.date === todayKey)
+      .filter((appointment) => appointment.date === todayKey && !isCancelledStatus(appointment.status))
       .sort((a, b) => String(a.time || '').localeCompare(String(b.time || '')))
 
     const completedToday = todayAppointments.filter((appointment) => isCompletedStatus(appointment.status))

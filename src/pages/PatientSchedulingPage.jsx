@@ -161,9 +161,9 @@ export function PatientSchedulingPage({ navigate }) {
                   </span>
                   <span className="min-w-0">
                     <span className="block break-words text-base font-bold text-text-heading">{professional.name}</span>
-                    <span className="mt-1 block break-words text-sm text-text-muted-v2">{getSpecialty(professional) || 'Especialidade nao informada'}</span>
+                    <span className="mt-1 block break-words text-sm text-text-muted-v2">{getSpecialty(professional) || 'Especialidade não informada'}</span>
                     <span className="mt-3 inline-flex rounded-full bg-[#3b82f6]/15 px-2.5 py-1 text-xs font-semibold text-[var(--professional-blue-text)]">
-                      {professional.crm ? `CRM ${professional.crm}${professional.crm_uf ? `-${professional.crm_uf}` : ''}` : 'CRM nao informado'}
+                      {professional.crm ? `CRM ${professional.crm}${professional.crm_uf ? `-${professional.crm_uf}` : ''}` : 'CRM não informado'}
                     </span>
                   </span>
                 </span>
@@ -357,7 +357,7 @@ export function PatientSchedulingDetailPage({ navigate, professionalId }) {
   if (!professional) {
     return (
       <div className="mx-auto max-w-3xl rounded-2xl border border-border-default-v2 bg-surface-card p-8 text-center text-text-heading">
-        <h1 className="text-xl font-bold">Profissional nao encontrado</h1>
+        <h1 className="text-xl font-bold">Profissional não encontrado</h1>
         <button
           className="mt-6 rounded-lg bg-accent-primary px-5 py-2.5 text-sm font-medium text-white transition hover:bg-accent-hover"
           onClick={() => navigate('/agendamento')}
@@ -428,7 +428,7 @@ export function PatientSchedulingDetailPage({ navigate, professionalId }) {
     }
 
     if (!availableSlots.some((slot) => slot.time === payload.time)) {
-      setSubmitError('O horario selecionado nao esta mais disponivel. Escolha outro horario.')
+      setSubmitError('O horário selecionado não está mais disponível. Escolha outro horário.')
       return
     }
 
@@ -472,7 +472,7 @@ export function PatientSchedulingDetailPage({ navigate, professionalId }) {
           </button>
           <div>
             <h1 className="text-[32px] font-bold leading-8 tracking-[-0.02em] text-text-heading">{professional.name}</h1>
-            <p className="mt-1 text-sm text-text-muted-v2">{specialty || 'Especialidade nao informada'}</p>
+            <p className="mt-1 text-sm text-text-muted-v2">{specialty || 'Especialidade não informada'}</p>
           </div>
         </div>
         <button
@@ -499,13 +499,13 @@ export function PatientSchedulingDetailPage({ navigate, professionalId }) {
             </div>
             <div className="min-w-0">
               <p className="break-words text-xl font-bold text-text-heading">{professional.name}</p>
-              <p className="mt-1 break-words text-sm text-text-muted-v2">{specialty || 'Especialidade nao informada'}</p>
+              <p className="mt-1 break-words text-sm text-text-muted-v2">{specialty || 'Especialidade não informada'}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <span className="rounded-full bg-[#3b82f6]/15 px-3 py-1 text-xs font-bold text-[var(--professional-blue-text)]">
-                  {professional.crm ? `CRM ${professional.crm}${professional.crm_uf ? `-${professional.crm_uf}` : ''}` : 'CRM nao informado'}
+                  {professional.crm ? `CRM ${professional.crm}${professional.crm_uf ? `-${professional.crm_uf}` : ''}` : 'CRM não informado'}
                 </span>
                 <span className="rounded-full border border-[#60a5fa]/20 bg-[#3b82f6]/10 px-3 py-1 text-xs font-bold text-text-muted-v2">
-                  {professional.unit || 'Unidade nao informada'}
+                  {professional.unit || 'Unidade não informada'}
                 </span>
               </div>
             </div>
@@ -602,7 +602,7 @@ function PatientBookingModal({
                 className="h-11 rounded-md border border-border-default-v2 bg-surface-card px-3 text-sm text-text-muted-v2 outline-none"
                 disabled
                 readOnly
-                value={getPatientLabel(currentPatient) || 'Paciente nao vinculado'}
+                value={getPatientLabel(currentPatient) || 'Paciente não vinculado'}
               />
             </DarkField>
 
@@ -611,7 +611,7 @@ function PatientBookingModal({
                 className="h-11 rounded-md border border-border-default-v2 bg-surface-card px-3 text-sm text-text-muted-v2 outline-none"
                 disabled
                 readOnly
-                value={professional?.name || 'Medico nao informado'}
+                value={professional?.name || 'Médico não informado'}
               />
             </DarkField>
 

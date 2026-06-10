@@ -4,6 +4,7 @@ import { authRepository } from '../repositories/authRepository.js'
 import { patientRepository } from '../repositories/patientRepository.js'
 import { translateErrorMessage } from '../repositories/repositoryUtils.js'
 import { maskBrazilianPhone, maskCpf, sanitizePersonName } from '../utils/inputSanitizers.js'
+import { isEmailLike, isValidCpf, isValidPersonName, onlyDigits } from '../utils/brFormatters.js'
 
 import { StethoscopeIcon } from '../components/Brand.jsx'
 
@@ -250,14 +251,33 @@ export function RegisterPage({ navigate }) {
   async function handleSubmit(event) {
     event.preventDefault()
     setError('')
-    if (form.password.length < 6) {
-      setError('A senha deve ter pelo menos 6 caracteres.')
+
+    if (!isValidPersonName(form.full_name)) {
+      setError('Informe seu nome completo (apenas letras, sem números).')
+      return
+    }
+    if (!isEmailLike(form.email)) {
+      setError('Informe um e-mail válido.')
+      return
+    }
+    if (!isValidCpf(form.cpf)) {
+      setError('CPF inválido. Confira os dígitos digitados.')
+      return
+    }
+    const phoneDigits = onlyDigits(form.phone_mobile)
+    if (phoneDigits.length < 10 || phoneDigits.length > 11) {
+      setError('Informe um celular válido com DDD (10 ou 11 dígitos).')
+      return
+    }
+    if (!form.password || form.password.length < 8) {
+      setError('A senha precisa ter no mínimo 8 caracteres.')
       return
     }
     if (form.password !== form.confirm_password) {
       setError('A confirmação de senha não confere.')
       return
     }
+
     setLoading(true)
     try {
       await patientRepository.registerPublicWithPassword(form)
@@ -333,8 +353,9 @@ export function RegisterPage({ navigate }) {
             <input
               autoComplete="new-password"
               className={lightInputSimpleClass}
-              minLength={6}
+              minLength={8}
               onChange={(e) => updateField('password', e.target.value)}
+              placeholder="Mínimo 8 caracteres"
               required
               type="password"
               value={form.password}

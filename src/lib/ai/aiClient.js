@@ -206,6 +206,12 @@ export const aiClient = {
     })
 
     if (!response.ok) {
+      if (response.status === 429) {
+        const error = new Error('Limite de uso da IA atingido. Aguarde alguns minutos ou troque a chave do Gemini no .env.')
+        error.quotaExceeded = true
+        error.status = 429
+        throw error
+      }
       const detail = await response.text().catch(() => '')
       throw new Error(`Falha na transcrição (${response.status}): ${detail.slice(0, 200)}`)
     }

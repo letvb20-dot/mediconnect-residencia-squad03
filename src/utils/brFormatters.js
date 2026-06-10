@@ -39,3 +39,32 @@ export function isValidPersonName(value) {
   const name = String(value || '').trim()
   return name.length >= 3 && !isEmailLike(name) && /^[\p{L}\s]+$/u.test(name)
 }
+
+// Validação do dígito verificador do CPF (algoritmo oficial da Receita Federal).
+// Rejeita CPFs com formato inválido, sequências repetidas (00000000000, 11111111111...)
+// e qualquer combinação cujos dígitos verificadores não fechem.
+export function isValidCpf(value) {
+  const digits = onlyDigits(value)
+  if (digits.length !== 11) return false
+  if (/^(\d)\1{10}$/.test(digits)) return false // todos iguais
+
+  const calcDigit = (slice) => {
+    const length = slice.length + 1
+    let sum = 0
+    for (let i = 0; i < slice.length; i += 1) {
+      sum += Number(slice[i]) * (length - i)
+    }
+    const mod = (sum * 10) % 11
+    return mod === 10 ? 0 : mod
+  }
+
+  const firstNine = digits.slice(0, 9)
+  const firstCheck = calcDigit(firstNine)
+  if (firstCheck !== Number(digits[9])) return false
+
+  const firstTen = digits.slice(0, 10)
+  const secondCheck = calcDigit(firstTen)
+  if (secondCheck !== Number(digits[10])) return false
+
+  return true
+}

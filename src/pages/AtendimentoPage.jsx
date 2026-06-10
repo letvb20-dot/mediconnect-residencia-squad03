@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RichTextEditor } from '../components/RichTextEditor.jsx'
 import { aiClient } from '../lib/ai/aiClient.js'
 import { heygenClient } from '../lib/ai/heygenClient.js'
+import { buildMediConnectLaudoHtml } from '../lib/medical/laudoTemplate.js'
 import { appointmentRepository } from '../repositories/appointmentRepository.js'
 import { patientRepository } from '../repositories/patientRepository.js'
 import { professionalRepository } from '../repositories/professionalRepository.js'
@@ -40,83 +41,8 @@ const DEMO_PATIENT = {
   age: null, // calculado em runtime
 }
 
-const CLINIC_FOOTER = 'MediConnect · Centro Médico Integrado · Av. Iguaçu, 1236 — Curitiba/PR · contato@mediconnect.com.br'
-
 function todayIso() {
   return formatLocalDateInput(new Date())
-}
-
-function formatBrDate(value) {
-  if (!value) return '___/___/______'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return String(value)
-  const dd = String(date.getDate()).padStart(2, '0')
-  const mm = String(date.getMonth() + 1).padStart(2, '0')
-  const yyyy = date.getFullYear()
-  return `${dd}/${mm}/${yyyy}`
-}
-
-function escapeHtml(value) {
-  return String(value || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-}
-
-function paragraphsFromText(text) {
-  return String(text || '')
-    .split(/\n{2,}|\r\n{2,}/)
-    .map((chunk) => chunk.trim())
-    .filter(Boolean)
-    .map((chunk) => `<p style="text-align: justify">${escapeHtml(chunk).replace(/\n/g, '<br>')}</p>`)
-    .join('')
-}
-
-function buildMediConnectLaudoHtml({ patient, appointment, doctor, draft, transcript }) {
-  const patientName = (patient?.name || appointment?.patient || 'Paciente não informado').toUpperCase()
-  const patientDoc = patient?.cpf || patient?.document || 'Não informado'
-  const patientBirth = formatBrDate(patient?.birthDate || patient?.birth_date)
-  const visitDate = formatBrDate(appointment?.date || todayIso())
-  const visitTime = appointment?.time || new Date().toTimeString().slice(0, 5)
-  const exam = draft?.exam || appointment?.type || 'Consulta médica'
-  const diagnosis = draft?.diagnosis || ''
-  const conclusion = draft?.conclusion || ''
-  const cid = draft?.cidCode || ''
-  const doctorName = doctor?.name || 'Médico Responsável'
-  const doctorCrm = doctor?.crm ? `CRM ${doctor.crm}` : ''
-  const doctorSpecialty = doctor?.specialty || ''
-
-  const findingsSource = [diagnosis, conclusion, transcript].filter(Boolean).join('\n\n').trim()
-  const findingsBlock = findingsSource
-    ? paragraphsFromText(findingsSource)
-    : '<p style="text-align: justify">Paciente avaliado conforme queixa apresentada. Conduta orientada após exame clínico.</p>'
-
-  return [
-    '<h2 style="text-align: center"><strong>MEDICONNECT</strong></h2>',
-    '<p style="text-align: center"><em>Centro Médico Integrado</em></p>',
-    '<p style="text-align: center">&nbsp;</p>',
-    '<h2 style="text-align: center"><strong>LAUDO MÉDICO</strong></h2>',
-    '<p style="text-align: center">&nbsp;</p>',
-    `<p style="text-align: justify">DECLARO PARA OS DEVIDOS FINS, A PEDIDO, QUE O(A) SR.(A) <u><strong>${escapeHtml(patientName)}</strong></u></p>`,
-    `<p style="text-align: justify"><strong>DOCUMENTO:</strong> ${escapeHtml(patientDoc)} &nbsp;&nbsp; <strong>NASC:</strong> ${escapeHtml(patientBirth)}</p>`,
-    `<p style="text-align: justify"><strong>FOI ATENDIDO(A) NO DIA ${escapeHtml(visitDate)}</strong>, às <strong>${escapeHtml(visitTime)}</strong>.</p>`,
-    `<p style="text-align: justify"><strong>Motivo / Exame:</strong> ${escapeHtml(exam)}</p>`,
-    '<p>&nbsp;</p>',
-    findingsBlock,
-    cid ? `<p style="text-align: justify"><strong>CID ${escapeHtml(cid)}</strong></p>` : '',
-    '<p>&nbsp;</p>',
-    `<p style="text-align: justify"><strong>MÉDICO RESPONSÁVEL:</strong> ${escapeHtml(doctorName)}${doctorSpecialty ? ` — ${escapeHtml(doctorSpecialty)}` : ''}${doctorCrm ? ` — ${escapeHtml(doctorCrm)}` : ''}</p>`,
-    '<p>&nbsp;</p>',
-    '<p>&nbsp;</p>',
-    '<p style="text-align: center">_______________________________________</p>',
-    `<p style="text-align: center"><em>${escapeHtml(doctorName)}</em></p>`,
-    doctorCrm ? `<p style="text-align: center"><em>${escapeHtml(doctorCrm)}</em></p>` : '',
-    '<p>&nbsp;</p>',
-    '<hr>',
-    `<p style="text-align: center"><em>${escapeHtml(CLINIC_FOOTER)}</em></p>`,
-  ].filter(Boolean).join('\n')
 }
 
 async function resolveDoctorIdForViewer() {
@@ -375,6 +301,9 @@ export function ConsultaPage({ navigate, appointmentId }) {
   const [recordingError, setRecordingError] = useState('')
   const [elapsedMs, setElapsedMs] = useState(0)
   const [transcript, setTranscript] = useState('')
+  const [manualMode, setManualMode] = useState(false)
+  const [manualText, setManualText] = useState('')
+  const [manualProcessing, setManualProcessing] = useState(false)
 
   const [exam, setExam] = useState('')
   const [cidCode, setCidCode] = useState('')
@@ -567,8 +496,15 @@ export function ConsultaPage({ navigate, appointmentId }) {
         }))
         setRecordingState('ready')
       } catch (transcribeError) {
-        setRecordingError(transcribeError?.message || 'Falha ao transcrever o áudio.')
+        const friendlyMsg = transcribeError?.quotaExceeded
+          ? 'Limite gratuito da IA atingido. Use a opção "Digitar resumo manualmente" abaixo para continuar sem perder a apresentação.'
+          : transcribeError?.message?.includes('429')
+            ? 'Limite gratuito da IA atingido. Use a opção "Digitar resumo manualmente" abaixo.'
+            : transcribeError?.message || 'Falha ao transcrever o áudio.'
+        setRecordingError(friendlyMsg)
         setRecordingState('error')
+        // Abre automaticamente o modo manual pra não bloquear a demo
+        setManualMode(true)
       }
     }
 
@@ -590,6 +526,44 @@ export function ConsultaPage({ navigate, appointmentId }) {
     }
   }, [])
 
+  // Modo manual: médico digita um resumo e a IA local monta o mini-laudo + letterhead.
+  // Funciona sem chamar nenhuma API externa (usa o motor heurístico de reportGenerator).
+  const handleManualSubmit = useCallback(async () => {
+    const text = manualText.trim()
+    if (!text) return
+    setManualProcessing(true)
+    setRecordingError('')
+    try {
+      const draft = await aiClient.generateReport({
+        patientName: patient?.name || appointment?.patient || '',
+        complaint: text,
+        exam: appointment?.type || 'Consulta',
+      })
+      const resolvedDraft = {
+        exam: draft?.exam || appointment?.type || 'Consulta',
+        cidCode: draft?.cidCode || '',
+        diagnosis: draft?.diagnosis || '',
+        conclusion: draft?.conclusion || '',
+      }
+      setExam(resolvedDraft.exam)
+      setCidCode(resolvedDraft.cidCode)
+      setDiagnosis(resolvedDraft.diagnosis)
+      setConclusion(resolvedDraft.conclusion)
+      setTranscript(text)
+      setContentHtml(buildMediConnectLaudoHtml({
+        patient,
+        appointment,
+        doctor,
+        draft: resolvedDraft,
+        transcript: text,
+      }))
+      setRecordingState('ready')
+      setManualMode(false)
+    } finally {
+      setManualProcessing(false)
+    }
+  }, [manualText, patient, appointment, doctor])
+
   const handleFinish = useCallback(async () => {
     if (!appointment) return
     if (!window.confirm('Marcar esta consulta como realizada?')) return
@@ -607,7 +581,7 @@ export function ConsultaPage({ navigate, appointmentId }) {
       })
       navigate('/atendimento')
     } catch (finishError) {
-      alert(finishError?.message || 'Erro ao finalizar a consulta.')
+      alert(translateErrorMessage(finishError?.message, 'Erro ao finalizar a consulta.'))
       setFinishing(false)
     }
   }, [appointment, navigate, isDemo])
@@ -857,15 +831,27 @@ export function ConsultaPage({ navigate, appointmentId }) {
               </div>
               <div className="flex flex-wrap gap-2">
                 {recordingState !== 'recording' ? (
-                  <button
-                    className="inline-flex h-11 items-center gap-2 rounded-md border border-accent-primary bg-accent-primary px-5 text-sm font-bold text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:border-border-default-v2 disabled:bg-surface-card-hover disabled:text-text-muted-v2"
-                    disabled={!recordingSupported || recordingState === 'transcribing'}
-                    onClick={startRecording}
-                    type="button"
-                  >
-                    <span className="size-2 rounded-full bg-current" />
-                    {recordingState === 'ready' || recordingState === 'error' ? 'Gravar novamente' : 'Começar'}
-                  </button>
+                  <>
+                    <button
+                      className="inline-flex h-11 items-center gap-2 rounded-md border border-accent-primary bg-accent-primary px-5 text-sm font-bold text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:border-border-default-v2 disabled:bg-surface-card-hover disabled:text-text-muted-v2"
+                      disabled={!recordingSupported || recordingState === 'transcribing'}
+                      onClick={startRecording}
+                      type="button"
+                    >
+                      <span className="size-2 rounded-full bg-current" />
+                      {recordingState === 'ready' || recordingState === 'error' ? 'Gravar novamente' : 'Começar'}
+                    </button>
+                    <button
+                      className="inline-flex h-11 items-center gap-2 rounded-md border border-border-default-v2 bg-surface-card-hover px-4 text-sm font-semibold text-text-body transition hover:bg-surface-card"
+                      onClick={() => setManualMode((value) => !value)}
+                      type="button"
+                    >
+                      <svg className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
+                        <path d="M12 20h9M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" />
+                      </svg>
+                      {manualMode ? 'Fechar resumo' : 'Digitar resumo'}
+                    </button>
+                  </>
                 ) : (
                   <button
                     className="inline-flex h-11 items-center gap-2 rounded-md border border-red-500/60 bg-red-600 px-5 text-sm font-bold text-white transition hover:bg-red-700"
@@ -886,7 +872,32 @@ export function ConsultaPage({ navigate, appointmentId }) {
               </p>
             ) : null}
             {recordingError ? (
-              <p className="mt-3 rounded-md border border-red-500/40 bg-red-950/20 px-3 py-2 text-xs text-red-200">{recordingError}</p>
+              <p className="mt-3 rounded-md border border-amber-500/40 bg-amber-950/20 px-3 py-2 text-xs text-amber-200">{recordingError}</p>
+            ) : null}
+            {manualMode ? (
+              <div className="mt-4 rounded-lg border border-accent-primary/30 bg-accent-primary/5 p-4">
+                <p className="text-sm font-semibold text-text-heading">Resumo manual da consulta</p>
+                <p className="mt-1 text-xs text-text-muted-v2">
+                  Descreva o atendimento em poucas linhas. A IA local monta o mini-laudo + letterhead automaticamente — não depende de nenhuma chave externa.
+                </p>
+                <textarea
+                  className="mt-3 min-h-32 w-full rounded-md border border-border-default-v2 bg-surface-card-hover px-3 py-2 text-sm leading-6 text-text-body outline-none transition focus:border-accent-primary focus:ring-2 focus:ring-accent-primary/20"
+                  onChange={(event) => setManualText(event.target.value)}
+                  placeholder="Ex.: paciente relata febre e dor de garganta há 3 dias, sem outros sintomas. Orientei hidratação e sintomáticos."
+                  value={manualText}
+                />
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <button
+                    className="inline-flex h-10 items-center gap-2 rounded-md border border-accent-primary bg-accent-primary px-4 text-sm font-semibold text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={!manualText.trim() || manualProcessing}
+                    onClick={handleManualSubmit}
+                    type="button"
+                  >
+                    {manualProcessing ? 'Montando laudo...' : 'Gerar mini-laudo a partir do texto'}
+                  </button>
+                  <span className="text-xs text-text-muted-v2">Sem custo de API · roda local</span>
+                </div>
+              </div>
             ) : null}
           </StepCard>
 

@@ -1,5 +1,6 @@
 import { apiConfig, getAuthenticatedHeaders, getAuthSession } from '../config/api.js'
 import { appointmentMapper } from '../mappers/appointmentMapper.js'
+import { appointmentNotesRepository } from './appointmentNotesRepository.js'
 import { getResponseError, normalizeItem } from './repositoryUtils.js'
 
 export const appointmentRepository = {
@@ -20,7 +21,14 @@ export const appointmentRepository = {
     if (!response.ok) throw new Error(await getResponseError(response, 'Erro ao buscar agendamentos.'))
 
     const data = await response.json()
-    return (Array.isArray(data) ? data : []).map(appointmentMapper.toUi)
+    const localNotes = appointmentNotesRepository.getAll()
+    return (Array.isArray(data) ? data : []).map((item) => {
+      const ui = appointmentMapper.toUi(item)
+      if (ui && ui.id && localNotes[String(ui.id)]) {
+        ui.notes = localNotes[String(ui.id)]
+      }
+      return ui
+    })
   },
 
   // POST /rest/v1/appointments
@@ -39,7 +47,12 @@ export const appointmentRepository = {
     }
 
     const data = await response.json()
-    return appointmentMapper.toUi(requireReturnedItem(data, 'Falha ao criar o agendamento. A API nao retornou confirmacao da alteracao.'))
+    const ui = appointmentMapper.toUi(requireReturnedItem(data, 'Falha ao criar o agendamento. A API nao retornou confirmacao da alteracao.'))
+    if (ui?.id && uiData?.notes) {
+      appointmentNotesRepository.set(ui.id, uiData.notes)
+      ui.notes = uiData.notes
+    }
+    return ui
   },
 
   // PATCH /rest/v1/appointments?id=eq.{id}
@@ -57,7 +70,12 @@ export const appointmentRepository = {
     }
 
     const data = await response.json()
-    return appointmentMapper.toUi(requireReturnedItem(data, 'Falha ao atualizar o agendamento. A API nao retornou confirmacao da alteracao.'))
+    const ui = appointmentMapper.toUi(requireReturnedItem(data, 'Falha ao atualizar o agendamento. A API nao retornou confirmacao da alteracao.'))
+    if (ui?.id && uiData?.notes !== undefined) {
+      appointmentNotesRepository.set(ui.id, uiData.notes)
+      ui.notes = uiData.notes || ui.notes
+    }
+    return ui
   },
 
   async cancel(id, uiData) {

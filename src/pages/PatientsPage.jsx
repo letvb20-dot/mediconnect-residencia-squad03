@@ -6,7 +6,7 @@ import { apiConfig } from '../config/api.js'
 import { hasCapability } from '../config/permissions.js'
 import { patientRepository } from '../repositories/patientRepository.js'
 import { translateErrorMessage } from '../repositories/repositoryUtils.js'
-import { isValidPersonName } from '../utils/brFormatters.js'
+import { isEmailLike, isValidCpf, isValidPersonName, onlyDigits } from '../utils/brFormatters.js'
 import { maskHeight, sanitizeFieldValue, sanitizePersonName } from '../utils/inputSanitizers.js'
 const ITEMS_PER_PAGE = 25
 
@@ -364,7 +364,7 @@ async function uploadPatientAttachments(patientId, files = []) {
     .map((result) => translateErrorMessage(result.reason?.message, 'Falha ao enviar anexo do paciente.'))
 
   if (failedUploads.length) {
-    throw new Error(`${failedUploads.length} anexo(s) nao puderam ser enviados. ${failedUploads[0]}`)
+    throw new Error(`${failedUploads.length} anexo(s) não puderam ser enviados. ${failedUploads[0]}`)
   }
 
   return results
@@ -668,7 +668,7 @@ async function uploadPatientAttachments(patientId, files = []) {
     .map((result) => translateErrorMessage(result.reason?.message, 'Falha ao enviar anexo do paciente.'))
 
   if (failedUploads.length) {
-    throw new Error(`${failedUploads.length} anexo(s) nao puderam ser enviados. ${failedUploads[0]}`)
+    throw new Error(`${failedUploads.length} anexo(s) não puderam ser enviados. ${failedUploads[0]}`)
   }
 
   return results
@@ -889,6 +889,23 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
         window.alert(`Preencha os campos obrigatórios: ${missingFields.join(', ')}.`)
         return
       }
+    }
+
+    // Validações de formato (rodam mesmo na edição quando o campo está preenchido)
+    if (formData.cpf && !isValidCpf(formData.cpf)) {
+      window.alert('CPF inválido. Confira os dígitos verificadores.')
+      return
+    }
+
+    if (formData.email && !isEmailLike(formData.email)) {
+      window.alert('Informe um e-mail válido.')
+      return
+    }
+
+    const phoneDigits = onlyDigits(formData.phone)
+    if (formData.phone && (phoneDigits.length < 10 || phoneDigits.length > 11)) {
+      window.alert('Informe um celular válido com DDD (10 ou 11 dígitos).')
+      return
     }
 
     onSave({
@@ -1279,7 +1296,7 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
               disabled={saving}
               type="submit"
             >
-              {saving ? 'Salvando...' : 'Salvar alteracoes'}
+              {saving ? 'Salvando...' : 'Salvar alterações'}
             </button>
           </div>
       </form>

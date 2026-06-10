@@ -66,9 +66,28 @@ export function sanitizeFieldValue(name, value, { allowEmail = false, allowPassw
   if (isCpfField(name)) return maskCpf(value)
   if (isPhoneField(name)) return maskBrazilianPhone(value)
   if (isCepField(name)) return maskCep(value)
+  if (isDateField(name)) return sanitizeDateValue(value)
   if (isNumericField(name)) return limitDigits(value, 11)
 
   return sanitizePlainText(value)
+}
+
+function isDateField(name) {
+  return /birth.?date|data.?nasc|date.?of.?birth|^date$/i.test(String(name || ''))
+}
+
+function sanitizeDateValue(value) {
+  // Mantém YYYY-MM-DD; aceita também DD/MM/YYYY e converte
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  // já está em YYYY-MM-DD
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (iso) return raw
+  // DD/MM/YYYY
+  const br = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+  if (br) return `${br[3]}-${br[2]}-${br[1]}`
+  // fallback: limpa, mas preserva dígitos, hifens e barras
+  return raw.replace(/[^\d\-/]/g, '').slice(0, 10)
 }
 
 function isEmailField(name) {

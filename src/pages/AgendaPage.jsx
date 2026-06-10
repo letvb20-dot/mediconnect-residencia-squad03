@@ -653,7 +653,7 @@ export function AgendaPage({ navigate, role }) {
             </button>
             <button
               className="h-10 rounded-sm border border-accent-primary bg-accent-primary px-4 text-sm font-semibold text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:border-border-default-v2 disabled:bg-surface-card-hover disabled:text-text-muted-v2"
-              disabled={!canCreateAppointment}
+              disabled={editingAppointment ? !agendaScope || agendaScope === 'patient' : !canCreateAppointment}
               type="submit"
             >
               {editingAppointment ? 'Salvar alterações' : 'Salvar'}

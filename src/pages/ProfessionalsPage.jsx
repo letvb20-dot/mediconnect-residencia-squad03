@@ -296,7 +296,7 @@ export function ProfessionalDetailPage({ navigate, professionalId, role, selfPro
 
     return (
       <div className="mx-auto max-w-3xl rounded-2xl border border-border-default-v2 bg-surface-card p-8 text-center text-text-heading">
-        <h1 className="text-xl font-bold">{selfProfile ? 'Perfil profissional nao encontrado' : 'Profissional nao encontrado'}</h1>
+        <h1 className="text-xl font-bold">{selfProfile ? 'Perfil profissional não encontrado' : 'Profissional não encontrado'}</h1>
         <button
           className="mt-6 rounded-lg bg-[#3b82f6] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#2563eb]"
           onClick={() => navigate(notFoundAction)}

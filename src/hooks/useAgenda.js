@@ -9,6 +9,7 @@ import { patientRepository } from '../repositories/patientRepository.js'
 import { professionalRepository } from '../repositories/professionalRepository.js'
 import { profileRepository } from '../repositories/profileRepository.js'
 import { userRepository } from '../repositories/userRepository.js'
+import { translateErrorMessage } from '../repositories/repositoryUtils.js'
 import { visitRepository } from '../repositories/visitRepository.js'
 import { waitlistRepository } from '../repositories/waitlistRepository.js'
 import { aiClient } from '../lib/ai/aiClient.js'
@@ -455,7 +456,7 @@ export function useAgenda() {
       queueAppointmentConfirmationMessages(payload)
       closeAppointmentModal()
     } catch (createError) {
-      alert(createError.message || 'Erro ao criar agendamento.')
+      alert(translateErrorMessage(createError?.message, 'Erro ao criar agendamento.'))
     }
   }
 
@@ -499,7 +500,7 @@ export function useAgenda() {
       notifyAppointmentAction('Agendamento atualizado', getAppointmentUpdateNotificationDetail(payload, editingAppointment, patients), payload, updated)
       closeAppointmentModal()
     } catch (updateError) {
-      alert(updateError.message || 'Erro ao atualizar agendamento.')
+      alert(translateErrorMessage(updateError?.message, 'Erro ao atualizar agendamento.'))
     }
   }
 
@@ -562,7 +563,7 @@ export function useAgenda() {
       }
       closeAppointmentModal()
     } catch (cancelError) {
-      alert(cancelError.message || 'Erro ao cancelar agendamento.')
+      alert(translateErrorMessage(cancelError?.message, 'Erro ao cancelar agendamento.'))
     }
   }
 
@@ -592,7 +593,7 @@ export function useAgenda() {
       )
       closeAppointmentModal()
     } catch (arrivalError) {
-      alert(arrivalError.message || 'Erro ao confirmar a chegada do paciente.')
+      alert(translateErrorMessage(arrivalError?.message, 'Erro ao confirmar a chegada do paciente.'))
     }
   }
 

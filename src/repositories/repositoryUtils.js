@@ -169,6 +169,22 @@ function translateTechnicalMessage(message) {
     return 'Já existe um paciente cadastrado com este CPF.'
   }
 
+  if (/doctors?_crm|crm.*unique|unique.*crm/i.test(message)) {
+    return 'Já existe um médico cadastrado com este CRM nesta UF.'
+  }
+
+  if (/duplicate.*email|email.*exist|email.*registrado|users?_email|email_key/i.test(message)) {
+    return 'Este e-mail já está cadastrado no sistema.'
+  }
+
+  if (/duplicate.*cpf|cpf.*exist|cpf.*registrado/i.test(message)) {
+    return 'Este CPF já está cadastrado no sistema.'
+  }
+
+  if (/password|senha.*curta|weak.*password|short.*password/i.test(message)) {
+    return 'A senha precisa ter no mínimo 8 caracteres.'
+  }
+
   return ''
 }
 

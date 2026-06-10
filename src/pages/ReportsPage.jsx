@@ -7,6 +7,7 @@ import { RichTextEditor } from '../components/RichTextEditor.jsx'
 import { DarkField, appCardClass as cardClass, appInputClass as inputClass, appLabelClass as labelClass, appTextareaClass as textareaClass } from '../components/ui.jsx'
 import { reportTemplates } from '../data/reportTemplates.js'
 import { aiClient } from '../lib/ai/aiClient.js'
+import { buildMediConnectLaudoHtml } from '../lib/medical/laudoTemplate.js'
 import { patientRepository } from '../repositories/patientRepository.js'
 import { notificationRepository } from '../repositories/notificationRepository.js'
 import { translateErrorMessage } from '../repositories/repositoryUtils.js'
@@ -859,13 +860,30 @@ function ReportEditorModalV3({
         complaint: aiComplaint,
         templateTitle: editor.contentJson?.templateTitle,
       })
+      const resolvedDraft = {
+        exam: draft.exam || editor.exam,
+        cidCode: draft.cidCode || editor.cidCode,
+        diagnosis: draft.diagnosis || editor.diagnosis,
+        conclusion: draft.conclusion || editor.conclusion,
+      }
+      const letterhead = buildMediConnectLaudoHtml({
+        patient: selectedPatient,
+        appointment: { type: resolvedDraft.exam, notes: aiComplaint },
+        doctor: {
+          name: currentProfessional?.name || viewerProfile?.name || '',
+          crm: currentProfessional?.crm || '',
+          specialty: currentProfessional?.specialty || '',
+        },
+        draft: resolvedDraft,
+        transcript: aiComplaint,
+      })
       onChange((current) => ({
         ...current,
-        exam: draft.exam || current.exam,
-        cidCode: draft.cidCode || current.cidCode,
-        diagnosis: draft.diagnosis || current.diagnosis,
-        conclusion: draft.conclusion || current.conclusion,
-        contentHtml: current.contentHtml ? `${current.contentHtml}<hr>${draft.contentHtml}` : draft.contentHtml,
+        exam: resolvedDraft.exam || current.exam,
+        cidCode: resolvedDraft.cidCode || current.cidCode,
+        diagnosis: resolvedDraft.diagnosis || current.diagnosis,
+        conclusion: resolvedDraft.conclusion || current.conclusion,
+        contentHtml: letterhead,
       }))
     } catch {
       alert('Não foi possível gerar o rascunho com IA. Tente novamente.')
@@ -971,9 +989,16 @@ function ReportEditorModalV3({
 
             <div className="mb-5 rounded-xl border border-accent-primary/30 bg-accent-primary/5 p-4">
               <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-text-heading">Assistente de IA {aiClient.isLive() ? '' : '(rascunho local)'}</p>
+                <p className="inline-flex items-center gap-2 text-sm font-semibold text-text-heading">
+                  Assistente de IA
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${aiClient.isLive() ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}`}>
+                    {aiClient.isLive() ? 'Gemini conectado' : 'Modo local'}
+                  </span>
+                </p>
               </div>
-              <p className="mb-3 text-xs text-text-muted-v2">Descreva a queixa/observação e gere um rascunho de exame, CID, diagnóstico e conclusão. Revise antes de salvar.</p>
+              <p className="mb-3 text-xs text-text-muted-v2">
+                Descreva a queixa, exame ou observação clínica do paciente. A IA gera o exame, CID, diagnóstico, conclusão e monta o laudo no letterhead MediConnect — pronto para revisar e salvar.
+              </p>
               <div className="flex flex-col gap-2 sm:flex-row">
                 <input
                   className={`${inputClass} flex-1`}
@@ -984,7 +1009,7 @@ function ReportEditorModalV3({
                 />
                 <button
                   className="inline-flex h-11 items-center justify-center gap-2 rounded-sm bg-accent-primary px-4 text-sm font-semibold text-white transition hover:bg-accent-hover disabled:opacity-50"
-                  disabled={aiLoading}
+                  disabled={aiLoading || !aiComplaint.trim()}
                   onClick={handleGenerateAI}
                   type="button"
                 >

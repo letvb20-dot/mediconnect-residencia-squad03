@@ -997,7 +997,7 @@ function MessageComposer({ allowedChannelKeys, draft, onChange, onClose, onSubmi
             <DarkField label="Telefone">
               <input
                 className={inputClass}
-                placeholder={draft.patientId ? 'Telefone nao cadastrado' : 'Selecione um paciente'}
+                placeholder={draft.patientId ? 'Telefone não cadastrado' : 'Selecione um paciente'}
                 readOnly
                 value={draft.phone}
               />

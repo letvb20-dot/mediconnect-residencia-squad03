@@ -14,7 +14,7 @@ const ROUTE_KEYWORDS = [
   { route: '/configuracoes', label: 'Configurações', words: ['configuracao', 'configuração', 'ajuste', 'preferencia', 'preferência'] },
 ]
 
-export function runChatEngine({ messages = [], role, data = {} }) {
+export function runChatEngine({ messages = [], role, data = {}, hasAi = false }) {
   const normalizedRole = normalizeRole(role) || 'paciente'
   const lastUser = [...messages].reverse().find((message) => message.role === 'user')
   const text = normalize(lastUser?.content || lastUser?.text || '')
@@ -27,8 +27,14 @@ export function runChatEngine({ messages = [], role, data = {} }) {
     return { text: greeting(normalizedRole), matched: true }
   }
 
+  const isActionIntent = matches(text, ['agendar', 'marcar', 'cancelar', 'desmarcar', 'reagendar', 'deletar', 'excluir', 'editar', 'alterar', 'mudar', 'novo', 'nova'])
+
+  if (hasAi && isActionIntent) {
+    return { text: '', matched: false }
+  }
+
   // Consultas de hoje
-  if (matches(text, ['consulta', 'agenda', 'atendimento']) && matches(text, ['hoje', 'agora', 'quantas', 'quantos', 'dia'])) {
+  if (!isActionIntent && matches(text, ['consulta', 'agenda', 'atendimento']) && matches(text, ['hoje', 'agora', 'quantas', 'quantos', 'dia'])) {
     const count = Number(data.appointmentsToday ?? 0)
     const owner = normalizedRole === 'medico' ? 'na sua agenda' : 'na agenda da clínica'
     return {
@@ -41,7 +47,7 @@ export function runChatEngine({ messages = [], role, data = {} }) {
   }
 
   // Lista de espera
-  if (matches(text, ['espera', 'fila', 'encaixe'])) {
+  if (!isActionIntent && matches(text, ['espera', 'fila', 'encaixe'])) {
     const count = Number(data.waitlistCount ?? 0)
     const gaps = Number(data.gapsCount ?? 0)
     return {
@@ -54,7 +60,7 @@ export function runChatEngine({ messages = [], role, data = {} }) {
   }
 
   // Laudos / relatórios
-  if (matches(text, ['laudo', 'relatorio', 'relatório', 'exame'])) {
+  if (!isActionIntent && matches(text, ['laudo', 'relatorio', 'relatório', 'exame'])) {
     const count = Number(data.reportsCount ?? 0)
     if (normalizedRole === 'paciente') {
       return {
@@ -73,7 +79,7 @@ export function runChatEngine({ messages = [], role, data = {} }) {
   }
 
   // Métricas (gestor/admin)
-  if (matches(text, ['cancelamento', 'no-show', 'no show', 'falta', 'taxa', 'metrica', 'métrica', 'indicador'])) {
+  if (!isActionIntent && matches(text, ['cancelamento', 'no-show', 'no show', 'falta', 'taxa', 'metrica', 'métrica', 'indicador'])) {
     if (['admin', 'gestor'].includes(normalizedRole)) {
       const rate = data.cancelRate ?? null
       const total = data.appointmentsTotal ?? null
@@ -89,7 +95,7 @@ export function runChatEngine({ messages = [], role, data = {} }) {
   }
 
   // Como agendar (paciente)
-  if (normalizedRole === 'paciente' && matches(text, ['agendar', 'marcar', 'consulta', 'agendamento'])) {
+  if (!hasAi && normalizedRole === 'paciente' && matches(text, ['agendar', 'marcar', 'consulta', 'agendamento'])) {
     return {
       text: 'Para agendar, abra a área de Agendamento, escolha um profissional e selecione um horário disponível.',
       route: '/agendamento',

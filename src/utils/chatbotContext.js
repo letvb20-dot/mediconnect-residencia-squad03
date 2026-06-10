@@ -48,13 +48,27 @@ export async function buildContext(role) {
       status: app.status,
     }))
 
+  // Compact active/upcoming appointments list
+  data.activeAppointmentsList = appointments
+    .filter((app) => !isCancelledStatus(app.status))
+    .slice(0, 10)
+    .map((app) => ({
+      id: app.id,
+      date: app.date,
+      time: app.time,
+      patient: app.patient || app.patientName || 'Paciente',
+      patientId: app.patientId,
+      doctor: app.professional || app.professionalName || 'Médico(a)',
+      doctorId: app.professionalId,
+      status: app.status,
+    }))
+
   // 2. Reports securely queried if canViewReports is true
   const canViewReports = capabilities.canViewReports === true
   let reports = []
   if (canViewReports) {
     if (normalizedRole === 'medico') {
-      const doctorPatients = await patientRepository.getDirectoryRows({ doctorId }).catch(() => [])
-      const doctorPatientIds = doctorPatients.map((p) => p.id).filter(Boolean)
+      const doctorPatientIds = [...new Set(appointments.map((app) => app.patientId).filter(Boolean))]
       const createdByValues = [profile?.id, profile?.doctorId, profile?.userId].filter(Boolean)
       
       const filters = {}
@@ -63,7 +77,7 @@ export async function buildContext(role) {
       } else if (createdByValues.length) {
         filters.createdByValues = createdByValues
       } else {
-        filters.createdByValues = ['non-existent']
+        filters.patientIds = ['non-existent']
       }
       reports = await reportRepository.getInitialReports(filters).catch(() => [])
     } else if (normalizedRole === 'paciente') {
@@ -97,9 +111,15 @@ export async function buildContext(role) {
 
   // 4. Patients and Professionals lists queried securely
   let patientsList = []
-  if (['admin', 'gestor', 'medico', 'secretaria'].includes(normalizedRole)) {
+  if (['admin', 'gestor', 'secretaria'].includes(normalizedRole)) {
     const allPatients = await patientRepository.getAll().catch(() => [])
     patientsList = allPatients.map((p) => ({ id: p.id, name: p.name || p.full_name }))
+  } else if (normalizedRole === 'medico') {
+    const doctorPatientIds = new Set(appointments.map((app) => app.patientId).filter(Boolean))
+    const allPatients = await patientRepository.getAll().catch(() => [])
+    patientsList = allPatients
+      .filter((p) => doctorPatientIds.has(p.id))
+      .map((p) => ({ id: p.id, name: p.name || p.full_name }))
   } else if (normalizedRole === 'paciente') {
     patientsList = [{ id: patientId, name: profile?.name || 'Paciente' }]
   }
@@ -109,6 +129,11 @@ export async function buildContext(role) {
 
   data.patients = patientsList
   data.professionals = professionalsList
+
+  // Expose current user metadata for frontend verification
+  data.currentUserId = profile?.userId || profile?.id || ''
+  data.currentPatientId = patientId
+  data.currentDoctorId = doctorId
 
   return data
 }

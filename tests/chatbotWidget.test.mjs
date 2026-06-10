@@ -36,8 +36,8 @@ test('ChatbotWidget buildContext resolves permissions correctly for a doctor', a
   appointmentRepository.getAll = async (filters) => {
     appointmentsQueryFilters = filters
     return [
-      { date: '2026-06-09', status: 'requested', patientName: 'João Silva' },
-      { date: '2026-06-09', status: 'cancelled', patientName: 'Maria Cruz' },
+      { id: 'app-1', date: '2026-06-09', status: 'requested', patientName: 'João Silva', patientId: 'pat-1' },
+      { id: 'app-2', date: '2026-06-09', status: 'cancelled', patientName: 'Maria Cruz', patientId: 'pat-2' },
     ]
   }
 
@@ -68,7 +68,7 @@ test('ChatbotWidget buildContext resolves permissions correctly for a doctor', a
 
     // Verify correct queries were performed
     assert.deepEqual(appointmentsQueryFilters, { doctorId: 'doc-123' })
-    assert.deepEqual(reportsQueryFilters, { patientIds: ['pat-1'] })
+    assert.deepEqual(reportsQueryFilters, { patientIds: ['pat-1', 'pat-2'] })
 
     // Verify correct metrics
     assert.equal(data.appointmentsTotal, 2)
@@ -80,6 +80,15 @@ test('ChatbotWidget buildContext resolves permissions correctly for a doctor', a
     // Verify lists
     assert.deepEqual(data.patients, [{ id: 'pat-1', name: 'João Silva' }])
     assert.deepEqual(data.professionals, [{ id: 'doc-123', name: 'Dr. Pedro' }])
+
+    // Verify metadata
+    assert.equal(data.currentUserId, 'user-456')
+    assert.equal(data.currentDoctorId, 'doc-123')
+    assert.equal(data.currentPatientId, '')
+
+    // Verify active appointments list
+    assert.equal(data.activeAppointmentsList.length, 1)
+    assert.equal(data.activeAppointmentsList[0].id, 'app-1')
 
     // Verify compact lists
     assert.equal(data.todayAppointmentsList.length, 1)
@@ -276,3 +285,36 @@ test('aiClient.chat JSON response parsing: parses action and appointmentData', a
     globalThis.fetch = originalFetch
   }
 })
+
+test('canAccess role permissions check', async () => {
+  const { canAccess } = await import('../src/config/permissions.js')
+  assert.equal(canAccess('paciente', '/pacientes'), false)
+  assert.equal(canAccess('paciente', '/laudos'), true)
+  assert.equal(canAccess('paciente', '/prontuario/123'), false)
+  assert.equal(canAccess('medico', '/prontuario/123'), true)
+  assert.equal(canAccess('secretaria', '/prontuario/123'), false)
+  assert.equal(canAccess('secretaria', '/laudos'), false)
+  assert.equal(canAccess('medico', '/laudos'), true)
+})
+
+test('runChatEngine hasAi action bypass', async () => {
+  const { runChatEngine } = await import('../src/lib/ai/chatEngine.js')
+  
+  // 1. Without AI, patient agendar is matched locally
+  const res1 = runChatEngine({
+    messages: [{ role: 'user', content: 'quero agendar uma consulta' }],
+    role: 'paciente',
+    hasAi: false
+  })
+  assert.equal(res1.matched, true)
+  assert.equal(res1.route, '/agendamento')
+
+  // 2. With AI, patient agendar is NOT matched locally (delegates to Gemini)
+  const res2 = runChatEngine({
+    messages: [{ role: 'user', content: 'quero agendar uma consulta' }],
+    role: 'paciente',
+    hasAi: true
+  })
+  assert.equal(res2.matched, false)
+})
+

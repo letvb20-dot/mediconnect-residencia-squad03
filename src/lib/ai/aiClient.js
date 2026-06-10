@@ -17,39 +17,46 @@ export const aiClient = {
 
   // Conversa do chatbot. Retorna { text, route?, action?, appointmentData? }.
   async chat({ messages = [], role, data = {} } = {}) {
-    const local = runChatEngine({ messages, role, data })
+    const local = runChatEngine({ messages, role, data, hasAi: Boolean(API_KEY) })
 
     if (local.matched || !API_KEY) return local
 
     try {
       const system =
-        `Você é o assistente do MediConnect, um sistema de gestão de clínica.\n` +
-        `O usuário tem o perfil "${role}". Responda em português do Brasil, de forma curta e objetiva.\n` +
-        `Use estes dados de contexto quando úteis: ${JSON.stringify(data).slice(0, 4000)}.\n` +
-        `Não invente dados que não estejam no contexto.\n\n` +
+        `Você é o assistente virtual do MediConnect, um sistema de gestão de clínica.\n` +
+        `O usuário tem o perfil "${role}". Responda em português do Brasil, de forma curta, objetiva e simpática.\n` +
+        `Use estes dados de contexto para responder: ${JSON.stringify(data).slice(0, 4000)}.\n` +
+        `Não invente IDs, nomes, datas ou horários que não estejam no contexto.\n\n` +
         `Sua resposta deve ser obrigatoriamente um JSON válido contendo as seguintes chaves:\n` +
-        `- "text": A resposta de texto curta e amigável para o usuário.\n` +
-        `- "action": Uma string indicando uma ação a ser realizada, ou null. Ação suportada: "confirm_appointment" (somente quando todos os dados obrigatórios para agendamento estiverem preenchidos e forem válidos).\n` +
-        `- "appointmentData": Um objeto com os dados da consulta ou null. Se action for "confirm_appointment", este objeto deve conter: "patientId" (string), "doctorId" (string), "scheduledAt" (data/hora ISO string formatada no fuso local/UTC YYYY-MM-DDTHH:mm:ss).\n\n` +
-        `Regras importantes:\n` +
-        `1. Se o perfil do usuário for 'paciente', o patientId do agendamento deve ser obrigatoriamente o ID do próprio paciente (fornecido em data.patients[0].id). Se ele tentar agendar para outra pessoa, informe no "text" que ele só pode agendar consultas para si mesmo.\n` +
-        `2. Se o usuário pedir para agendar mas faltar alguma informação (como médico, paciente, data ou hora), ou se a informação for ambígua, peça os dados restantes no campo "text", deixe "action" como null e "appointmentData" como null.\n` +
-        `3. Se houver mais de um paciente ou médico com o mesmo nome na pesquisa, peça para o usuário especificar.\n\n` +
-        `Exemplo de resposta de confirmação de agendamento:\n` +
+        `- "text": A resposta de texto curta para o usuário.\n` +
+        `- "route": Uma rota de navegação do sistema (ex: "/agenda", "/pacientes", "/laudos", "/perfil", "/prontuario/ID_DO_PACIENTE") ou null.\n` +
+        `- "action": A ação a ser tomada ("confirm_appointment", "cancel_appointment", ou null).\n` +
+        `- "appointmentData": Um objeto com dados ou null. Se action for "confirm_appointment", deve conter: "patientId", "doctorId", "scheduledAt" (formato ISO YYYY-MM-DDTHH:mm:ss). Se action for "cancel_appointment", deve conter "id" (o ID da consulta a ser cancelada de data.activeAppointmentsList).\n\n` +
+        `Regras de Segurança e Acesso por Perfil:\n` +
+        `1. PERFIL PACIENTE:\n` +
+        `   - Só pode agendar consultas para si mesmo (patientId deve ser data.currentPatientId). Se tentar agendar para outro, recuse.\n` +
+        `   - Só pode cancelar suas próprias consultas (presentes em data.activeAppointmentsList com patientId igual a data.currentPatientId). Se tentar cancelar outra, recuse.\n` +
+        `   - Rotas permitidas: "/agendamento", "/laudos", "/perfil", "/configuracoes". Bloqueie qualquer outra rota.\n` +
+        `2. PERFIL MEDICO:\n` +
+        `   - Só pode agendar ou gerenciar consultas na sua própria agenda (doctorId deve ser data.currentDoctorId). Se tentar para outro médico, recuse.\n` +
+        `   - Só pode visualizar, buscar ou gerenciar dados de pacientes que são dele (listados em data.patients). Se o médico perguntar ou tentar abrir prontuário ("/prontuario/ID") de um paciente que não está em data.patients, recuse dizendo que não tem acesso a pacientes que não são dele.\n` +
+        `3. PERFIL SECRETARIA:\n` +
+        `   - Pode gerenciar agendas e pacientes gerais.\n` +
+        `   - NÃO tem acesso a laudos clínicos ou prontuários médicos. Se ela pedir para ver laudos ou prontuários, recuse dizendo que seu perfil não possui acesso a informações clínicas.\n\n` +
+        `Exemplo de resposta para cancelamento:\n` +
         `{\n` +
-        `  "text": "Perfeito! Posso agendar a consulta de João Silva com o Dr. Pedro para amanhã às 14:00. Deseja confirmar?",\n` +
-        `  "action": "confirm_appointment",\n` +
+        `  "text": "Entendi que deseja cancelar a consulta de João Silva do dia 10 às 14:00. Posso prosseguir?",\n` +
+        `  "route": null,\n` +
+        `  "action": "cancel_appointment",\n` +
         `  "appointmentData": {\n` +
-        `    "patientId": "p-1",\n` +
-        `    "doctorId": "d-2",\n` +
-        `    "scheduledAt": "2026-06-10T14:00:00"\n` +
+        `    "id": "appointment-uuid-123"\n` +
         `  }\n` +
         `}`
       const text = await callGemini({ system, messages, responseMimeType: 'application/json' })
       const parsed = safeParseJson(text) || {}
       return {
         text: parsed.text || text,
-        route: local.route,
+        route: parsed.route || null,
         action: parsed.action || null,
         appointmentData: parsed.appointmentData || null,
       }

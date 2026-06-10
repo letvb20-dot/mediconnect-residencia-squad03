@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { aiClient } from '../../lib/ai/aiClient.js'
 import { AUTH_SESSION_CHANGED_EVENT, getAuthSession } from '../../config/api.js'
-import { normalizeRole } from '../../config/permissions.js'
+import { canAccess, normalizeRole } from '../../config/permissions.js'
 import { buildContext } from '../../utils/chatbotContext.js'
 import { createSpeechRecognizer, isVoiceCaptureAvailable } from '../../lib/ai/speechRecognition.js'
 import { appointmentRepository } from '../../repositories/appointmentRepository.js'
@@ -148,43 +148,105 @@ export function ChatbotWidget({ navigate, role }) {
     }
   }, [recording])
 
+  const handleNavigation = useCallback(async (route) => {
+    const authorized = canAccess(role, route)
+    if (!authorized) {
+      alert('Você não tem permissão para acessar esta funcionalidade.')
+      return
+    }
+
+    if (String(route || '').startsWith('/prontuario/')) {
+      const patientIdFromRoute = route.split('/').pop()
+      const data = await buildContext(role)
+      const hasPatientAccess = data.patients?.some(
+        (p) => String(p.id) === String(patientIdFromRoute)
+      )
+      if (!hasPatientAccess) {
+        alert('Você não tem permissão para acessar o prontuário de pacientes que não são seus.')
+        return
+      }
+    }
+
+    setOpen(false)
+    navigate(route)
+  }, [role, navigate])
+
   const handleExecuteAction = useCallback(async (message) => {
     if (!message.appointmentData) return
     setLoading(true)
     try {
-      const { patientId, doctorId, scheduledAt } = message.appointmentData
-      const datePart = scheduledAt.split('T')[0]
-      const timePart = scheduledAt.split('T')[1]?.substring(0, 5) || '09:00'
+      const data = await buildContext(role)
+      
+      if (message.action === 'confirm_appointment') {
+        const { patientId, doctorId, scheduledAt } = message.appointmentData
+        
+        // Ownership checks
+        if (role === 'paciente' && String(patientId) !== String(data.currentPatientId)) {
+          throw new Error('Você só pode agendar consultas para si mesmo.')
+        }
+        if (role === 'medico' && String(doctorId) !== String(data.currentDoctorId)) {
+          throw new Error('Você só pode agendar consultas para si mesmo.')
+        }
 
-      const payload = {
-        patientId,
-        professionalId: doctorId,
-        date: datePart,
-        time: timePart,
-        status: 'Agendado',
-      }
+        const datePart = scheduledAt.split('T')[0]
+        const timePart = scheduledAt.split('T')[1]?.substring(0, 5) || '09:00'
 
-      await appointmentRepository.create(payload)
+        const payload = {
+          patientId,
+          professionalId: doctorId,
+          date: datePart,
+          time: timePart,
+          status: 'Agendado',
+        }
 
-      setMessages((current) =>
-        current.map((msg) =>
-          msg === message ? { ...msg, action: null, appointmentData: null } : msg
+        await appointmentRepository.create(payload)
+
+        setMessages((current) =>
+          current.map((msg) =>
+            msg === message ? { ...msg, action: null, appointmentData: null } : msg
+          )
         )
-      )
 
-      setMessages((current) => [
-        ...current,
-        { role: 'assistant', content: '✓ Consulta agendada com sucesso no MediConnect!' },
-      ])
+        setMessages((current) => [
+          ...current,
+          { role: 'assistant', content: '✓ Consulta agendada com sucesso no MediConnect!' },
+        ])
+      } else if (message.action === 'cancel_appointment') {
+        const { id } = message.appointmentData
+        if (!id) throw new Error('ID do agendamento não informado.')
+
+        // Resolve details from activeAppointmentsList to check ownership
+        const appToCancel = data.activeAppointmentsList?.find((a) => String(a.id) === String(id))
+
+        if (role === 'paciente' && appToCancel && String(appToCancel.patientId) !== String(data.currentPatientId)) {
+          throw new Error('Você só pode cancelar suas próprias consultas.')
+        }
+        if (role === 'medico' && appToCancel && String(appToCancel.doctorId) !== String(data.currentDoctorId)) {
+          throw new Error('Você só pode cancelar consultas da sua própria agenda.')
+        }
+
+        await appointmentRepository.cancel(id, { status: 'Cancelado' })
+
+        setMessages((current) =>
+          current.map((msg) =>
+            msg === message ? { ...msg, action: null, appointmentData: null } : msg
+          )
+        )
+
+        setMessages((current) => [
+          ...current,
+          { role: 'assistant', content: '✓ Consulta cancelada com sucesso no MediConnect!' },
+        ])
+      }
     } catch (error) {
       setMessages((current) => [
         ...current,
-        { role: 'assistant', content: `Falha ao realizar agendamento: ${error.message}` },
+        { role: 'assistant', content: `Falha ao realizar ação: ${error.message}` },
       ])
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [role])
 
   function handleKeyDown(event) {
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -194,8 +256,7 @@ export function ChatbotWidget({ navigate, role }) {
   }
 
   function handleQuickAction(action) {
-    setOpen(false)
-    navigate(action.route)
+    handleNavigation(action.route)
   }
 
   return (
@@ -257,10 +318,7 @@ export function ChatbotWidget({ navigate, role }) {
                   {message.route ? (
                     <button
                       className="mt-2 inline-flex items-center gap-1 rounded-lg bg-accent-primary/10 px-2.5 py-1 text-xs font-semibold text-accent-primary transition hover:bg-accent-primary/20"
-                      onClick={() => {
-                        setOpen(false)
-                        navigate(message.route)
-                      }}
+                      onClick={() => handleNavigation(message.route)}
                       type="button"
                     >
                       Abrir →
@@ -274,6 +332,16 @@ export function ChatbotWidget({ navigate, role }) {
                       type="button"
                     >
                       ✓ Confirmar Agendamento
+                    </button>
+                  ) : null}
+                  {message.action === 'cancel_appointment' && message.appointmentData ? (
+                    <button
+                      className="mt-2 flex items-center gap-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
+                      disabled={loading}
+                      onClick={() => handleExecuteAction(message)}
+                      type="button"
+                    >
+                      ✗ Cancelar Agendamento
                     </button>
                   ) : null}
                 </div>
@@ -364,17 +432,26 @@ function ChatIcon() {
 
 function MicIcon() {
   return (
-    <svg className="size-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-      <path d="M12 1v11m0 0a3.5 3.5 0 0 0 7 0V5.5m-7 6.5a3.5 3.5 0 0 1-7 0V5.5" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4m-4 0h8" strokeLinecap="round" strokeLinejoin="round" />
+    <svg className="size-5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+      <rect x="9" y="3" width="6" height="12" rx="3" />
+      <path d="M5 11a7 7 0 0 0 14 0" />
+      <path d="M12 18v3" />
+      <path d="M9 21h6" />
     </svg>
   )
 }
 
 function MicOffIcon() {
   return (
-    <svg className="size-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-      <path d="M12 1a3.5 3.5 0 0 0-3.5 3.5v2.8m2.5 5.7A3.5 3.5 0 0 0 12 12M19 10v1a7 7 0 0 1-3.6 6.1m-3.4 1v4M8 22h8M1 1l22 22" strokeLinecap="round" strokeLinejoin="round" />
+    <svg className="size-5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+      <line x1="2" x2="22" y1="2" y2="22" />
+      <path d="M18.89 13.23A7.12 7.12 0 0 0 19 11v-1" />
+      <path d="M9 9a3 3 0 0 0 3 3" />
+      <path d="M17 10a3 3 0 0 0-3-3" />
+      <path d="M5 10v1a7 7 0 0 0 10.84 5.84" />
+      <path d="M12 18v4" />
+      <path d="M8 22h8" />
+      <path d="M10.39 4.39A3 3 0 0 1 12 4v0a3 3 0 0 1 3 3v2.61" />
     </svg>
   )
 }

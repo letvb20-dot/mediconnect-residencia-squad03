@@ -15,6 +15,7 @@ import { aiClient } from '../lib/ai/aiClient.js'
 import { formatLocalDateInput, parseLocalDate, sortAppointmentsByTime } from '../utils/agendaDate.js'
 import { isCommunicationEligiblePatient } from '../utils/communicationEligibility.js'
 import { buildPatientFromProfile, resolveCurrentPatient } from '../utils/patientIdentity.js'
+import { getCommunicationSettings } from '../utils/communicationSettings.js'
 
 const BOOKING_DAY_START = '07:00'
 const BOOKING_DAY_END = '18:00'
@@ -452,7 +453,7 @@ export function useAgenda() {
       const created = await appointmentRepository.create(payload)
       setLocalAppointments((current) => sortAppointmentsByTime([...current, enrichAppointment(created, payload, patients, professionals)]))
       notifyAppointmentAction('Consulta marcada', `Consulta de ${getPatientName(payload.patientId, patients)} marcada para ${formatAppointmentDate(payload.date)} as ${payload.time}.`, payload, created)
-      queueAppointmentConfirmationMessages(payload)
+      queueAppointmentConfirmationMessages(payload, created.id)
       closeAppointmentModal()
     } catch (createError) {
       alert(createError.message || 'Erro ao criar agendamento.')
@@ -552,7 +553,7 @@ export function useAgenda() {
           promotedPayload,
           promotedAppointment,
         )
-        queueAppointmentConfirmationMessages(promotedPayload)
+        queueAppointmentConfirmationMessages(promotedPayload, promotedAppointment.id)
       }
       if (promotionErrorMessage) {
         alert(`O cancelamento foi salvo, mas não foi possível agendar automaticamente o próximo paciente da fila. ${promotionErrorMessage}`)
@@ -596,8 +597,9 @@ export function useAgenda() {
     }
   }
 
-  function queueAppointmentConfirmationMessages(payload) {
-    sendAppointmentConfirmationMessages(payload, { patients, professionals }).catch((sendError) => {
+  function queueAppointmentConfirmationMessages(payload, appointmentId = null) {
+    const enrichedPayload = appointmentId ? { ...payload, id: appointmentId } : payload
+    sendAppointmentConfirmationMessages(enrichedPayload, { patients, professionals }).catch((sendError) => {
       console.warn('Falha ao enviar comunicacao automatica de agendamento.', sendError)
     })
   }
@@ -766,6 +768,7 @@ export async function sendAppointmentConfirmationMessages(payload, { patients = 
     professional: findProfessionalById(payload.professionalId, professionals),
   })
   const template = 'Confirmacao e lembrete de agendamento'
+  const settings = getCommunicationSettings()
 
   if (!phone) {
     await Promise.all(['whatsapp', 'sms'].map((channel) =>
@@ -795,12 +798,17 @@ export async function sendAppointmentConfirmationMessages(payload, { patients = 
     },
     {
       channel: 'sms',
-      promise: Promise.resolve().then(() => communicationRepository.sendSms({
-        content,
-        patientId: payload.patientId,
-        patientName,
-        phone,
-      })),
+      promise: Promise.resolve().then(() => {
+        if (!settings.sms_confirmation_enabled) {
+          throw new Error('Desabilitado: Confirmação por SMS desativada nas configurações.')
+        }
+        return communicationRepository.sendSms({
+          content,
+          patientId: payload.patientId,
+          patientName,
+          phone,
+        })
+      }),
     },
   ]
 
@@ -820,6 +828,27 @@ export async function sendAppointmentConfirmationMessages(payload, { patients = 
       template,
     }).catch(() => null),
   ))
+
+  if (payload.id) {
+    try {
+      const confirmations = JSON.parse(window.localStorage.getItem('mediconnect.sent_confirmations.v1') || '{}')
+      const hasSmsFail = failed.some(f => f.channel === 'sms')
+      const hasWaFail = failed.some(f => f.channel === 'whatsapp')
+      let status = 'Sucesso'
+      if (hasSmsFail && hasWaFail) {
+        status = 'Falha'
+      } else if (hasSmsFail || hasWaFail) {
+        status = 'Parcial'
+      }
+      confirmations[payload.id] = {
+        sentAt: new Date().toISOString(),
+        status
+      }
+      window.localStorage.setItem('mediconnect.sent_confirmations.v1', JSON.stringify(confirmations))
+    } catch (e) {
+      console.error(e)
+    }
+  }
 
   return {
     failed: failed.map((delivery) => delivery.channel),

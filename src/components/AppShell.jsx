@@ -12,6 +12,7 @@ import { PROFILE_AVATAR_CHANGED_EVENT, profileRepository } from '../repositories
 import { useSocketEvent } from '../providers/socketContext.js'
 import { BrandLogo } from './Brand.jsx'
 import { ChatbotWidget } from './ai/ChatbotWidget.jsx'
+import { useAutoReminders } from '../hooks/useAutoReminders.js'
 
 // Todos os itens de navegação com seus ícones e metadados
 const ALL_NAV_ITEMS = [
@@ -55,6 +56,7 @@ const titles = {
 
 export function AppShell({ children, currentPath, navigate, role, routeTitle }) {
   const normalizedRole = normalizeRole(role)
+  useAutoReminders(role)
   const [menuOpen, setMenuOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)

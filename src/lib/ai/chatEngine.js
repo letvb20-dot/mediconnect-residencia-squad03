@@ -20,11 +20,11 @@ export function runChatEngine({ messages = [], role, data = {} }) {
   const text = normalize(lastUser?.content || lastUser?.text || '')
 
   if (!text) {
-    return { text: greeting(normalizedRole) }
+    return { text: greeting(normalizedRole), matched: true }
   }
 
   if (matches(text, ['ola', 'oi', 'bom dia', 'boa tarde', 'boa noite', 'ajuda', 'ajudar', 'o que voce faz', 'pode fazer'])) {
-    return { text: greeting(normalizedRole) }
+    return { text: greeting(normalizedRole), matched: true }
   }
 
   // Consultas de hoje
@@ -36,6 +36,7 @@ export function runChatEngine({ messages = [], role, data = {} }) {
         ? `Há ${count} consulta(s) para hoje ${owner}. Quer abrir a Agenda?`
         : `Não encontrei consultas para hoje ${owner}.`,
       route: '/agenda',
+      matched: true,
     }
   }
 
@@ -48,6 +49,7 @@ export function runChatEngine({ messages = [], role, data = {} }) {
         ? `Há ${count} paciente(s) na lista de espera${gaps ? ` e ${gaps} lacuna(s) de horário com encaixe sugerido` : ''}. Posso abrir a Lista de espera.`
         : 'A lista de espera está vazia no momento.',
       route: '/lista-espera',
+      matched: true,
     }
   }
 
@@ -60,11 +62,13 @@ export function runChatEngine({ messages = [], role, data = {} }) {
           ? `Você tem ${count} relatório(s) disponível(is). Abra a área de Relatórios para visualizar e imprimir.`
           : 'Ainda não há relatórios vinculados ao seu cadastro.',
         route: '/laudos',
+        matched: true,
       }
     }
     return {
       text: 'Em Relatórios você cria, edita e libera laudos. No editor, use o botão "Gerar com IA" para um rascunho automático a partir do paciente e do modelo.',
       route: '/laudos',
+      matched: true,
     }
   }
 
@@ -78,9 +82,10 @@ export function runChatEngine({ messages = [], role, data = {} }) {
           ? `A taxa de ausência/cancelamento estimada é de ${rate}%${total != null ? ` sobre ${total} consultas` : ''}. Veja detalhes em Analytics.`
           : 'Abra Analytics para ver as métricas consolidadas da clínica.',
         route: '/relatorios',
+        matched: true,
       }
     }
-    return { text: 'As métricas consolidadas ficam disponíveis para gestão e administração.' }
+    return { text: 'As métricas consolidadas ficam disponíveis para gestão e administração.', matched: true }
   }
 
   // Como agendar (paciente)
@@ -88,17 +93,22 @@ export function runChatEngine({ messages = [], role, data = {} }) {
     return {
       text: 'Para agendar, abra a área de Agendamento, escolha um profissional e selecione um horário disponível.',
       route: '/agendamento',
+      matched: true,
     }
   }
 
-  // Navegação genérica ("onde vejo X", "como faço Y")
-  const routeHit = ROUTE_KEYWORDS.find((entry) => entry.words.some((word) => text.includes(normalize(word))))
-  if (routeHit && isRouteAllowed(normalizedRole, routeHit.route)) {
-    return { text: `Você encontra isso em "${routeHit.label}". Quer que eu abra?`, route: routeHit.route }
+  // Navegação genérica ("onde vejo X", "como faço Y", ou termos diretos curtos)
+  const isNavQuery = matches(text, ['onde', 'como', 'abrir', 'ir para', 'ir ate', 'ver', 'mostrar', 'acessar', 'tela']) || text.split(/\s+/).length <= 2
+  if (isNavQuery) {
+    const routeHit = ROUTE_KEYWORDS.find((entry) => entry.words.some((word) => text.includes(normalize(word))))
+    if (routeHit && isRouteAllowed(normalizedRole, routeHit.route)) {
+      return { text: `Você encontra isso em "${routeHit.label}". Quer que eu abra?`, route: routeHit.route, matched: true }
+    }
   }
 
   return {
     text: 'Posso ajudar com agenda, lista de espera, relatórios e navegação no sistema. Tente perguntar, por exemplo: "quantas consultas tenho hoje?" ou "onde vejo os laudos?".',
+    matched: false,
   }
 }
 

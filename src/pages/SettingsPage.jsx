@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Switch } from '../components/ui/switch.jsx'
 
 import { useAccessibility } from '../contexts/accessibilityContext.js'
+import { getCommunicationSettings, saveCommunicationSettings } from '../utils/communicationSettings.js'
 
 const cardClass = 'rounded-2xl border border-border-default-v2 bg-surface-card shadow-card'
 const inputClass =
@@ -163,6 +164,7 @@ function SkeletonToggleRow() {
 
 function NotificationsSection() {
   const [prefs, setPrefs] = useState(() => getNotificationPrefs())
+  const [commSettings, setCommSettings] = useState(() => getCommunicationSettings())
   const isLoading = false
 
   function handleToggle(key, newValue) {
@@ -192,6 +194,19 @@ function NotificationsSection() {
         }
       }))
     }
+  }
+
+  function handleCommSettingChange(key, value) {
+    const next = { ...commSettings, [key]: value }
+    setCommSettings(next)
+    saveCommunicationSettings(next)
+    window.dispatchEvent(new CustomEvent('app:show_toast', {
+      detail: {
+        title: 'Preferência de SMS atualizada',
+        description: 'Sua configuração de comunicação foi salva.',
+        type: 'success'
+      }
+    }))
   }
 
   return (
@@ -233,6 +248,53 @@ function NotificationsSection() {
           </>
         )}
       </SettingsGroup>
+
+      <div className="mt-8">
+        <Subsection title="Automatização de SMS">
+          <ToggleRow 
+            checked={commSettings.sms_confirmation_enabled} 
+            description="Enviar SMS de confirmação imediatamente após realizar um agendamento" 
+            label="Confirmação de Agendamento" 
+            onChange={(v) => handleCommSettingChange('sms_confirmation_enabled', v)} 
+          />
+          <ToggleRow 
+            checked={commSettings.sms_reminder_enabled} 
+            description="Enviar SMS de lembrete antes da consulta" 
+            label="Lembrete de Consulta" 
+            onChange={(v) => handleCommSettingChange('sms_reminder_enabled', v)} 
+          />
+          <ToggleRow 
+            checked={commSettings.background_automation_enabled} 
+            description="Disparar lembretes automaticamente em segundo plano a cada 6 horas" 
+            label="Disparo Automático (Segundo Plano)" 
+            onChange={(v) => handleCommSettingChange('background_automation_enabled', v)} 
+          />
+          <SettingRow description="Horas de antecedência para disparo do lembrete" label="Antecedência do Lembrete">
+            <select 
+              className={inputClass} 
+              value={commSettings.reminder_hours_ahead} 
+              onChange={(e) => handleCommSettingChange('reminder_hours_ahead', Number(e.target.value))}
+            >
+              <option value={12}>12 horas antes</option>
+              <option value={24}>24 horas antes (padrão)</option>
+              <option value={48}>48 horas antes</option>
+            </select>
+          </SettingRow>
+          <div className="py-4 border-b border-[var(--border-default)] last:border-0">
+            <label className="block text-sm font-semibold text-[var(--text-primary)] mb-1">
+              Template de SMS de Lembrete
+            </label>
+            <p className="text-xs text-[var(--text-muted)] mb-2">
+              Use tags: <code>{"{paciente}"}</code>, <code>{"{data}"}</code>, <code>{"{hora}"}</code>, <code>{"{medico}"}</code>
+            </p>
+            <textarea
+              className="w-full min-h-[80px] rounded-xl border border-border-default-v2 bg-surface-inset px-3 py-2 text-sm text-text-body outline-none transition focus:border-accent-primary focus:ring-2 focus:ring-accent-primary/20 resize-y"
+              value={commSettings.reminder_sms_template}
+              onChange={(e) => handleCommSettingChange('reminder_sms_template', e.target.value)}
+            />
+          </div>
+        </Subsection>
+      </div>
     </SectionFrame>
   )
 }

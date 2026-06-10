@@ -380,7 +380,7 @@ function resolveRoute(pathname, navigate, role, profile, user, isAuthenticated) 
     }
   }
 
-  if (pathname === '/laudos') {
+  if (pathname === '/relatorios') {
     return {
       element: <ReportsPage navigate={navigate} role={role} />,
       title: 'Relatórios',
@@ -388,7 +388,7 @@ function resolveRoute(pathname, navigate, role, profile, user, isAuthenticated) 
     }
   }
 
-  if (pathname === '/relatorios') {
+  if (pathname === '/laudos') {
     return {
       element: <AnalyticsPage />,
       title: 'Analytics',

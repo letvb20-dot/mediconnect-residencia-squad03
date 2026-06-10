@@ -84,7 +84,7 @@ function mapProfessional(doctor) {
   return {
     id: String(doctor.id || doctor.medico_id || doctor.user_id || doctor.name || doctor.nome),
     userId: doctor.user_id || doctor.userId || doctor.usuario_id || doctor.auth_user_id || null,
-    name: doctor.full_name || doctor.name || doctor.nome || 'Medico(a)',
+    name: doctor.full_name || doctor.name || doctor.nome || 'Médico',
     full_name: doctor.full_name || doctor.name || doctor.nome || '',
     email: doctor.email || doctor.user_email || doctor.usuario_email || '',
     cpf: doctor.cpf || doctor.document || doctor.documento || '',
@@ -92,7 +92,7 @@ function mapProfessional(doctor) {
     crm_uf: doctor.crm_uf || doctor.crmUf || doctor.uf_crm || '',
     specialty,
     unit: doctor.unit || doctor.unidade || doctor.clinic_unit || doctor.clinica || doctor.location || '',
-    role: specialty || doctor.role || 'Medico(a)',
+    role: specialty || doctor.role || 'Médico',
     schedule: doctor.schedule || doctor.agenda || doctor.disponibilidade || 'Seg a Sex, 08h as 18h',
     nextSlot: doctor.nextSlot || doctor.proximo_horario || doctor.next_slot || 'Consulta pendente',
     patients: doctor.patients || doctor.pacientes_ativos || doctor.active_patients || 0,

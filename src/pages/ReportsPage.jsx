@@ -106,7 +106,7 @@ export function ReportsPage({ role }) {
         return {
           id: String(professional.id || ''),
           createdByValue,
-          name: professional.name || 'Médico(a)',
+          name: professional.name || 'Médico',
         }
       })
       .filter((professional) => {

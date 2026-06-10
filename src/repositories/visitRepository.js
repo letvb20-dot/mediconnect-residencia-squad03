@@ -145,7 +145,7 @@ function normalizeQueueItem(item) {
     patientId: item.patientId || '',
     patient: item.patient || 'Paciente não informado',
     professionalId: item.professionalId || '',
-    professional: item.professional || 'Médico(a) não informado',
+    professional: item.professional || 'Médico não informado',
     date: item.date || '',
     time: normalizeTime(item.time),
     type: item.type || 'Consulta',
@@ -243,7 +243,7 @@ function getPatientName(patientId, patients) {
 
 function getProfessionalName(professionalId, professionals) {
   const professional = professionals.find((item) => normalizeValue(item.id) === normalizeValue(professionalId))
-  return professional?.name || professional?.full_name || professional?.nome || 'Médico(a) não informado'
+  return professional?.name || professional?.full_name || professional?.nome || 'Médico não informado'
 }
 
 function normalizePriority(priority) {

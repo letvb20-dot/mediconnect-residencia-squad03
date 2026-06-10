@@ -90,7 +90,7 @@ export function WaitlistPage({ role }) {
   )
 
   const doctorName = useCallback(
-    (id) => professionals.find((item) => String(item.id) === String(id))?.name || 'Médico(a)',
+    (id) => professionals.find((item) => String(item.id) === String(id))?.name || 'Médico',
     [professionals],
   )
 

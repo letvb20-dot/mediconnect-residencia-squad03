@@ -1279,7 +1279,7 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
               disabled={saving}
               type="submit"
             >
-              {saving ? 'Salvando...' : 'Salvar alteracoes'}
+              {saving ? 'Salvando...' : 'Salvar alterações'}
             </button>
           </div>
       </form>

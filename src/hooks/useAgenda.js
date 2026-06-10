@@ -1208,7 +1208,7 @@ function exceptionToAppointment(exception, professionals, time) {
     exceptionId: exception.id,
     patient: isBlock ? 'Bloqueio de agenda' : 'Disponibilidade extra',
     patientId: '',
-    professional: professional?.name || 'Médico(a)',
+    professional: professional?.name || 'Médico',
     professionalId: exception.doctorId,
     date: exception.date,
     time: normalizeTime(time) || '00:00',

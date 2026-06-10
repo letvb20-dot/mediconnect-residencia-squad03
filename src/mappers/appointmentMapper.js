@@ -69,7 +69,7 @@ export const appointmentMapper = {
         professional.full_name ||
         professional.name ||
         professional.nome ||
-        'Médico(a)',
+        'Médico',
       date: dateStr,
       time: timeStr,
       type: apiData.type || apiData.tipo || apiData.tipo_consulta || 'Consulta',

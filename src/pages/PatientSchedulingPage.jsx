@@ -16,7 +16,8 @@ import { formatLocalDateInput, parseLocalDate } from '../utils/agendaDate.js'
 
 const PROFESSIONALS_PER_PAGE = 12
 const WEEKDAY_LABELS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab']
-const appointmentTypeOptions = ['Retorno', 'Primeira consulta', 'Exame', 'Avaliacao pre-op']
+const appointmentTypeOptions = ['Retorno', 'Primeira consulta', 'Exame', 'Avaliação pré-op']
+const APPOINTMENT_REQUEST_TIMEOUT_MS = 15000
 const initialBookingForm = {
   date: formatLocalDateInput(new Date()),
   durationMinutes: 30,
@@ -161,9 +162,9 @@ export function PatientSchedulingPage({ navigate }) {
                   </span>
                   <span className="min-w-0">
                     <span className="block break-words text-base font-bold text-text-heading">{professional.name}</span>
-                    <span className="mt-1 block break-words text-sm text-text-muted-v2">{getSpecialty(professional) || 'Especialidade nao informada'}</span>
+                    <span className="mt-1 block break-words text-sm text-text-muted-v2">{getSpecialty(professional) || 'Especialidade não informada'}</span>
                     <span className="mt-3 inline-flex rounded-full bg-[#3b82f6]/15 px-2.5 py-1 text-xs font-semibold text-[var(--professional-blue-text)]">
-                      {professional.crm ? `CRM ${professional.crm}${professional.crm_uf ? `-${professional.crm_uf}` : ''}` : 'CRM nao informado'}
+                      {professional.crm ? `CRM ${professional.crm}${professional.crm_uf ? `-${professional.crm_uf}` : ''}` : 'CRM não informado'}
                     </span>
                   </span>
                 </span>
@@ -213,6 +214,9 @@ export function PatientSchedulingDetailPage({ navigate, professionalId }) {
   const [professionals, setProfessionals] = useState([])
   const [viewerProfile, setViewerProfile] = useState(null)
   const [currentPatient, setCurrentPatient] = useState(null)
+  const [myAppointments, setMyAppointments] = useState([])
+  const [myAppointmentsLoading, setMyAppointmentsLoading] = useState(true)
+  const [myAppointmentsError, setMyAppointmentsError] = useState('')
   const [availabilityRows, setAvailabilityRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [availabilityLoading, setAvailabilityLoading] = useState(false)
@@ -247,6 +251,25 @@ export function PatientSchedulingDetailPage({ navigate, professionalId }) {
         setProfessionals(professionalsData || [])
         setViewerProfile(currentProfile)
         setCurrentPatient(resolvedPatient)
+
+        if (resolvedPatient?.id) {
+          setMyAppointmentsLoading(true)
+          setMyAppointmentsError('')
+          try {
+            const patientAppointments = await appointmentRepository.getAll({ patientId: resolvedPatient.id })
+            if (!active) return
+            setMyAppointments(sortAppointmentsByDateTime(patientAppointments || []))
+          } catch (appointmentsError) {
+            if (!active) return
+            setMyAppointments([])
+            setMyAppointmentsError(translateErrorMessage(appointmentsError.message, 'Não foi possível carregar suas consultas.'))
+          } finally {
+            if (active) setMyAppointmentsLoading(false)
+          }
+        } else {
+          setMyAppointments([])
+          setMyAppointmentsLoading(false)
+        }
       } catch (err) {
         if (active) setError(translateErrorMessage(err.message, 'Erro ao carregar agendamento.'))
       } finally {
@@ -331,7 +354,7 @@ export function PatientSchedulingDetailPage({ navigate, professionalId }) {
       } catch (err) {
         if (active) {
           setAvailableSlots([])
-          setSlotsError(translateErrorMessage(err.message, 'Nao foi possivel calcular horarios disponiveis.'))
+          setSlotsError(translateErrorMessage(err.message, 'Não foi possível calcular horários disponíveis.'))
           setBookingForm((current) => ({ ...current, time: '' }))
         }
       } finally {
@@ -357,7 +380,7 @@ export function PatientSchedulingDetailPage({ navigate, professionalId }) {
   if (!professional) {
     return (
       <div className="mx-auto max-w-3xl rounded-2xl border border-border-default-v2 bg-surface-card p-8 text-center text-text-heading">
-        <h1 className="text-xl font-bold">Profissional nao encontrado</h1>
+        <h1 className="text-xl font-bold">Profissional não encontrado</h1>
         <button
           className="mt-6 rounded-lg bg-accent-primary px-5 py-2.5 text-sm font-medium text-white transition hover:bg-accent-hover"
           onClick={() => navigate('/agendamento')}
@@ -399,11 +422,11 @@ export function PatientSchedulingDetailPage({ navigate, professionalId }) {
   async function submitBooking(event) {
     event.preventDefault()
     if (!professional?.id || !currentPatient?.id) {
-      setSubmitError('Nao foi possivel identificar o paciente ou o medico selecionado.')
+      setSubmitError('Não foi possível identificar o paciente ou o médico selecionado.')
       return
     }
     if (!bookingForm.time) {
-      setSubmitError('Selecione um horario disponivel para concluir o agendamento.')
+      setSubmitError('Selecione um horário disponível para concluir o agendamento.')
       return
     }
 
@@ -416,44 +439,55 @@ export function PatientSchedulingDetailPage({ navigate, professionalId }) {
       notes: bookingForm.notes,
       patientId: currentPatient.id,
       professionalId: professional.id,
-      room: bookingForm.mode === 'Teleconsulta' ? 'Virtual' : 'Consultorio 1',
+      room: bookingForm.mode === 'Teleconsulta' ? 'Virtual' : 'Consultório 1',
       status: 'Agendado',
       time: bookingForm.time,
       type: bookingForm.type,
     }
 
     if (isAppointmentInPast(payload.date, payload.time)) {
-      setSubmitError('Nao e possivel agendar consultas em horarios anteriores ao horario atual.')
+      setSubmitError('Não é possível agendar consultas em horários anteriores ao horário atual.')
       return
     }
 
     if (!availableSlots.some((slot) => slot.time === payload.time)) {
-      setSubmitError('O horario selecionado nao esta mais disponivel. Escolha outro horario.')
+      setSubmitError('O horário selecionado não está mais disponível. Escolha outro horário.')
       return
     }
 
     setSubmitting(true)
     try {
-      const patientAppointments = await appointmentRepository
-        .getAll({ patientId: currentPatient.id })
-        .catch(() => [])
+      const patientAppointments = await withTimeout(
+        appointmentRepository.getAll({ patientId: currentPatient.id }),
+        APPOINTMENT_REQUEST_TIMEOUT_MS,
+        'O servidor demorou para validar seus agendamentos. Tente novamente.',
+      )
 
       if (hasPatientAppointmentOnDate(patientAppointments, currentPatient.id, payload.date)) {
-        setSubmitError('Voce ja possui um agendamento nesta data.')
+        setSubmitError('Você já possui um agendamento nesta data.')
         return
       }
 
-      await appointmentRepository.create(payload)
+      const createdAppointment = await withTimeout(
+        appointmentRepository.create(payload),
+        APPOINTMENT_REQUEST_TIMEOUT_MS,
+        'O servidor demorou para confirmar o agendamento. Tente novamente.',
+      )
+
+      setMyAppointments((current) => sortAppointmentsByDateTime([...current, createdAppointment]))
       sendAppointmentConfirmationMessages(payload, {
         patients: [currentPatient],
         professionals: [professional],
       }).catch((sendError) => {
         console.warn('Falha ao enviar comunicacao automatica de agendamento.', sendError)
       })
-      window.alert('Consulta agendada com sucesso.')
+      showToast('Consulta agendada', 'Sua consulta foi salva com sucesso.', 'success')
       setModalOpen(false)
+      setSubmitError('')
     } catch (err) {
-      setSubmitError(translateErrorMessage(err.message, 'Erro ao criar agendamento.'))
+      const message = translateErrorMessage(err.message, 'Erro ao criar agendamento.')
+      setSubmitError(message)
+      showToast('Falha ao agendar', message, 'error')
     } finally {
       setSubmitting(false)
     }
@@ -472,7 +506,7 @@ export function PatientSchedulingDetailPage({ navigate, professionalId }) {
           </button>
           <div>
             <h1 className="text-[32px] font-bold leading-8 tracking-[-0.02em] text-text-heading">{professional.name}</h1>
-            <p className="mt-1 text-sm text-text-muted-v2">{specialty || 'Especialidade nao informada'}</p>
+            <p className="mt-1 text-sm text-text-muted-v2">{specialty || 'Especialidade não informada'}</p>
           </div>
         </div>
         <button
@@ -487,7 +521,7 @@ export function PatientSchedulingDetailPage({ navigate, professionalId }) {
 
       {!canOpenBooking ? (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
-          Nao foi possivel vincular seu usuario a um cadastro de paciente. Atualize seu perfil antes de agendar.
+          Não foi possível vincular seu usuário a um cadastro de paciente. Atualize seu perfil antes de agendar.
         </div>
       ) : null}
 
@@ -499,13 +533,13 @@ export function PatientSchedulingDetailPage({ navigate, professionalId }) {
             </div>
             <div className="min-w-0">
               <p className="break-words text-xl font-bold text-text-heading">{professional.name}</p>
-              <p className="mt-1 break-words text-sm text-text-muted-v2">{specialty || 'Especialidade nao informada'}</p>
+              <p className="mt-1 break-words text-sm text-text-muted-v2">{specialty || 'Especialidade não informada'}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <span className="rounded-full bg-[#3b82f6]/15 px-3 py-1 text-xs font-bold text-[var(--professional-blue-text)]">
-                  {professional.crm ? `CRM ${professional.crm}${professional.crm_uf ? `-${professional.crm_uf}` : ''}` : 'CRM nao informado'}
+                  {professional.crm ? `CRM ${professional.crm}${professional.crm_uf ? `-${professional.crm_uf}` : ''}` : 'CRM não informado'}
                 </span>
                 <span className="rounded-full border border-[#60a5fa]/20 bg-[#3b82f6]/10 px-3 py-1 text-xs font-bold text-text-muted-v2">
-                  {professional.unit || 'Unidade nao informada'}
+                  {professional.unit || 'Unidade não informada'}
                 </span>
               </div>
             </div>
@@ -513,12 +547,11 @@ export function PatientSchedulingDetailPage({ navigate, professionalId }) {
 
           <div className="mt-4 grid gap-2.5 md:grid-cols-2">
             {[
-              ['Nome', professional.name || 'Nao informado'],
-              ['Especialidade', specialty || 'Nao informada'],
-              ['CRM', professional.crm ? `${professional.crm}${professional.crm_uf ? `-${professional.crm_uf}` : ''}` : 'Nao informado'],
-              ['Unidade', professional.unit || 'Nao informada'],
-              ['E-mail', professional.email || 'Nao informado'],
-              ['Telefone', professional.phone || 'Nao informado'],
+              ['Nome', professional.name || 'Não informado'],
+              ['Especialidade', specialty || 'Não informada'],
+              ['CRM', professional.crm ? `${professional.crm}${professional.crm_uf ? `-${professional.crm_uf}` : ''}` : 'Não informado'],
+              ['Unidade', professional.unit || 'Não informada'],
+              ['Telefone', professional.phone || 'Não informado'],
             ].map(([label, value]) => (
               <div className="rounded-lg border border-[#60a5fa]/15 bg-surface-card/70 px-3 py-2" key={label}>
                 <p className="text-[11px] font-semibold uppercase text-text-muted-v2">{label}</p>
@@ -527,6 +560,13 @@ export function PatientSchedulingDetailPage({ navigate, professionalId }) {
             ))}
           </div>
         </div>
+
+        <MyAppointmentsSection
+          appointments={myAppointments}
+          error={myAppointmentsError}
+          loading={myAppointmentsLoading}
+          patient={currentPatient}
+        />
 
         <div className="rounded-2xl border border-[#60a5fa]/20 bg-[#3b82f6]/5 p-3 shadow-sm shadow-[#3b82f6]/5">
           <div className="mb-2 flex items-center justify-between gap-3">
@@ -602,7 +642,7 @@ function PatientBookingModal({
                 className="h-11 rounded-md border border-border-default-v2 bg-surface-card px-3 text-sm text-text-muted-v2 outline-none"
                 disabled
                 readOnly
-                value={getPatientLabel(currentPatient) || 'Paciente nao vinculado'}
+                value={getPatientLabel(currentPatient) || 'Paciente não vinculado'}
               />
             </DarkField>
 
@@ -611,7 +651,7 @@ function PatientBookingModal({
                 className="h-11 rounded-md border border-border-default-v2 bg-surface-card px-3 text-sm text-text-muted-v2 outline-none"
                 disabled
                 readOnly
-                value={professional?.name || 'Medico nao informado'}
+                value={professional?.name || 'Médico não informado'}
               />
             </DarkField>
 
@@ -625,7 +665,7 @@ function PatientBookingModal({
               />
             </DarkField>
 
-            <DarkField label="Horario">
+            <DarkField label="Horário">
               <select
                 className="h-11 rounded-md border border-border-default-v2 bg-surface-card-hover px-3 text-sm text-text-body outline-none focus:border-accent-primary disabled:cursor-not-allowed disabled:text-text-muted-v2"
                 disabled={slotsLoading || !timeOptions.length}
@@ -634,16 +674,16 @@ function PatientBookingModal({
                 value={form.time}
               >
                 <option value="">
-                  {slotsLoading ? 'Calculando horarios...' : 'Selecione um horario disponivel'}
+                  {slotsLoading ? 'Calculando horários...' : 'Selecione um horário disponível'}
                 </option>
                 {timeOptions.map((time) => (
                   <option key={time} value={time}>{time}</option>
                 ))}
               </select>
-              {slotsLoading ? <span className="text-xs font-normal text-text-muted-v2">Calculando horarios...</span> : null}
+              {slotsLoading ? <span className="text-xs font-normal text-text-muted-v2">Calculando horários...</span> : null}
               {slotsError ? <span className="text-xs font-normal text-amber-400">{slotsError}</span> : null}
               {!slotsLoading && !timeOptions.length ? (
-                <span className="text-xs font-normal text-amber-400">Nenhum horario disponivel para este medico nesta data.</span>
+                <span className="text-xs font-normal text-amber-400">Nenhum horário disponível para este médico nesta data.</span>
               ) : null}
             </DarkField>
 
@@ -670,7 +710,7 @@ function PatientBookingModal({
               </select>
             </DarkField>
 
-            <DarkField label="Duracao">
+            <DarkField label="Duração">
               <input
                 className="h-11 rounded-md border border-border-default-v2 bg-surface-card-hover px-3 text-sm text-text-body outline-none focus:border-accent-primary"
                 max="240"
@@ -682,11 +722,11 @@ function PatientBookingModal({
               />
             </DarkField>
 
-            <DarkField className="md:col-span-2" label="Observacoes">
+            <DarkField className="md:col-span-2" label="Observações">
               <textarea
                 className="min-h-28 w-full resize-y rounded-md border border-border-default-v2 bg-surface-card-hover px-3 py-2 text-sm leading-5 text-text-body outline-none transition placeholder:text-text-muted-v2 focus:border-accent-primary"
                 onChange={(event) => onUpdate('notes', event.target.value)}
-                placeholder="Observacoes sobre o agendamento"
+                placeholder="Observações sobre o agendamento"
                 value={form.notes}
               />
             </DarkField>
@@ -714,6 +754,57 @@ function PatientBookingModal({
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  )
+}
+
+function MyAppointmentsSection({ appointments, error, loading, patient }) {
+  const patientName = getPatientLabel(patient) || 'paciente'
+
+  return (
+    <div className="rounded-2xl border border-[#60a5fa]/20 bg-[#3b82f6]/5 p-5 shadow-sm shadow-[#3b82f6]/5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-base font-bold text-text-heading">Minhas consultas</h2>
+          <p className="mt-1 text-sm text-text-muted-v2">Acompanhe aqui tudo o que está agendado para {patientName}.</p>
+        </div>
+        <span className="rounded-full bg-[#3b82f6]/15 px-3 py-1 text-xs font-semibold text-[var(--professional-blue-text)]">
+          {appointments.length} registros
+        </span>
+      </div>
+
+      <div className="mt-4 min-h-40 rounded-xl border border-[#60a5fa]/15 bg-surface-card/70 p-3">
+        {loading ? (
+          <p className="p-4 text-sm text-text-muted-v2">Carregando consultas...</p>
+        ) : error ? (
+          <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">{error}</p>
+        ) : appointments.length ? (
+          <div className="grid gap-3">
+            {appointments.map((appointment) => (
+              <article className="rounded-lg border border-border-default-v2 bg-surface-card px-4 py-3" key={appointment.id}>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-text-heading">{appointment.type || 'Consulta'}</p>
+                    <p className="mt-1 text-sm text-text-muted-v2">{appointment.professional || 'Médico não informado'}</p>
+                  </div>
+                  <div className="shrink-0 text-left sm:text-right">
+                    <p className="text-sm font-semibold text-text-heading">{formatAppointmentDateTime(appointment)}</p>
+                    <span className="mt-1 inline-flex rounded-full border border-border-default-v2 bg-surface-card-hover px-2.5 py-1 text-xs font-semibold text-text-body">
+                      {appointment.status || 'Agendado'}
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-text-muted-v2">
+                  {appointment.mode ? <span className="rounded-full bg-surface-card-hover px-2.5 py-1">{appointment.mode}</span> : null}
+                  {appointment.room ? <span className="rounded-full bg-surface-card-hover px-2.5 py-1">{appointment.room}</span> : null}
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="p-4 text-sm text-text-muted-v2">Nenhuma consulta encontrada ainda.</p>
+        )}
       </div>
     </div>
   )
@@ -747,11 +838,11 @@ function ProfessionalWeeklyAgenda({ rows }) {
                 ))
               ) : (
                 <p className="flex min-h-12 items-center justify-center rounded-lg border border-dashed border-[#60a5fa]/15 px-2 py-2 text-center text-[11px] leading-4 text-text-muted-v2">
-                  Sem horarios
+                  Sem horários
                 </p>
               )}
               {dayRows.length > visibleRows.length ? (
-                <span className="truncate text-[10px] font-bold text-[var(--professional-blue-text)]">+ {dayRows.length - visibleRows.length} horarios</span>
+                <span className="truncate text-[10px] font-bold text-[var(--professional-blue-text)]">+ {dayRows.length - visibleRows.length} horários</span>
               ) : null}
             </div>
           </article>
@@ -857,6 +948,51 @@ function normalizeSearch(value) {
     .replace(/[\u0300-\u036f]/g, '')
     .trim()
     .toLowerCase()
+}
+
+function sortAppointmentsByDateTime(appointments) {
+  return [...appointments].sort((left, right) => getAppointmentDateTime(left) - getAppointmentDateTime(right))
+}
+
+function getAppointmentDateTime(appointment) {
+  const value = `${appointment?.date || ''}T${appointment?.time || '00:00'}:00`
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? Number.MAX_SAFE_INTEGER : date.getTime()
+}
+
+function formatAppointmentDateTime(appointment) {
+  const dateTime = new Date(`${appointment?.date || ''}T${appointment?.time || '00:00'}:00`)
+  if (Number.isNaN(dateTime.getTime())) {
+    return [appointment?.date, appointment?.time].filter(Boolean).join(' ') || 'Data não informada'
+  }
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(dateTime)
+}
+
+function showToast(title, description, type = 'default') {
+  window.dispatchEvent(new CustomEvent('app:show_toast', {
+    detail: { title, description, type },
+  }))
+}
+
+function withTimeout(promise, timeoutMs, message) {
+  let timeoutId = null
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = window.setTimeout(() => reject(new Error(message)), timeoutMs)
+  })
+
+  return Promise.race([
+    promise.finally(() => {
+      if (timeoutId) window.clearTimeout(timeoutId)
+    }),
+    timeoutPromise,
+  ])
 }
 
 function SchedulingIcon({ className = 'size-4', name }) {

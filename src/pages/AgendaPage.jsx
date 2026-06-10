@@ -693,7 +693,7 @@ function PatientAgendaList({ appointments, currentPatient, onAppointmentClick })
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-bold text-text-body">{appointment.type || 'Consulta'}</p>
               <p className="mt-1 truncate text-sm text-text-muted-v2">
-                {appointment.professional || 'Médico(a) não informado'}
+                {appointment.professional || 'Médico não informado'}
               </p>
             </div>
             <div className="shrink-0 text-left sm:text-right">

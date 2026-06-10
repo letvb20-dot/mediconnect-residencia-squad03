@@ -21,7 +21,7 @@ const ALL_NAV_ITEMS = [
   { href: '/agendamento', label: 'Agendamento', icon: 'calendar' },
   { href: '/profissionais', label: 'Profissionais', icon: 'doctor' },
   { href: '/pacientes', label: 'Pacientes', icon: 'users', exact: true },
-  { href: '/laudos', label: 'Relatórios', icon: 'clipboard' },
+  { href: '/laudos', label: 'Analytics', icon: 'chart' },
   { href: '/lista-espera', label: 'Lista de Espera Inteligente', icon: 'users' },
   {
     href: '/comunicacao',
@@ -29,7 +29,7 @@ const ALL_NAV_ITEMS = [
     icon: 'message',
     activePaths: ['/comunicacao', '/mensagens'],
   },
-  { href: '/relatorios', label: 'Analytics', icon: 'chart' },
+  { href: '/relatorios', label: 'Relatórios', icon: 'clipboard' },
   { href: '/configuracoes', label: 'Configurações', icon: 'settings', activePaths: ['/configuracoes', '/config'] },
 ]
 
@@ -41,13 +41,13 @@ const titles = {
   '/agendamento': 'Agendamento',
   '/atendimento': 'Atendimento',
   '/consultas': 'Lista de Espera Inteligente',
-  '/laudos': 'Relatórios',
+  '/laudos': 'Analytics',
   '/lista-espera': 'Lista de Espera Inteligente',
   '/pacientes': 'Pacientes',
   '/profissionais': 'Profissionais',
   '/comunicacao': 'Comunicação',
   '/mensagens': 'Comunicação',
-  '/relatorios': 'Analytics',
+  '/relatorios': 'Relatórios',
   '/perfil': 'Perfil',
   '/configuracoes': 'Configurações',
   '/config': 'Configurações',
@@ -533,8 +533,8 @@ function getNotificationRoute(notification) {
     'medical-records': '/prontuario',
     medical_records: '/prontuario',
     prontuario: '/prontuario',
-    reports: '/laudos',
-    relatorios: '/laudos',
+    reports: '/relatorios',
+    relatorios: '/relatorios',
   }
 
   return domainRoutes[notification.domain] || ''

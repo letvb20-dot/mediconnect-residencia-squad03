@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { aiClient } from '../../lib/ai/aiClient.js'
+import { runAssistant } from '../../lib/ai/agent/runAgent.js'
 import { AUTH_SESSION_CHANGED_EVENT, getAuthSession } from '../../config/api.js'
 import { canAccess, normalizeRole } from '../../config/permissions.js'
-import { buildContext } from '../../utils/chatbotContext.js'
 import { createSpeechRecognizer, isVoiceCaptureAvailable } from '../../lib/ai/speechRecognition.js'
-import { appointmentRepository } from '../../repositories/appointmentRepository.js'
 
 const SESSION_KEY_PREFIX = 'mediconnect.chatbot.history.v1'
 const ANON_SCOPE = 'anon'
@@ -52,6 +51,7 @@ export function ChatbotWidget({ navigate, role }) {
   const [messages, setMessages] = useState(() => readHistory(sessionKey))
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [agentStatus, setAgentStatus] = useState('')
   const scrollRef = useRef(null)
 
   // Reage a troca de usuário recarregando o histórico isolado por perfil.
@@ -91,20 +91,33 @@ export function ChatbotWidget({ navigate, role }) {
     const nextMessages = [...messages, { role: 'user', content: trimmed }]
     setMessages(nextMessages)
     setInput('')
-    setLoading(true)
 
-    try {
-      const data = await buildContext(role)
-      const reply = await aiClient.chat({ messages: nextMessages, role, data })
+    // Agente 100% function calling. Sem API key não há fallback de contexto estático.
+    if (!aiClient.isLive()) {
       setMessages((current) => [
         ...current,
         {
           role: 'assistant',
-          content: reply.text,
-          route: reply.route || '',
-          action: reply.action || null,
-          appointmentData: reply.appointmentData || null,
+          content: 'Assistente de IA indisponível: configure a VITE_GEMINI_API_KEY no .env e reinicie o servidor.',
         },
+      ])
+      return
+    }
+
+    setLoading(true)
+    try {
+      // O modelo decide quais ferramentas chamar; nós executamos nos repositórios.
+      // onStep alimenta o status ao vivo enquanto o loop roda.
+      const reply = await runAssistant({
+        messages: nextMessages,
+        role,
+        onStep: (step) => {
+          if (step.kind === 'call') setAgentStatus(step.label)
+        },
+      })
+      setMessages((current) => [
+        ...current,
+        { role: 'assistant', content: reply.text, route: reply.route || '', steps: reply.steps || [] },
       ])
     } catch {
       setMessages((current) => [
@@ -113,6 +126,7 @@ export function ChatbotWidget({ navigate, role }) {
       ])
     } finally {
       setLoading(false)
+      setAgentStatus('')
     }
   }, [input, loading, messages, role])
 
@@ -148,105 +162,16 @@ export function ChatbotWidget({ navigate, role }) {
     }
   }, [recording])
 
-  const handleNavigation = useCallback(async (route) => {
+  const handleNavigation = useCallback((route) => {
     const authorized = canAccess(role, route)
     if (!authorized) {
       alert('Você não tem permissão para acessar esta funcionalidade.')
       return
     }
 
-    if (String(route || '').startsWith('/prontuario/')) {
-      const patientIdFromRoute = route.split('/').pop()
-      const data = await buildContext(role)
-      const hasPatientAccess = data.patients?.some(
-        (p) => String(p.id) === String(patientIdFromRoute)
-      )
-      if (!hasPatientAccess) {
-        alert('Você não tem permissão para acessar o prontuário de pacientes que não são seus.')
-        return
-      }
-    }
-
     setOpen(false)
     navigate(route)
   }, [role, navigate])
-
-  const handleExecuteAction = useCallback(async (message) => {
-    if (!message.appointmentData) return
-    setLoading(true)
-    try {
-      const data = await buildContext(role)
-      
-      if (message.action === 'confirm_appointment') {
-        const { patientId, doctorId, scheduledAt } = message.appointmentData
-        
-        // Ownership checks
-        if (role === 'paciente' && String(patientId) !== String(data.currentPatientId)) {
-          throw new Error('Você só pode agendar consultas para si mesmo.')
-        }
-        if (role === 'medico' && String(doctorId) !== String(data.currentDoctorId)) {
-          throw new Error('Você só pode agendar consultas para si mesmo.')
-        }
-
-        const datePart = scheduledAt.split('T')[0]
-        const timePart = scheduledAt.split('T')[1]?.substring(0, 5) || '09:00'
-
-        const payload = {
-          patientId,
-          professionalId: doctorId,
-          date: datePart,
-          time: timePart,
-          status: 'Agendado',
-        }
-
-        await appointmentRepository.create(payload)
-
-        setMessages((current) =>
-          current.map((msg) =>
-            msg === message ? { ...msg, action: null, appointmentData: null } : msg
-          )
-        )
-
-        setMessages((current) => [
-          ...current,
-          { role: 'assistant', content: '✓ Consulta agendada com sucesso no MediConnect!' },
-        ])
-      } else if (message.action === 'cancel_appointment') {
-        const { id } = message.appointmentData
-        if (!id) throw new Error('ID do agendamento não informado.')
-
-        // Resolve details from activeAppointmentsList to check ownership
-        const appToCancel = data.activeAppointmentsList?.find((a) => String(a.id) === String(id))
-
-        if (role === 'paciente' && appToCancel && String(appToCancel.patientId) !== String(data.currentPatientId)) {
-          throw new Error('Você só pode cancelar suas próprias consultas.')
-        }
-        if (role === 'medico' && appToCancel && String(appToCancel.doctorId) !== String(data.currentDoctorId)) {
-          throw new Error('Você só pode cancelar consultas da sua própria agenda.')
-        }
-
-        await appointmentRepository.cancel(id, { status: 'Cancelado' })
-
-        setMessages((current) =>
-          current.map((msg) =>
-            msg === message ? { ...msg, action: null, appointmentData: null } : msg
-          )
-        )
-
-        setMessages((current) => [
-          ...current,
-          { role: 'assistant', content: '✓ Consulta cancelada com sucesso no MediConnect!' },
-        ])
-      }
-    } catch (error) {
-      setMessages((current) => [
-        ...current,
-        { role: 'assistant', content: `Falha ao realizar ação: ${error.message}` },
-      ])
-    } finally {
-      setLoading(false)
-    }
-  }, [role])
 
   function handleKeyDown(event) {
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -315,6 +240,20 @@ export function ChatbotWidget({ navigate, role }) {
                   }`}
                 >
                   <p className="whitespace-pre-wrap">{message.content}</p>
+                  {message.steps?.length ? (
+                    <details className="mt-1.5">
+                      <summary className="cursor-pointer select-none list-none text-[10px] text-text-muted-v2 opacity-50 transition-opacity duration-150 hover:!opacity-100">
+                        Como cheguei nisso · {message.steps.length} {message.steps.length === 1 ? 'passo' : 'passos'}
+                      </summary>
+                      <ol className="mt-1 space-y-0.5 border-l border-border-default-v2 pl-2 text-[10px] text-text-muted-v2">
+                        {message.steps.map((step, stepIndex) => (
+                          <li key={stepIndex} className="leading-4">
+                            {renderStep(step)}
+                          </li>
+                        ))}
+                      </ol>
+                    </details>
+                  ) : null}
                   {message.route ? (
                     <button
                       className="mt-2 inline-flex items-center gap-1 rounded-lg bg-accent-primary/10 px-2.5 py-1 text-xs font-semibold text-accent-primary transition hover:bg-accent-primary/20"
@@ -324,31 +263,11 @@ export function ChatbotWidget({ navigate, role }) {
                       Abrir →
                     </button>
                   ) : null}
-                  {message.action === 'confirm_appointment' && message.appointmentData ? (
-                    <button
-                      className="mt-2 flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
-                      disabled={loading}
-                      onClick={() => handleExecuteAction(message)}
-                      type="button"
-                    >
-                      ✓ Confirmar Agendamento
-                    </button>
-                  ) : null}
-                  {message.action === 'cancel_appointment' && message.appointmentData ? (
-                    <button
-                      className="mt-2 flex items-center gap-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
-                      disabled={loading}
-                      onClick={() => handleExecuteAction(message)}
-                      type="button"
-                    >
-                      ✗ Cancelar Agendamento
-                    </button>
-                  ) : null}
                 </div>
               </div>
             ))}
 
-            {loading ? <p className="text-xs text-text-muted-v2">Pensando...</p> : null}
+            {loading ? <p className="text-xs text-text-muted-v2">{agentStatus || 'Pensando...'}</p> : null}
           </div>
 
           <div className="flex items-end gap-2 border-t border-border-default-v2 p-3">
@@ -397,6 +316,35 @@ export function ChatbotWidget({ navigate, role }) {
       </button>
     </>
   )
+}
+
+// Renderiza um passo do trace do agente (raciocínio / chamada / resultado).
+// Discreto, sem emoji — o tipo do passo é indicado por estilo/prefixo textual.
+function renderStep(step) {
+  if (step.kind === 'thought') {
+    return <span className="italic">{step.text}</span>
+  }
+  if (step.kind === 'call') {
+    const argsText = formatArgs(step.args)
+    return (
+      <span>
+        <span className="text-text-body">{step.label || step.tool}</span>
+        {argsText ? <span> — {argsText}</span> : null}
+      </span>
+    )
+  }
+  if (step.kind === 'result') {
+    return <span>→ {step.summary}</span>
+  }
+  return null
+}
+
+// Transforma os argumentos da ferramenta em "chave: valor" legível.
+function formatArgs(args) {
+  if (!args || typeof args !== 'object') return ''
+  const entries = Object.entries(args).filter(([, value]) => value !== undefined && value !== '')
+  if (!entries.length) return 'sem filtros'
+  return entries.map(([key, value]) => `${key}: ${value}`).join(', ')
 }
 
 function readHistory(key) {

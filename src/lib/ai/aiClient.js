@@ -95,9 +95,9 @@ export const aiClient = {
   // schema: [{ name, label, type?: 'text'|'number'|'date'|'enum', options?: string[], example? }]
   // Retorna um objeto { campo: valor } só com os campos que o Gemini conseguiu inferir.
   async extractFormFromAudio({ blob, mimeType, schema = [], hint = '' } = {}) {
-    if (!API_KEY) throw new Error('Preenchimento por voz indisponível: VITE_GEMINI_API_KEY não configurada.')
-    if (!blob) throw new Error('Áudio vazio.')
-    if (!Array.isArray(schema) || schema.length === 0) throw new Error('Schema do formulário vazio.')
+    if (!API_KEY) throw new Error('Preenchimento por voz indisponível: a chave VITE_GEMINI_API_KEY não está configurada no .env.')
+    if (!blob) throw new Error('Não foi gravado nenhum áudio para processar.')
+    if (!Array.isArray(schema) || schema.length === 0) throw new Error('Nenhum campo de formulário foi informado para a IA preencher.')
 
     const base64 = await blobToBase64(blob)
     const effectiveMime = mimeType || blob.type || 'audio/webm'
@@ -149,7 +149,7 @@ export const aiClient = {
 
     if (!response.ok) {
       const detail = await response.text().catch(() => '')
-      throw new Error(`Falha na extração por voz (${response.status}): ${detail.slice(0, 200)}`)
+      throw new Error(`Não foi possível extrair os campos do áudio. ${describeGeminiError(response.status, detail)}`)
     }
 
     const payload = await response.json()
@@ -157,15 +157,15 @@ export const aiClient = {
     const text = Array.isArray(parts) ? parts.map((part) => part.text || '').join('').trim() : ''
     const parsed = safeParseJson(text)
     if (!parsed || typeof parsed !== 'object') {
-      throw new Error('Resposta da IA não veio em JSON válido.')
+      throw new Error('A IA respondeu, mas o conteúdo não veio em JSON válido — tente gravar novamente com uma fala mais clara.')
     }
     return parsed
   },
 
   // Transcreve áudio (Blob) usando o Gemini. Cross-browser, não depende da Web Speech API.
   async transcribeAudio({ blob, mimeType } = {}) {
-    if (!API_KEY) throw new Error('Reconhecimento de voz indisponível: VITE_GEMINI_API_KEY não configurada.')
-    if (!blob) throw new Error('Áudio vazio.')
+    if (!API_KEY) throw new Error('Reconhecimento de voz indisponível: a chave VITE_GEMINI_API_KEY não está configurada no .env.')
+    if (!blob) throw new Error('Não foi gravado nenhum áudio para transcrever.')
 
     const base64 = await blobToBase64(blob)
     const effectiveMime = mimeType || blob.type || 'audio/webm'
@@ -193,7 +193,7 @@ export const aiClient = {
 
     if (!response.ok) {
       const detail = await response.text().catch(() => '')
-      throw new Error(`Falha na transcrição (${response.status}): ${detail.slice(0, 200)}`)
+      throw new Error(`Não foi possível transcrever o áudio. ${describeGeminiError(response.status, detail)}`)
     }
 
     const payload = await response.json()
@@ -205,8 +205,8 @@ export const aiClient = {
   // Transcreve áudios mais longos (consultas inteiras). Usa maxOutputTokens maior e
   // pede pontuação/parágrafos para o texto ficar pronto para alimentar generateReport.
   async transcribeLongAudio({ blob, mimeType } = {}) {
-    if (!API_KEY) throw new Error('Transcrição indisponível: VITE_GEMINI_API_KEY não configurada.')
-    if (!blob) throw new Error('Áudio vazio.')
+    if (!API_KEY) throw new Error('Transcrição indisponível: a chave VITE_GEMINI_API_KEY não está configurada no .env.')
+    if (!blob) throw new Error('Não foi gravado nenhum áudio para transcrever.')
 
     const base64 = await blobToBase64(blob)
     const effectiveMime = mimeType || blob.type || 'audio/webm'
@@ -238,7 +238,7 @@ export const aiClient = {
 
     if (!response.ok) {
       const detail = await response.text().catch(() => '')
-      throw new Error(`Falha na transcrição (${response.status}): ${detail.slice(0, 200)}`)
+      throw new Error(`Não foi possível transcrever o áudio da consulta. ${describeGeminiError(response.status, detail)}`)
     }
 
     const payload = await response.json()
@@ -319,13 +319,29 @@ async function callGemini({ system, messages, responseMimeType }) {
     }),
   })
 
-  if (!response.ok) throw new Error('Falha na chamada à API do Gemini.')
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '')
+    throw new Error(`A IA não respondeu. ${describeGeminiError(response.status, detail)}`)
+  }
 
   const payload = await response.json()
   const parts = payload?.candidates?.[0]?.content?.parts
   const text = Array.isArray(parts) ? parts.map((part) => part.text || '').join('').trim() : ''
-  if (!text) throw new Error('Resposta vazia da API.')
+  if (!text) throw new Error('A IA respondeu sem nenhum conteúdo — tente reformular a pergunta.')
   return text
+}
+
+// Traduz códigos HTTP do Gemini em mensagens claras para o usuário final.
+function describeGeminiError(status, detail) {
+  const snippet = String(detail || '').slice(0, 160).trim()
+  if (status === 400) return `A IA recusou a requisição (provavelmente um parâmetro inválido).${snippet ? ` Detalhe: ${snippet}` : ''}`
+  if (status === 401 || status === 403) return 'A chave VITE_GEMINI_API_KEY parece inválida ou sem permissão para o modelo configurado.'
+  if (status === 404) return 'O modelo do Gemini configurado em VITE_GEMINI_MODEL não foi encontrado.'
+  if (status === 413) return 'O áudio enviado é grande demais para o Gemini processar. Grave trechos mais curtos.'
+  if (status === 429) return 'Limite de uso da API do Gemini atingido. Aguarde alguns instantes e tente de novo.'
+  if (status === 503 || status === 502 || status === 504) return 'A API do Gemini está sobrecarregada no momento. Tente novamente em alguns segundos.'
+  if (status >= 500) return 'A API do Gemini está com instabilidade. Tente novamente em instantes.'
+  return snippet || `Erro inesperado da API (HTTP ${status}).`
 }
 
 function safeParseJson(text) {

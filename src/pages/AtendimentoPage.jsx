@@ -11,34 +11,6 @@ import { translateErrorMessage } from '../repositories/repositoryUtils.js'
 import { formatLocalDateInput } from '../utils/agendaDate.js'
 
 const DRAFT_REPORT_STORAGE_KEY = 'mediconnect.atendimento.draftReport'
-const DEMO_APPOINTMENT_ID = 'demo-bot-001'
-
-const DEMO_APPOINTMENT = {
-  id: DEMO_APPOINTMENT_ID,
-  patientId: 'demo-patient-001',
-  patient: 'Paciente Bot (demonstração)',
-  professional: 'Médico de plantão',
-  date: '',
-  time: '09:00',
-  type: 'Consulta de demonstração',
-  mode: 'Presencial',
-  durationMinutes: 30,
-  status: 'Aguardando',
-  highPriority: false,
-  priority: 'Média',
-  notes: 'Paciente fictício para demonstração do fluxo de atendimento. Relata cefaleia há 3 dias, sem febre, alivia com hidratação.',
-  room: 'Consultório 1',
-  isDemo: true,
-}
-
-const DEMO_PATIENT = {
-  id: 'demo-patient-001',
-  name: 'Paciente Bot (demonstração)',
-  birthDate: '1990-05-12',
-  birth_date: '1990-05-12',
-  cpf: '000.000.000-00',
-  age: null, // calculado em runtime
-}
 
 const CLINIC_FOOTER = 'MediConnect · Centro Médico Integrado · Av. Iguaçu, 1236 — Curitiba/PR · contato@mediconnect.com.br'
 
@@ -136,23 +108,22 @@ export function AtendimentoPage({ navigate }) {
   const load = useCallback(async () => {
     setError('')
     const today = todayIso()
-    const demo = { ...DEMO_APPOINTMENT, date: today }
     try {
       const { doctorId, profile } = await resolveDoctorIdForViewer()
       setDoctorName(profile?.name || '')
       if (!doctorId) {
-        setAppointments([demo])
-        setError('Não foi possível identificar o médico vinculado ao seu usuário. Mostrando apenas o paciente de demonstração.')
+        setAppointments([])
+        setError('Não foi possível identificar o médico vinculado ao seu usuário.')
         return
       }
       const data = await appointmentRepository.getAll({ doctorId, status: 'checked_in' })
       const filtered = (data || [])
         .filter((appointment) => appointment.date === today && appointment.status === 'Aguardando')
         .sort((a, b) => String(a.time || '').localeCompare(String(b.time || '')))
-      setAppointments([demo, ...filtered])
+      setAppointments(filtered)
     } catch (loadError) {
-      setAppointments([demo])
-      setError(translateErrorMessage(loadError) || 'Erro ao carregar a fila de atendimento. Mostrando apenas o paciente de demonstração.')
+      setAppointments([])
+      setError(translateErrorMessage(loadError) || 'Erro ao carregar a fila de atendimento.')
     } finally {
       setLoading(false)
     }
@@ -169,174 +140,219 @@ export function AtendimentoPage({ navigate }) {
     return now.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
   }, [])
 
-  const realQueueCount = appointments.filter((appointment) => !appointment.isDemo).length
-  const hasDemo = appointments.some((appointment) => appointment.isDemo)
+  const queueCount = appointments.length
   const nextPatient = appointments[0]
+  const upcoming = appointments.slice(1)
+  const nextInitials = initialsOf(nextPatient?.patient)
 
   return (
-    <div className="grid gap-6">
-      {/* Cabeçalho */}
-      <header className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div className="flex items-start gap-3">
-          <div className="flex size-12 items-center justify-center rounded-xl bg-accent-primary/10 text-accent-primary">
-            <svg className="size-6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
-              <path d="M3 12h4l2-5 4 10 2-5h6" />
-            </svg>
-          </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent-primary">Atendimento</p>
-            <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-text-heading md:text-3xl">
-              Sala de espera
-            </h1>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-text-muted-v2">
-              Pacientes do dia que já fizeram check-in na recepção e aguardam ser chamados.
-              {doctorName ? <> Fila de <span className="text-text-body">{doctorName}</span>.</> : null}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 self-start">
-          <span className="rounded-full border border-border-default-v2 bg-surface-card-hover px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-text-muted-v2">
-            {todayLabel}
-          </span>
-          <button
-            className="inline-flex h-9 items-center gap-2 rounded-md border border-border-default-v2 bg-surface-card-hover px-3 text-xs font-semibold text-text-body transition hover:bg-surface-card"
-            onClick={() => load()}
-            type="button"
-          >
-            <svg className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
-              <path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5" />
-            </svg>
-            Atualizar
-          </button>
-        </div>
-      </header>
-
-      {/* Barra de estatísticas */}
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border border-border-default-v2 bg-surface-card p-4 shadow-card">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted-v2">Aguardando atendimento</p>
-          <p className="mt-2 text-2xl font-bold text-text-heading">{realQueueCount}</p>
-          <p className="mt-1 text-xs text-text-muted-v2">
-            {realQueueCount === 0 ? 'Nenhum paciente real na fila' : realQueueCount === 1 ? 'paciente em sala de espera' : 'pacientes em sala de espera'}
-          </p>
-        </div>
-        <div className="rounded-xl border border-border-default-v2 bg-surface-card p-4 shadow-card">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted-v2">Próximo da fila</p>
-          <p className="mt-2 truncate text-base font-semibold text-text-heading">
-            {nextPatient?.patient || '—'}
-          </p>
-          <p className="mt-1 text-xs text-text-muted-v2">
-            {nextPatient ? `Agendado para ${nextPatient.time || '--:--'}` : 'Fila vazia'}
-          </p>
-        </div>
-        <div className="rounded-xl border border-border-default-v2 bg-surface-card p-4 shadow-card">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted-v2">Modo demonstração</p>
-          <p className="mt-2 text-base font-semibold text-text-heading">{hasDemo ? 'Ativo' : 'Desativado'}</p>
-          <p className="mt-1 text-xs text-text-muted-v2">
-            {hasDemo ? 'Paciente Bot disponível no topo da fila' : '—'}
-          </p>
-        </div>
-      </div>
-
-      {error ? (
-        <div className="rounded-xl border border-amber-500/40 bg-amber-950/20 px-4 py-3 text-sm text-amber-200">
-          {error}
-        </div>
-      ) : null}
-
-      {/* Fila */}
-      <section className="rounded-2xl border border-border-default-v2 bg-surface-card shadow-card">
-        <header className="flex items-center justify-between border-b border-border-default-v2 px-5 py-3">
-          <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-text-muted-v2">Fila de atendimento</h2>
-          <span className="text-xs text-text-muted-v2">
-            {appointments.length} {appointments.length === 1 ? 'item' : 'itens'}
-          </span>
-        </header>
-
-        {loading ? (
-          <div className="p-6 text-sm text-text-muted-v2">Carregando a fila...</div>
-        ) : appointments.length === 0 ? (
-          <div className="p-10 text-center">
-            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-surface-card-hover text-text-muted-v2">
+    <div className="page-enter grid gap-6">
+      {/* HERO: contexto do médico + ação principal */}
+      <header className="relative overflow-hidden rounded-2xl border border-border-default-v2 bg-surface-card shadow-card">
+        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-accent-primary/30 via-accent-primary to-accent-primary/30" aria-hidden="true" />
+        <div className="grid gap-5 px-5 py-5 sm:px-7 md:grid-cols-[1fr_auto] md:items-end">
+          <div className="flex items-start gap-4">
+            <div className="metric-tone-blue flex size-12 items-center justify-center rounded-2xl shadow-card">
               <svg className="size-6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
+                <path d="M3 12h4l2-5 4 10 2-5h6" />
+              </svg>
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent-primary">Atendimento · Sala de espera</p>
+              <h1 className="mt-1 text-2xl font-bold leading-tight tracking-tight text-text-heading md:text-3xl">
+                {doctorName ? <>Bom atendimento, <span className="text-accent-primary">{firstName(doctorName)}</span>.</> : 'Sua fila de atendimento'}
+              </h1>
+              <p className="mt-1 text-sm capitalize text-text-muted-v2">{todayLabel}</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 self-start md:self-end">
+            <button
+              className="inline-flex h-10 items-center gap-2 rounded-md border border-border-default-v2 bg-surface-card-hover px-3.5 text-sm font-semibold text-text-body transition hover:bg-surface-card hover:border-border-strong"
+              onClick={() => load()}
+              type="button"
+            >
+              <svg className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
+                <path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5" />
+              </svg>
+              Atualizar
+            </button>
+          </div>
+        </div>
+
+        <div className="grid gap-3 border-t border-border-subtle bg-surface-inset/50 px-5 py-4 sm:px-7 sm:grid-cols-2">
+          {/* Próximo paciente em destaque */}
+          {nextPatient ? (
+            <button
+              className="group flex items-center gap-4 rounded-xl border border-accent-primary/30 bg-accent-primary/5 px-4 py-3 text-left transition hover:border-accent-primary/60 hover:bg-accent-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary"
+              onClick={() => navigate(`/atendimento/${nextPatient.id}`)}
+              type="button"
+            >
+              <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-accent-primary text-base font-bold text-white shadow-card">
+                {nextInitials}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-accent-primary">Próximo</p>
+                <p className="mt-0.5 truncate text-base font-bold text-text-heading">{nextPatient.patient}</p>
+                <p className="mt-0.5 truncate text-xs text-text-muted-v2">
+                  {nextPatient.time || '--:--'} · {nextPatient.type || 'Consulta'}
+                </p>
+              </div>
+              <span className="inline-flex h-9 items-center gap-1.5 rounded-md bg-accent-primary px-3 text-xs font-bold text-white shadow-card transition group-hover:bg-accent-hover">
+                Atender
+                <svg className="size-3.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path d="m9 6 6 6-6 6" />
+                </svg>
+              </span>
+            </button>
+          ) : (
+            <div className="flex items-center gap-3 rounded-xl border border-dashed border-border-default-v2 px-4 py-3 text-sm text-text-muted-v2">
+              <svg className="size-5 text-text-muted-v2" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
                 <circle cx="12" cy="12" r="9" />
                 <path d="M12 7v5l3 2" />
               </svg>
+              Nenhum paciente aguardando no momento.
             </div>
-            <p className="mt-3 text-base font-semibold text-text-heading">Nenhum paciente aguardando.</p>
-            <p className="mt-1 text-sm leading-6 text-text-muted-v2">
-              Quando a recepção confirmar a chegada de um paciente, ele aparecerá aqui automaticamente.
+          )}
+
+          {/* Métrica da fila */}
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-border-default-v2 bg-surface-card px-4 py-3">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted-v2">Em sala de espera</p>
+              <p className="mt-0.5 text-2xl font-bold leading-none tabular-nums text-text-heading">{queueCount}</p>
+            </div>
+            <div className="text-right text-xs text-text-muted-v2">
+              <p>{queueCount === 1 ? 'paciente' : 'pacientes'}</p>
+              <p className="mt-0.5">aguardando</p>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {error ? (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-500/40 bg-amber-950/20 px-4 py-3 text-sm text-amber-200">
+          <svg className="mt-0.5 size-4 shrink-0" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+            <path d="M12 9v4M12 17h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+          </svg>
+          <p>{error}</p>
+        </div>
+      ) : null}
+
+      {/* Fila completa */}
+      <section className="overflow-hidden rounded-2xl border border-border-default-v2 bg-surface-card shadow-card">
+        <header className="flex items-center justify-between gap-3 border-b border-border-subtle px-5 py-3">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-bold text-text-heading">Fila completa</h2>
+            <span className="rounded-full bg-surface-inset px-2 py-0.5 text-[11px] font-semibold tabular-nums text-text-muted-v2">
+              {appointments.length}
+            </span>
+          </div>
+          {upcoming.length > 0 ? (
+            <span className="text-xs text-text-muted-v2">
+              {upcoming.length} {upcoming.length === 1 ? 'após o próximo' : 'após o próximo'}
+            </span>
+          ) : null}
+        </header>
+
+        {loading ? (
+          <div className="grid gap-2 p-5">
+            {[0, 1, 2].map((index) => (
+              <div className="skeleton h-16" key={index} />
+            ))}
+          </div>
+        ) : appointments.length === 0 ? (
+          <div className="px-6 py-14 text-center">
+            <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-surface-inset text-text-muted-v2">
+              <svg className="size-7" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" viewBox="0 0 24 24">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M22 11h-6M22 11l-2-2M22 11l-2 2" />
+              </svg>
+            </div>
+            <p className="mt-3 text-base font-semibold text-text-heading">Nenhum paciente aguardando</p>
+            <p className="mx-auto mt-1 max-w-sm text-sm leading-6 text-text-muted-v2">
+              Assim que a recepção confirmar a chegada de alguém, o paciente aparecerá aqui.
             </p>
           </div>
         ) : (
-          <ul className="divide-y divide-border-default-v2">
-            {appointments.map((appointment) => {
-              const initials = String(appointment.patient || 'P')
-                .split(/\s+/)
-                .filter(Boolean)
-                .slice(0, 2)
-                .map((part) => part[0]?.toUpperCase())
-                .join('') || 'P'
-              return (
-                <li key={appointment.id}>
-                  <button
-                    className={`group flex w-full items-center gap-4 px-5 py-4 text-left transition hover:bg-surface-card-hover ${
-                      appointment.isDemo ? 'bg-sky-950/10' : ''
-                    }`}
-                    onClick={() => navigate(`/atendimento/${appointment.id}`)}
-                    type="button"
-                  >
-                    {/* Hora */}
-                    <div className="flex w-16 shrink-0 flex-col items-center rounded-lg bg-surface-inset px-2 py-2">
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted-v2">Hora</span>
-                      <span className="mt-0.5 text-lg font-bold tabular-nums text-text-heading">{appointment.time || '--:--'}</span>
-                    </div>
-                    {/* Avatar */}
-                    <div className={`flex size-11 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
-                      appointment.isDemo
-                        ? 'bg-sky-500/20 text-sky-200'
-                        : 'bg-accent-primary/15 text-accent-primary'
-                    }`}>
-                      {initials}
-                    </div>
-                    {/* Conteúdo */}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate text-base font-semibold text-text-heading">{appointment.patient}</p>
-                        {appointment.isDemo ? (
-                          <span className="rounded-full border border-sky-400/50 bg-sky-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-sky-200">
-                            Demo
-                          </span>
-                        ) : null}
-                      </div>
-                      <p className="mt-0.5 text-xs text-text-muted-v2">
-                        {appointment.type || 'Consulta'} · {appointment.mode || 'Presencial'}
-                      </p>
-                      {appointment.notes ? (
-                        <p className="mt-1 line-clamp-1 text-sm text-text-body">
-                          <span className="text-text-muted-v2">Obs.: </span>
-                          {appointment.notes}
-                        </p>
-                      ) : null}
-                    </div>
-                    {/* Status + seta */}
-                    <div className="flex items-center gap-3">
-                      <span className="rounded-full border border-emerald-500/40 bg-emerald-950/30 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-200">
-                        Aguardando
-                      </span>
-                      <svg className="size-5 text-text-muted-v2 transition group-hover:translate-x-0.5 group-hover:text-accent-primary" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
-                        <path d="m9 6 6 6-6 6" />
-                      </svg>
-                    </div>
-                  </button>
-                </li>
-              )
-            })}
+          <ul className="divide-y divide-border-subtle">
+            {appointments.map((appointment, index) => (
+              <li key={appointment.id}>
+                <QueueRow
+                  appointment={appointment}
+                  highlighted={index === 0}
+                  onClick={() => navigate(`/atendimento/${appointment.id}`)}
+                />
+              </li>
+            ))}
           </ul>
         )}
       </section>
     </div>
   )
+}
+
+// Linha da fila com hora, avatar, dados e botão de atender.
+function QueueRow({ appointment, highlighted, onClick }) {
+  const initials = initialsOf(appointment.patient)
+  return (
+    <button
+      className={`group flex w-full items-center gap-4 px-5 py-4 text-left transition hover:bg-surface-card-hover focus-visible:bg-surface-card-hover focus-visible:outline-none ${
+        highlighted ? 'bg-accent-primary/[0.04]' : ''
+      }`}
+      onClick={onClick}
+      type="button"
+    >
+      <div className="flex w-16 shrink-0 flex-col items-center rounded-lg bg-surface-inset px-2 py-2">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted-v2">Hora</span>
+        <span className="mt-0.5 text-lg font-bold tabular-nums text-text-heading">{appointment.time || '--:--'}</span>
+      </div>
+      <div className={`flex size-11 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
+        highlighted ? 'bg-accent-primary text-white shadow-card' : 'bg-accent-primary/15 text-accent-primary'
+      }`}>
+        {initials}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="truncate text-base font-semibold text-text-heading">{appointment.patient}</p>
+          {highlighted ? (
+            <span className="rounded-full bg-accent-primary/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-accent-primary">
+              Próximo
+            </span>
+          ) : null}
+        </div>
+        <p className="mt-0.5 text-xs text-text-muted-v2">
+          {appointment.type || 'Consulta'} · {appointment.mode || 'Presencial'}
+        </p>
+        {appointment.notes ? (
+          <p className="mt-1 line-clamp-1 text-sm text-text-body">
+            <span className="text-text-muted-v2">Obs.: </span>
+            {appointment.notes}
+          </p>
+        ) : null}
+      </div>
+      <div className="flex items-center gap-3">
+        <span className="hidden rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-300 sm:inline-flex">
+          Aguardando
+        </span>
+        <svg className="size-5 text-text-muted-v2 transition group-hover:translate-x-1 group-hover:text-accent-primary" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
+          <path d="m9 6 6 6-6 6" />
+        </svg>
+      </div>
+    </button>
+  )
+}
+
+function firstName(name) {
+  return String(name || '').trim().split(/\s+/)[0] || ''
+}
+
+function initialsOf(name) {
+  return String(name || 'P')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('') || 'P'
 }
 
 function calculateAge(birthDate) {
@@ -398,8 +414,6 @@ export function ConsultaPage({ navigate, appointmentId }) {
   const startedAtRef = useRef(0)
   const tickerRef = useRef(0)
 
-  const isDemo = String(appointmentId) === DEMO_APPOINTMENT_ID
-
   useEffect(() => {
     let active = true
     async function loadDoctor() {
@@ -425,13 +439,6 @@ export function ConsultaPage({ navigate, appointmentId }) {
     let active = true
     async function fetchData() {
       setError('')
-      if (isDemo) {
-        const today = todayIso()
-        setAppointment({ ...DEMO_APPOINTMENT, date: today })
-        setPatient({ ...DEMO_PATIENT })
-        setLoading(false)
-        return
-      }
       try {
         const list = await appointmentRepository.getAll()
         const target = (list || []).find((item) => String(item.id) === String(appointmentId))
@@ -453,7 +460,7 @@ export function ConsultaPage({ navigate, appointmentId }) {
     }
     fetchData()
     return () => { active = false }
-  }, [appointmentId, isDemo])
+  }, [appointmentId])
 
   useEffect(() => {
     return () => {
@@ -478,8 +485,8 @@ export function ConsultaPage({ navigate, appointmentId }) {
     if (!recordingSupported) {
       setRecordingError(
         !aiClient.isLive()
-          ? 'Gravação indisponível: configure VITE_GEMINI_API_KEY no .env.'
-          : 'Este navegador não suporta gravação de áudio.',
+          ? 'Gravação indisponível: a chave VITE_GEMINI_API_KEY não está configurada no .env. Sem ela a IA não consegue transcrever o áudio.'
+          : 'Este navegador não suporta gravação de áudio. Tente em uma versão recente do Chrome, Edge ou Firefox.',
       )
       return
     }
@@ -488,9 +495,16 @@ export function ConsultaPage({ navigate, appointmentId }) {
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true })
     } catch (mediaError) {
-      const message = mediaError?.name === 'NotAllowedError'
-        ? 'Permissão de microfone negada pelo navegador.'
-        : `Não foi possível acessar o microfone: ${mediaError?.message || 'erro desconhecido'}`
+      let message
+      if (mediaError?.name === 'NotAllowedError') {
+        message = 'Permissão de microfone negada pelo navegador. Libere o acesso ao microfone nas configurações do site e tente de novo.'
+      } else if (mediaError?.name === 'NotFoundError') {
+        message = 'Nenhum microfone foi encontrado neste computador. Conecte um dispositivo de áudio e tente novamente.'
+      } else if (mediaError?.name === 'NotReadableError') {
+        message = 'O microfone está sendo usado por outro programa. Feche o aplicativo que está com ele aberto e tente novamente.'
+      } else {
+        message = `Não foi possível acessar o microfone: ${mediaError?.message || 'erro desconhecido do navegador'}.`
+      }
       setRecordingError(message)
       return
     }
@@ -501,7 +515,7 @@ export function ConsultaPage({ navigate, appointmentId }) {
       recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
     } catch (recorderError) {
       stream.getTracks().forEach((track) => track.stop())
-      setRecordingError(`Não foi possível iniciar o gravador: ${recorderError?.message || 'erro desconhecido'}`)
+      setRecordingError(`Não foi possível iniciar o gravador de áudio do navegador: ${recorderError?.message || 'erro desconhecido'}.`)
       return
     }
 
@@ -519,7 +533,7 @@ export function ConsultaPage({ navigate, appointmentId }) {
       setRecordingState('recording')
     }
     recorder.onerror = (event) => {
-      setRecordingError(`Erro na gravação: ${event?.error?.message || 'desconhecido'}`)
+      setRecordingError(`Falha durante a gravação do áudio: ${event?.error?.message || 'erro desconhecido do gravador'}.`)
     }
     recorder.onstop = async () => {
       if (tickerRef.current) {
@@ -540,36 +554,48 @@ export function ConsultaPage({ navigate, appointmentId }) {
       const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || 'audio/webm' })
       setRecordingState('transcribing')
 
+      let text
       try {
-        const text = await aiClient.transcribeLongAudio({ blob, mimeType: blob.type })
-        setTranscript(text || '')
-        const draft = await aiClient.generateReport({
+        text = await aiClient.transcribeLongAudio({ blob, mimeType: blob.type })
+      } catch (transcribeError) {
+        setRecordingError(`Etapa de transcrição falhou. ${transcribeError?.message || 'A IA não conseguiu converter o áudio em texto.'}`)
+        setRecordingState('error')
+        return
+      }
+
+      setTranscript(text || '')
+
+      let draft
+      try {
+        draft = await aiClient.generateReport({
           patientName: patient?.name || appointment?.patient || '',
           complaint: text || appointment?.notes || '',
           exam: appointment?.type || 'Consulta',
         })
-        const resolvedDraft = {
-          exam: draft?.exam || appointment?.type || 'Consulta',
-          cidCode: draft?.cidCode || '',
-          diagnosis: draft?.diagnosis || '',
-          conclusion: draft?.conclusion || '',
-        }
-        setExam(resolvedDraft.exam)
-        setCidCode(resolvedDraft.cidCode)
-        setDiagnosis(resolvedDraft.diagnosis)
-        setConclusion(resolvedDraft.conclusion)
-        setContentHtml(buildMediConnectLaudoHtml({
-          patient,
-          appointment,
-          doctor,
-          draft: resolvedDraft,
-          transcript: text,
-        }))
-        setRecordingState('ready')
-      } catch (transcribeError) {
-        setRecordingError(transcribeError?.message || 'Falha ao transcrever o áudio.')
+      } catch (draftError) {
+        setRecordingError(`O áudio foi transcrito, mas o rascunho do laudo falhou. ${draftError?.message || 'A IA não conseguiu gerar o rascunho.'}`)
         setRecordingState('error')
+        return
       }
+
+      const resolvedDraft = {
+        exam: draft?.exam || appointment?.type || 'Consulta',
+        cidCode: draft?.cidCode || '',
+        diagnosis: draft?.diagnosis || '',
+        conclusion: draft?.conclusion || '',
+      }
+      setExam(resolvedDraft.exam)
+      setCidCode(resolvedDraft.cidCode)
+      setDiagnosis(resolvedDraft.diagnosis)
+      setConclusion(resolvedDraft.conclusion)
+      setContentHtml(buildMediConnectLaudoHtml({
+        patient,
+        appointment,
+        doctor,
+        draft: resolvedDraft,
+        transcript: text,
+      }))
+      setRecordingState('ready')
     }
 
     streamRef.current = stream
@@ -580,7 +606,7 @@ export function ConsultaPage({ navigate, appointmentId }) {
       stream.getTracks().forEach((track) => track.stop())
       streamRef.current = null
       recorderRef.current = null
-      setRecordingError(`Não foi possível iniciar a gravação: ${startError?.message || 'erro desconhecido'}`)
+      setRecordingError(`Não foi possível iniciar a gravação: ${startError?.message || 'erro desconhecido do navegador'}.`)
     }
   }, [appointment, patient, doctor, recordingSupported])
 
@@ -593,10 +619,6 @@ export function ConsultaPage({ navigate, appointmentId }) {
   const handleFinish = useCallback(async () => {
     if (!appointment) return
     if (!window.confirm('Marcar esta consulta como realizada?')) return
-    if (isDemo) {
-      navigate('/atendimento')
-      return
-    }
     setFinishing(true)
     try {
       await appointmentRepository.update(appointment.id, {
@@ -610,7 +632,7 @@ export function ConsultaPage({ navigate, appointmentId }) {
       alert(finishError?.message || 'Erro ao finalizar a consulta.')
       setFinishing(false)
     }
-  }, [appointment, navigate, isDemo])
+  }, [appointment, navigate])
 
   const handleGenerateLaudo = useCallback(() => {
     if (!appointment) return
@@ -651,12 +673,12 @@ export function ConsultaPage({ navigate, appointmentId }) {
 
   const handleGenerateVideo = useCallback(async () => {
     if (!videoSupported) {
-      setVideoError('Configure VITE_HEYGEN_API_KEY no .env para gerar vídeos.')
+      setVideoError('Geração de vídeo indisponível: a chave VITE_HEYGEN_API_KEY não está configurada no .env.')
       return
     }
     const script = videoScript.trim()
     if (!script) {
-      setVideoError('Escreva uma mensagem antes de gerar o vídeo.')
+      setVideoError('Escreva uma mensagem no roteiro antes de gerar o vídeo.')
       return
     }
     setVideoError('')
@@ -672,7 +694,7 @@ export function ConsultaPage({ navigate, appointmentId }) {
       setVideoState('ready')
       setVideoStatus('Vídeo pronto.')
     } catch (genError) {
-      setVideoError(genError?.message || 'Falha ao gerar o vídeo.')
+      setVideoError(`Falha ao gerar o vídeo. ${genError?.message || 'Erro desconhecido do HeyGen.'}`)
       setVideoState('error')
       setVideoStatus('')
     }
@@ -701,26 +723,41 @@ export function ConsultaPage({ navigate, appointmentId }) {
     } catch (downloadError) {
       // Fallback: abre direto a URL em nova aba
       window.open(videoUrl, '_blank', 'noopener,noreferrer')
-      setVideoError(`Não consegui baixar direto (${downloadError?.message || 'erro'}). Abri o vídeo em uma nova aba.`)
+      setVideoError(`Não foi possível baixar o vídeo direto (${downloadError?.message || 'erro de rede'}). Abri o arquivo em uma nova aba para você baixar manualmente.`)
     }
   }, [videoUrl, patient, appointment])
 
   if (loading) {
-    return <div className="rounded-2xl border border-border-default-v2 bg-surface-card p-6 text-sm text-text-muted-v2">Carregando consulta...</div>
+    return (
+      <div className="grid gap-4 page-enter">
+        <div className="skeleton h-32 rounded-2xl" />
+        <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
+          <div className="skeleton h-64 rounded-2xl" />
+          <div className="skeleton h-96 rounded-2xl" />
+        </div>
+      </div>
+    )
   }
 
   if (error || !appointment) {
     return (
-      <div className="grid gap-4">
-        <div className="rounded-2xl border border-red-500/40 bg-red-950/20 px-4 py-3 text-sm text-red-200">
-          {error || 'Agendamento não encontrado.'}
+      <div className="grid gap-4 page-enter">
+        <div className="flex items-start gap-3 rounded-2xl border border-red-500/40 bg-red-500/10 px-5 py-4 text-sm text-red-300">
+          <svg className="mt-0.5 size-5 shrink-0" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 8v4M12 16h.01" />
+          </svg>
+          <p>{error || 'Agendamento não encontrado.'}</p>
         </div>
         <div>
           <button
-            className="h-10 rounded-sm border border-border-default-v2 bg-surface-card-hover px-4 text-sm font-semibold text-text-body"
+            className="inline-flex h-10 items-center gap-2 rounded-md border border-border-default-v2 bg-surface-card-hover px-4 text-sm font-semibold text-text-body transition hover:bg-surface-card"
             onClick={() => navigate('/atendimento')}
             type="button"
           >
+            <svg className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
+              <path d="m15 6-6 6 6 6" />
+            </svg>
             Voltar para Atendimento
           </button>
         </div>
@@ -730,247 +767,238 @@ export function ConsultaPage({ navigate, appointmentId }) {
 
   const age = calculateAge(patient?.birthDate || patient?.birth_date)
   const ageLabel = age !== null ? `${age} anos` : 'Idade não informada'
-  const initials = String(patient?.name || appointment.patient || 'P')
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join('') || 'P'
-
-  const recordingDone = recordingState === 'ready'
-  const laudoFilled = Boolean(exam || diagnosis || conclusion || contentHtml)
-  const videoDone = Boolean(videoUrl)
-
-  const stepStatus = {
-    record: recordingDone ? 'done' : recordingState === 'recording' || recordingState === 'transcribing' ? 'doing' : 'pending',
-    laudo: videoDone ? 'done' : laudoFilled ? 'doing' : 'pending',
-    video: videoDone ? 'done' : videoState === 'generating' ? 'doing' : 'pending',
-  }
+  const birthDateLabel = formatBrDate(patient?.birthDate || patient?.birth_date)
+  const initials = initialsOf(patient?.name || appointment.patient)
+  const canGenerateLaudo = Boolean(exam || diagnosis || conclusion || contentHtml)
 
   return (
-    <div className="grid gap-6 pb-24">
-      {/* Top bar com paciente + voltar */}
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <button
-            className="inline-flex h-10 items-center gap-1.5 rounded-md border border-border-default-v2 bg-surface-card-hover px-3 text-sm font-semibold text-text-body transition hover:bg-surface-card"
-            onClick={() => navigate('/atendimento')}
-            type="button"
-          >
-            <svg className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
-              <path d="m15 6-6 6 6 6" />
-            </svg>
-            Voltar
-          </button>
-          <div className="flex items-center gap-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent-primary">Atendimento em curso</p>
-            {isDemo ? (
-              <span className="rounded-full border border-sky-400/50 bg-sky-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-sky-200">
-                Demonstração
-              </span>
-            ) : null}
+    <div className="page-enter grid gap-5 pb-28">
+      {/* Voltar */}
+      <button
+        className="inline-flex h-9 w-fit items-center gap-1.5 rounded-md border border-border-default-v2 bg-surface-card-hover px-3 text-xs font-semibold text-text-muted-v2 transition hover:bg-surface-card hover:text-text-body"
+        onClick={() => navigate('/atendimento')}
+        type="button"
+      >
+        <svg className="size-3.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+          <path d="m15 6-6 6 6 6" />
+        </svg>
+        Voltar para a fila
+      </button>
+
+      {/* HERO DO PACIENTE */}
+      <header className="relative overflow-hidden rounded-2xl border border-border-default-v2 bg-surface-card shadow-card">
+        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-accent-primary/40 via-accent-primary to-accent-primary/40" aria-hidden="true" />
+        <div className="grid gap-5 px-5 py-5 sm:px-7 lg:grid-cols-[auto_1fr_auto] lg:items-center">
+          <div className="flex items-center gap-4">
+            <div className="flex size-16 items-center justify-center rounded-2xl bg-accent-primary text-xl font-bold text-white shadow-card sm:size-20">
+              {initials}
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-300">
+                  <span className="size-1.5 animate-pulse rounded-full bg-emerald-400" />
+                  Em atendimento
+                </span>
+              </div>
+              <h1 className="mt-1 truncate text-xl font-bold leading-tight text-text-heading sm:text-2xl">
+                {patient?.name || appointment.patient}
+              </h1>
+              <p className="mt-0.5 text-sm text-text-muted-v2">
+                {ageLabel}
+                {patient?.cpf ? <span> · CPF {patient.cpf}</span> : null}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-3 lg:justify-end">
+            <PatientFact icon="clock" label="Horário" value={appointment.time || '--:--'} mono />
+            <PatientFact icon="stethoscope" label="Tipo" value={appointment.type || 'Consulta'} />
+            <PatientFact icon="map-pin" label="Modalidade" value={appointment.mode || 'Presencial'} />
+            <PatientFact icon="calendar" label="Nascimento" value={birthDateLabel} mono />
           </div>
         </div>
       </header>
 
-      {/* Layout em duas colunas: paciente (esq) + workflow (dir) */}
-      <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
-        {/* COLUNA ESQUERDA: ficha do paciente (sticky no desktop) */}
-        <aside className="lg:sticky lg:top-6 lg:self-start">
-          <div className="rounded-2xl border border-border-default-v2 bg-surface-card shadow-card">
-            <div className="border-b border-border-default-v2 px-5 py-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted-v2">Paciente</p>
-              <div className="mt-3 flex items-center gap-3">
-                <div className={`flex size-14 items-center justify-center rounded-full text-base font-bold ${
-                  isDemo ? 'bg-sky-500/20 text-sky-200' : 'bg-accent-primary/15 text-accent-primary'
-                }`}>
-                  {initials}
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate text-base font-bold text-text-heading">{patient?.name || appointment.patient}</p>
-                  <p className="text-xs text-text-muted-v2">{ageLabel}</p>
-                </div>
-              </div>
+      {/* Layout em duas colunas: contexto (esq) + laudo (dir) */}
+      <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
+        {/* CONTEXTO DO PACIENTE */}
+        <aside className="lg:sticky lg:top-6 lg:self-start grid gap-5">
+          <section className="overflow-hidden rounded-2xl border border-border-default-v2 bg-surface-card shadow-card">
+            <header className="border-b border-border-subtle px-5 py-3">
+              <h2 className="text-sm font-bold text-text-heading">Anamnese do agendamento</h2>
+            </header>
+            <div className="px-5 py-4">
+              {appointment.notes ? (
+                <p className="whitespace-pre-line text-sm leading-6 text-text-body">{appointment.notes}</p>
+              ) : (
+                <p className="text-sm text-text-muted-v2">
+                  Nenhuma observação foi registrada no agendamento deste paciente.
+                </p>
+              )}
             </div>
-            <dl className="grid grid-cols-1 gap-3 px-5 py-4 text-sm">
-              <div>
-                <dt className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted-v2">Horário</dt>
-                <dd className="mt-0.5 font-semibold tabular-nums text-text-heading">{appointment.time || '--:--'}</dd>
+          </section>
+
+          {doctor?.name ? (
+            <section className="overflow-hidden rounded-2xl border border-border-default-v2 bg-surface-card shadow-card">
+              <header className="border-b border-border-subtle px-5 py-3">
+                <h2 className="text-sm font-bold text-text-heading">Profissional responsável</h2>
+              </header>
+              <div className="px-5 py-4 text-sm">
+                <p className="font-semibold text-text-heading">{doctor.name}</p>
+                {doctor.specialty ? <p className="mt-0.5 text-text-body">{doctor.specialty}</p> : null}
+                {doctor.crm ? <p className="mt-0.5 text-xs text-text-muted-v2">CRM {doctor.crm}</p> : null}
               </div>
-              <div>
-                <dt className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted-v2">Tipo</dt>
-                <dd className="mt-0.5 text-text-body">{appointment.type || 'Consulta'} · {appointment.mode || 'Presencial'}</dd>
-              </div>
-              <div>
-                <dt className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted-v2">Observação do agendamento</dt>
-                <dd className="mt-1 whitespace-pre-line text-sm leading-6 text-text-body">
-                  {appointment.notes || <span className="text-text-muted-v2">Nenhuma observação informada.</span>}
-                </dd>
-              </div>
-            </dl>
-            {/* Indicador de progresso das etapas */}
-            <div className="border-t border-border-default-v2 px-5 py-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted-v2">Fluxo da consulta</p>
-              <ol className="mt-3 space-y-2 text-xs">
-                <StepIndicator number={1} label="Gravação" status={stepStatus.record} />
-                <StepIndicator number={2} label="Mini-laudo" status={stepStatus.laudo} />
-                <StepIndicator number={3} label="Vídeo para o paciente" status={stepStatus.video} />
-              </ol>
-            </div>
-          </div>
+            </section>
+          ) : null}
         </aside>
 
-        {/* COLUNA DIREITA: etapas */}
+        {/* CONTEÚDO PRINCIPAL */}
         <div className="grid gap-5">
-          {/* ETAPA 1 — Gravação */}
-          <StepCard number={1} title="Gravação da consulta" subtitle="Capture o áudio do atendimento para gerar o rascunho automático.">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className={`flex size-12 items-center justify-center rounded-full transition ${
-                  recordingState === 'recording'
-                    ? 'animate-pulse bg-red-500/20 text-red-300'
-                    : recordingDone
-                      ? 'bg-emerald-500/15 text-emerald-300'
-                      : 'bg-surface-card-hover text-text-muted-v2'
-                }`}>
-                  <svg className="size-6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
-                    <rect height="14" rx="3" width="6" x="9" y="3" />
-                    <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+          {/* Laudo médico */}
+          <section className="overflow-hidden rounded-2xl border border-border-default-v2 bg-surface-card shadow-card">
+            <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle px-5 py-3">
+              <div className="flex items-center gap-2.5">
+                <div className="flex size-8 items-center justify-center rounded-lg bg-accent-primary/15 text-accent-primary">
+                  <svg className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <path d="M14 2v6h6M8 13h8M8 17h5" />
                   </svg>
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-text-heading">
-                    {recordingState === 'idle' && 'Pronto para gravar'}
-                    {recordingState === 'recording' && `Gravando · ${formatElapsed(elapsedMs)}`}
-                    {recordingState === 'transcribing' && 'Transcrevendo com IA...'}
-                    {recordingState === 'ready' && 'Gravação concluída'}
-                    {recordingState === 'error' && 'Erro na gravação'}
-                  </p>
-                  <p className="mt-0.5 text-xs text-text-muted-v2">
-                    {recordingState === 'idle' && 'O áudio é transcrito automaticamente quando você parar.'}
-                    {recordingState === 'recording' && 'Clique em Parar para encerrar.'}
-                    {recordingState === 'transcribing' && 'Isso pode levar alguns segundos.'}
-                    {recordingState === 'ready' && 'O mini-laudo apareceu abaixo, pronto para revisão.'}
-                    {recordingState === 'error' && 'Você pode tentar novamente.'}
-                  </p>
+                  <h2 className="text-base font-bold text-text-heading">Laudo médico</h2>
+                  <p className="text-xs text-text-muted-v2">Preencha manualmente ou pelo ditado de voz</p>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {recordingState !== 'recording' ? (
-                  <button
-                    className="inline-flex h-11 items-center gap-2 rounded-md border border-accent-primary bg-accent-primary px-5 text-sm font-bold text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:border-border-default-v2 disabled:bg-surface-card-hover disabled:text-text-muted-v2"
-                    disabled={!recordingSupported || recordingState === 'transcribing'}
-                    onClick={startRecording}
-                    type="button"
-                  >
-                    <span className="size-2 rounded-full bg-current" />
-                    {recordingState === 'ready' || recordingState === 'error' ? 'Gravar novamente' : 'Começar'}
-                  </button>
-                ) : (
-                  <button
-                    className="inline-flex h-11 items-center gap-2 rounded-md border border-red-500/60 bg-red-600 px-5 text-sm font-bold text-white transition hover:bg-red-700"
-                    onClick={stopRecording}
-                    type="button"
-                  >
-                    <span className="size-3 rounded-sm bg-current" />
-                    Parar
-                  </button>
-                )}
-              </div>
-            </div>
-            {!recordingSupported ? (
-              <p className="mt-3 text-xs text-text-muted-v2">
-                {!aiClient.isLive()
-                  ? 'Para habilitar a gravação, configure VITE_GEMINI_API_KEY no .env.'
-                  : 'Este navegador não suporta gravação de áudio.'}
-              </p>
-            ) : null}
-            {recordingError ? (
-              <p className="mt-3 rounded-md border border-red-500/40 bg-red-950/20 px-3 py-2 text-xs text-red-200">{recordingError}</p>
-            ) : null}
-          </StepCard>
+              <RecordingToolbar
+                aiAvailable={aiClient.isLive()}
+                elapsedMs={elapsedMs}
+                onStart={startRecording}
+                onStop={stopRecording}
+                recordingState={recordingState}
+                supported={recordingSupported}
+              />
+            </header>
 
-          {/* ETAPA 2 — Mini-laudo */}
-          {recordingDone || laudoFilled ? (
-            <StepCard number={2} title="Mini-laudo" subtitle="Revise e edite o rascunho gerado pela IA antes de transformar em laudo oficial.">
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="grid gap-1.5">
-                  <span className="text-xs font-medium text-text-heading">Exame / motivo</span>
-                  <input
-                    className="h-10 rounded-md border border-border-default-v2 bg-surface-card-hover px-3 text-sm text-text-body outline-none transition focus:border-accent-primary focus:ring-2 focus:ring-accent-primary/20"
-                    onChange={(event) => setExam(event.target.value)}
-                    value={exam}
-                  />
-                </label>
-                <label className="grid gap-1.5">
-                  <span className="text-xs font-medium text-text-heading">CID</span>
-                  <input
-                    className="h-10 rounded-md border border-border-default-v2 bg-surface-card-hover px-3 text-sm text-text-body outline-none transition focus:border-accent-primary focus:ring-2 focus:ring-accent-primary/20"
-                    onChange={(event) => setCidCode(event.target.value)}
-                    value={cidCode}
-                  />
-                </label>
-                <label className="grid gap-1.5 md:col-span-2">
-                  <span className="text-xs font-medium text-text-heading">Diagnóstico</span>
-                  <textarea
-                    className="min-h-20 rounded-md border border-border-default-v2 bg-surface-card-hover px-3 py-2 text-sm leading-6 text-text-body outline-none transition focus:border-accent-primary focus:ring-2 focus:ring-accent-primary/20"
-                    onChange={(event) => setDiagnosis(event.target.value)}
-                    value={diagnosis}
-                  />
-                </label>
-                <label className="grid gap-1.5 md:col-span-2">
-                  <span className="text-xs font-medium text-text-heading">Conclusão</span>
-                  <textarea
-                    className="min-h-20 rounded-md border border-border-default-v2 bg-surface-card-hover px-3 py-2 text-sm leading-6 text-text-body outline-none transition focus:border-accent-primary focus:ring-2 focus:ring-accent-primary/20"
-                    onChange={(event) => setConclusion(event.target.value)}
-                    value={conclusion}
-                  />
-                </label>
-              </div>
+            <div className="grid gap-5 px-5 py-5 sm:px-6">
+              {!recordingSupported ? (
+                <InlineNotice tone="warning">
+                  {!aiClient.isLive()
+                    ? 'Preenchimento por voz desabilitado: a chave VITE_GEMINI_API_KEY não está configurada no .env.'
+                    : 'Este navegador não suporta gravação de áudio. Use uma versão recente do Chrome, Edge ou Firefox.'}
+                </InlineNotice>
+              ) : null}
+              {recordingError ? <InlineNotice tone="danger">{recordingError}</InlineNotice> : null}
+              {recordingState === 'transcribing' ? (
+                <InlineNotice tone="info">
+                  <span className="inline-flex items-center gap-2">
+                    <span className="size-1.5 animate-pulse rounded-full bg-accent-primary" />
+                    Transcrevendo o áudio e gerando rascunho do laudo...
+                  </span>
+                </InlineNotice>
+              ) : null}
 
-              <div className="mt-5">
-                <div className="mb-2 flex items-center justify-between">
-                  <p className="text-xs font-medium text-text-heading">Corpo do relatório</p>
-                  <span className="text-[11px] uppercase tracking-[0.14em] text-text-muted-v2">Letterhead MediConnect</span>
+              {/* Identificação do laudo */}
+              <div>
+                <FieldGroupTitle>Identificação</FieldGroupTitle>
+                <div className="mt-3 grid gap-4 sm:grid-cols-[1fr_180px]">
+                  <Field label="Exame / motivo">
+                    <input
+                      className="h-11 rounded-md border border-border-default-v2 bg-surface-card-hover px-3 text-sm text-text-body outline-none transition focus:border-accent-primary focus:ring-2 focus:ring-accent-primary/20"
+                      onChange={(event) => setExam(event.target.value)}
+                      placeholder="Ex.: Consulta de retorno"
+                      value={exam}
+                    />
+                  </Field>
+                  <Field label="CID">
+                    <input
+                      className="h-11 rounded-md border border-border-default-v2 bg-surface-card-hover px-3 text-sm font-mono text-text-body uppercase outline-none transition focus:border-accent-primary focus:ring-2 focus:ring-accent-primary/20"
+                      onChange={(event) => setCidCode(event.target.value)}
+                      placeholder="Ex.: R51"
+                      value={cidCode}
+                    />
+                  </Field>
                 </div>
-                <div className="overflow-hidden rounded-md border border-border-default-v2 bg-surface-inset">
+              </div>
+
+              {/* Avaliação clínica */}
+              <div>
+                <FieldGroupTitle>Avaliação clínica</FieldGroupTitle>
+                <div className="mt-3 grid gap-4">
+                  <Field label="Diagnóstico">
+                    <textarea
+                      className="min-h-24 rounded-md border border-border-default-v2 bg-surface-card-hover px-3 py-2 text-sm leading-6 text-text-body outline-none transition focus:border-accent-primary focus:ring-2 focus:ring-accent-primary/20"
+                      onChange={(event) => setDiagnosis(event.target.value)}
+                      placeholder="Descreva o diagnóstico clínico do paciente."
+                      value={diagnosis}
+                    />
+                  </Field>
+                  <Field label="Conclusão e conduta">
+                    <textarea
+                      className="min-h-24 rounded-md border border-border-default-v2 bg-surface-card-hover px-3 py-2 text-sm leading-6 text-text-body outline-none transition focus:border-accent-primary focus:ring-2 focus:ring-accent-primary/20"
+                      onChange={(event) => setConclusion(event.target.value)}
+                      placeholder="Resumo da conduta, prescrições e orientações."
+                      value={conclusion}
+                    />
+                  </Field>
+                </div>
+              </div>
+
+              {/* Corpo do relatório */}
+              <div>
+                <FieldGroupTitle>Corpo do laudo</FieldGroupTitle>
+                <p className="mt-1 text-xs text-text-muted-v2">Editor com letterhead da clínica — base para o documento final.</p>
+                <div className="mt-3 overflow-hidden rounded-lg border border-border-default-v2 bg-surface-inset">
                   <RichTextEditor onChange={setContentHtml} value={contentHtml} />
                 </div>
               </div>
 
               {transcript ? (
-                <div className="mt-5">
-                  <button
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-accent-primary underline-offset-2 hover:underline"
-                    onClick={() => setShowTranscript((value) => !value)}
-                    type="button"
-                  >
-                    <svg className="size-3" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
-                      <path d={showTranscript ? 'm18 15-6-6-6 6' : 'm6 9 6 6 6-6'} />
+                <details className="group rounded-lg border border-border-subtle bg-surface-inset/60">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-xs font-semibold text-text-muted-v2 hover:text-text-body">
+                    <span className="inline-flex items-center gap-2">
+                      <svg className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
+                        <path d="M4 6h16M4 12h16M4 18h10" />
+                      </svg>
+                      Transcrição bruta do áudio
+                    </span>
+                    <svg className="size-3 transition group-open:rotate-180" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+                      <path d="m6 9 6 6 6-6" />
                     </svg>
-                    {showTranscript ? 'Ocultar transcrição bruta' : 'Mostrar transcrição bruta'}
-                  </button>
-                  {showTranscript ? (
-                    <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-border-default-v2 bg-surface-inset px-3 py-2 text-xs text-text-muted-v2">
-                      {transcript}
-                    </pre>
-                  ) : null}
+                  </summary>
+                  <pre className="max-h-72 overflow-auto whitespace-pre-wrap border-t border-border-subtle px-4 py-3 text-xs text-text-body">
+                    {transcript}
+                  </pre>
+                </details>
+              ) : null}
+            </div>
+          </section>
+
+          {/* Mensagem em vídeo */}
+          <section className="overflow-hidden rounded-2xl border border-border-default-v2 bg-surface-card shadow-card">
+            <header className="flex items-center justify-between gap-3 border-b border-border-subtle px-5 py-3">
+              <div className="flex items-center gap-2.5">
+                <div className="flex size-8 items-center justify-center rounded-lg bg-fuchsia-500/15 text-fuchsia-400">
+                  <svg className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
+                    <polygon points="6 4 20 12 6 20 6 4" />
+                  </svg>
                 </div>
-              ) : null}
-            </StepCard>
-          ) : null}
+                <div>
+                  <h2 className="text-base font-bold text-text-heading">Mensagem em vídeo</h2>
+                  <p className="text-xs text-text-muted-v2">Gere um vídeo curto com avatar para o paciente</p>
+                </div>
+              </div>
+              <span className="rounded-full bg-surface-inset px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted-v2">
+                Opcional
+              </span>
+            </header>
 
-          {/* ETAPA 3 — Vídeo */}
-          {recordingDone || conclusion || videoUrl ? (
-            <StepCard number={3} title="Mensagem em vídeo" subtitle="Um avatar do HeyGen narra a mensagem e gera um MP4 para enviar ao paciente.">
+            <div className="grid gap-4 px-5 py-5 sm:px-6">
               {!videoSupported ? (
-                <p className="mb-3 rounded-md border border-amber-500/30 bg-amber-950/20 px-3 py-2 text-xs text-amber-200">
-                  Para habilitar a geração de vídeo, configure <code>VITE_HEYGEN_API_KEY</code> no <code>.env</code>.
-                </p>
+                <InlineNotice tone="warning">
+                  Geração de vídeo desabilitada: a chave <code className="font-mono">VITE_HEYGEN_API_KEY</code> não está configurada no <code className="font-mono">.env</code>.
+                </InlineNotice>
               ) : null}
 
-              <label className="grid gap-1.5">
-                <span className="text-xs font-medium text-text-heading">Roteiro do vídeo</span>
+              <Field label="Roteiro do vídeo">
                 <textarea
                   className="min-h-32 rounded-md border border-border-default-v2 bg-surface-card-hover px-3 py-2 text-sm leading-6 text-text-body outline-none transition focus:border-accent-primary focus:ring-2 focus:ring-accent-primary/20"
                   onChange={(event) => {
@@ -980,11 +1008,11 @@ export function ConsultaPage({ navigate, appointmentId }) {
                   placeholder="Olá, [nome]. Aqui vai um resumo da nossa consulta..."
                   value={videoScript}
                 />
-              </label>
+              </Field>
 
-              <div className="mt-4 flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <button
-                  className="inline-flex h-10 items-center gap-2 rounded-md border border-fuchsia-500/60 bg-fuchsia-600 px-4 text-sm font-semibold text-white transition hover:bg-fuchsia-700 disabled:cursor-not-allowed disabled:border-border-default-v2 disabled:bg-surface-card-hover disabled:text-text-muted-v2"
+                  className="inline-flex h-10 items-center gap-2 rounded-md bg-fuchsia-600 px-4 text-sm font-bold text-white shadow-card transition hover:bg-fuchsia-700 disabled:cursor-not-allowed disabled:bg-surface-card-hover disabled:text-text-muted-v2 disabled:shadow-none"
                   disabled={!videoSupported || videoState === 'generating' || !videoScript.trim()}
                   onClick={handleGenerateVideo}
                   type="button"
@@ -992,7 +1020,7 @@ export function ConsultaPage({ navigate, appointmentId }) {
                   <svg className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
                     <polygon points="6 4 20 12 6 20 6 4" />
                   </svg>
-                  {videoState === 'generating' ? 'Gerando vídeo...' : videoState === 'ready' ? 'Gerar novamente' : 'Gerar vídeo'}
+                  {videoState === 'generating' ? 'Gerando...' : videoState === 'ready' ? 'Gerar novamente' : 'Gerar vídeo'}
                 </button>
                 {videoState === 'generating' && videoStatus ? (
                   <span className="inline-flex items-center gap-2 text-xs text-text-muted-v2">
@@ -1002,12 +1030,10 @@ export function ConsultaPage({ navigate, appointmentId }) {
                 ) : null}
               </div>
 
-              {videoError ? (
-                <p className="mt-3 rounded-md border border-red-500/40 bg-red-950/20 px-3 py-2 text-xs text-red-200">{videoError}</p>
-              ) : null}
+              {videoError ? <InlineNotice tone="danger">{videoError}</InlineNotice> : null}
 
               {videoUrl ? (
-                <div className="mt-4 grid gap-3">
+                <div className="grid gap-3 rounded-lg border border-border-subtle bg-surface-inset/60 p-4">
                   <video
                     className="w-full max-w-xl rounded-md border border-border-default-v2 bg-black"
                     controls
@@ -1015,14 +1041,14 @@ export function ConsultaPage({ navigate, appointmentId }) {
                   />
                   <div className="flex flex-wrap gap-2">
                     <button
-                      className="inline-flex h-10 items-center gap-2 rounded-md border border-emerald-500/60 bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                      className="inline-flex h-10 items-center gap-2 rounded-md bg-emerald-600 px-4 text-sm font-semibold text-white shadow-card transition hover:bg-emerald-700"
                       onClick={handleSendVideo}
                       type="button"
                     >
                       <svg className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
                         <path d="M12 3v12m0 0 5-5m-5 5-5-5M5 21h14" />
                       </svg>
-                      Enviar (baixar MP4)
+                      Baixar MP4
                     </button>
                     <a
                       className="inline-flex h-10 items-center rounded-md border border-border-default-v2 bg-surface-card-hover px-4 text-sm font-semibold text-text-body transition hover:bg-surface-card"
@@ -1035,89 +1061,174 @@ export function ConsultaPage({ navigate, appointmentId }) {
                   </div>
                 </div>
               ) : null}
-            </StepCard>
-          ) : null}
+            </div>
+          </section>
         </div>
       </div>
 
       {/* Action bar sticky */}
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border-default-v2 bg-surface-card/95 backdrop-blur">
-        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center justify-end gap-2 px-6 py-3">
-          <button
-            className="h-10 rounded-md border border-border-default-v2 bg-surface-card-hover px-4 text-sm font-semibold text-text-body transition hover:bg-surface-card"
-            onClick={() => navigate('/atendimento')}
-            type="button"
-          >
-            Cancelar
-          </button>
-          <button
-            className="inline-flex h-10 items-center gap-2 rounded-md border border-accent-primary bg-surface-card-hover px-4 text-sm font-semibold text-accent-primary transition hover:bg-surface-card disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={recordingState !== 'ready' && !exam && !diagnosis && !conclusion}
-            onClick={handleGenerateLaudo}
-            type="button"
-          >
-            <svg className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-              <path d="M14 2v6h6M8 13h8M8 17h5" />
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border-default-v2 bg-surface-card/95 shadow-elevated backdrop-blur">
+        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center justify-between gap-3 px-5 py-3 sm:px-7">
+          <div className="hidden items-center gap-2 text-xs text-text-muted-v2 sm:flex">
+            <svg className="size-4 text-accent-primary" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 7v5l3 2" />
             </svg>
-            Gerar laudo
-          </button>
-          <button
-            className="inline-flex h-10 items-center gap-2 rounded-md border border-emerald-500/60 bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={finishing}
-            onClick={handleFinish}
-            type="button"
-          >
-            <svg className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
-              <path d="M20 6 9 17l-5-5" />
-            </svg>
-            {finishing ? 'Finalizando...' : 'Finalizar consulta'}
-          </button>
+            <span>Atendendo <strong className="text-text-heading">{patient?.name || appointment.patient}</strong></span>
+          </div>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <button
+              className="inline-flex h-10 items-center gap-1.5 rounded-md border border-border-default-v2 bg-surface-card-hover px-4 text-sm font-semibold text-text-body transition hover:bg-surface-card"
+              onClick={() => navigate('/atendimento')}
+              type="button"
+            >
+              Cancelar
+            </button>
+            <button
+              className="inline-flex h-10 items-center gap-2 rounded-md border border-accent-primary bg-surface-card-hover px-4 text-sm font-semibold text-accent-primary transition hover:bg-accent-muted disabled:cursor-not-allowed disabled:border-border-default-v2 disabled:text-text-muted-v2 disabled:opacity-60"
+              disabled={!canGenerateLaudo}
+              onClick={handleGenerateLaudo}
+              type="button"
+            >
+              <svg className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <path d="M14 2v6h6M8 13h8M8 17h5" />
+              </svg>
+              Gerar laudo
+            </button>
+            <button
+              className="inline-flex h-10 items-center gap-2 rounded-md bg-emerald-600 px-4 text-sm font-bold text-white shadow-card transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={finishing}
+              onClick={handleFinish}
+              type="button"
+            >
+              <svg className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" viewBox="0 0 24 24">
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+              {finishing ? 'Finalizando...' : 'Finalizar consulta'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
   )
 }
 
-// Card de etapa numerada usado na ConsultaPage
-function StepCard({ number, title, subtitle, children }) {
+// Botão compacto de gravação por voz exibido no cabeçalho do card de Laudo.
+function RecordingToolbar({ aiAvailable, elapsedMs, onStart, onStop, recordingState, supported }) {
+  const isRecording = recordingState === 'recording'
+  const isBusy = recordingState === 'transcribing'
+
+  if (isRecording) {
+    return (
+      <button
+        className="inline-flex h-10 items-center gap-2 rounded-md bg-red-600 px-3.5 text-xs font-bold text-white shadow-card transition hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+        onClick={onStop}
+        type="button"
+      >
+        <span className="relative flex size-3 items-center justify-center">
+          <span className="absolute size-3 animate-ping rounded-full bg-white/40" />
+          <span className="size-2 rounded-sm bg-white" />
+        </span>
+        <span className="tabular-nums">Parar · {formatElapsed(elapsedMs)}</span>
+      </button>
+    )
+  }
+
+  if (isBusy) {
+    return (
+      <span className="inline-flex h-10 items-center gap-2 rounded-md border border-border-default-v2 bg-surface-card-hover px-3.5 text-xs font-semibold text-text-muted-v2">
+        <span className="size-2 animate-pulse rounded-full bg-accent-primary" />
+        Transcrevendo...
+      </span>
+    )
+  }
+
+  const isDone = recordingState === 'ready'
+  const isError = recordingState === 'error'
   return (
-    <section className="overflow-hidden rounded-2xl border border-border-default-v2 bg-surface-card shadow-card">
-      <header className="flex items-start gap-3 border-b border-border-default-v2 px-5 py-3">
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent-primary/15 text-sm font-bold text-accent-primary">
-          {number}
-        </div>
-        <div>
-          <h2 className="text-sm font-bold text-text-heading">{title}</h2>
-          {subtitle ? <p className="text-xs text-text-muted-v2">{subtitle}</p> : null}
-        </div>
-      </header>
-      <div className="p-5">{children}</div>
-    </section>
+    <button
+      className={`inline-flex h-10 items-center gap-2 rounded-md border px-3.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/40 disabled:cursor-not-allowed disabled:border-border-subtle disabled:bg-surface-card-hover disabled:text-text-muted-v2 ${
+        isDone
+          ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/15'
+          : 'border-accent-primary/50 bg-accent-primary/10 text-accent-primary hover:bg-accent-primary/15'
+      }`}
+      disabled={!supported}
+      onClick={onStart}
+      title={!aiAvailable ? 'Configure VITE_GEMINI_API_KEY no .env para habilitar' : undefined}
+      type="button"
+    >
+      <svg className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
+        <rect height="14" rx="3" width="6" x="9" y="3" />
+        <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+      </svg>
+      {isDone ? 'Gravar novamente' : isError ? 'Tentar de novo' : 'Preencher por voz'}
+    </button>
   )
 }
 
-// Indicador visual de progresso (sidebar do paciente)
-function StepIndicator({ number, label, status }) {
-  const styles = status === 'done'
-    ? { dot: 'bg-emerald-500/20 text-emerald-300', label: 'text-text-body', sub: 'Concluído' }
-    : status === 'doing'
-      ? { dot: 'bg-accent-primary/20 text-accent-primary', label: 'text-text-heading font-semibold', sub: 'Em andamento' }
-      : { dot: 'bg-surface-card-hover text-text-muted-v2', label: 'text-text-muted-v2', sub: 'Pendente' }
+// Pílula de fato do paciente usada no hero da ConsultaPage.
+function PatientFact({ icon, label, value, mono }) {
+  const icons = {
+    clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
+    stethoscope: <><path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 12 0V4a2 2 0 0 0-2-2h-1a.3.3 0 1 0 .2.3" /><path d="M8 15v2a4 4 0 0 0 8 0v-3" /><circle cx="20" cy="10" r="2" /></>,
+    'map-pin': <><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z" /><circle cx="12" cy="10" r="3" /></>,
+    calendar: <><rect height="18" rx="2" width="18" x="3" y="4" /><path d="M16 2v4M8 2v4M3 10h18" /></>,
+  }
   return (
-    <li className="flex items-center gap-3">
-      <div className={`flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${styles.dot}`}>
-        {status === 'done' ? (
-          <svg className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" viewBox="0 0 24 24">
-            <path d="M20 6 9 17l-5-5" />
-          </svg>
-        ) : number}
+    <div className="flex items-center gap-2.5 rounded-xl border border-border-subtle bg-surface-inset/60 px-3 py-2">
+      <div className="flex size-8 items-center justify-center rounded-lg bg-surface-card text-text-muted-v2">
+        <svg className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
+          {icons[icon] || <circle cx="12" cy="12" r="9" />}
+        </svg>
       </div>
       <div className="min-w-0">
-        <p className={`truncate text-xs ${styles.label}`}>{label}</p>
-        <p className="text-[10px] uppercase tracking-[0.14em] text-text-muted-v2">{styles.sub}</p>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted-v2">{label}</p>
+        <p className={`truncate text-sm font-semibold text-text-heading ${mono ? 'tabular-nums' : ''}`}>{value}</p>
       </div>
-    </li>
+    </div>
+  )
+}
+
+// Título de um grupo de campos no card do laudo.
+function FieldGroupTitle({ children }) {
+  return (
+    <h3 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.16em] text-text-muted-v2">
+      <span className="h-px w-4 bg-border-default-v2" aria-hidden="true" />
+      {children}
+    </h3>
+  )
+}
+
+// Wrapper de label + campo com espaçamento consistente.
+function Field({ label, children }) {
+  return (
+    <label className="grid gap-1.5">
+      <span className="text-xs font-semibold text-text-body">{label}</span>
+      {children}
+    </label>
+  )
+}
+
+// Aviso inline coerente entre seções (info / warning / danger).
+function InlineNotice({ tone = 'info', children }) {
+  const tones = {
+    info: 'border-accent-primary/30 bg-accent-primary/5 text-text-body',
+    warning: 'border-amber-500/40 bg-amber-500/10 text-amber-200',
+    danger: 'border-red-500/40 bg-red-500/10 text-red-200',
+  }
+  const iconByTone = {
+    info: <><circle cx="12" cy="12" r="9" /><path d="M12 8v4M12 16h.01" /></>,
+    warning: <><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><path d="M12 9v4M12 17h.01" /></>,
+    danger: <><circle cx="12" cy="12" r="9" /><path d="M15 9l-6 6M9 9l6 6" /></>,
+  }
+  return (
+    <div className={`flex items-start gap-2.5 rounded-lg border px-3 py-2.5 text-xs leading-5 ${tones[tone] || tones.info}`}>
+      <svg className="mt-0.5 size-4 shrink-0" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
+        {iconByTone[tone] || iconByTone.info}
+      </svg>
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
   )
 }
 

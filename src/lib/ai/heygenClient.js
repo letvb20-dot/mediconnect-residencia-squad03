@@ -22,9 +22,9 @@ export const heygenClient = {
 
   // Gera um vídeo. onProgress recebe { status, message } durante o polling.
   async generateVideo({ prompt, onProgress } = {}) {
-    if (!API_KEY) throw new Error('HeyGen indisponível: configure VITE_HEYGEN_API_KEY no .env.')
+    if (!API_KEY) throw new Error('Geração de vídeo indisponível: a chave VITE_HEYGEN_API_KEY não está configurada no .env.')
     const text = String(prompt || '').trim()
-    if (!text) throw new Error('Roteiro vazio. Escreva uma mensagem antes de gerar o vídeo.')
+    if (!text) throw new Error('Escreva uma mensagem no roteiro antes de gerar o vídeo.')
 
     if (AVATAR_ID) {
       return generateWithAvatarV2({ text, onProgress })
@@ -70,7 +70,7 @@ async function resolveVoiceId(onProgress) {
     } catch { /* desiste */ }
   }
 
-  if (!voiceId) throw new Error('Não consegui descobrir a voz padrão do avatar. Defina VITE_HEYGEN_VOICE_ID no .env.')
+  if (!voiceId) throw new Error('O HeyGen não devolveu uma voz padrão para o avatar configurado. Defina VITE_HEYGEN_VOICE_ID no .env com o ID de uma voz pt-BR.')
   cachedVoiceIdForAvatar = voiceId
   return voiceId
 }
@@ -92,7 +92,7 @@ async function generateWithAvatarV2({ text, onProgress }) {
 
   const response = await postJson(`${BASE_URL}/v2/video/generate`, body)
   const videoId = response?.data?.video_id || response?.video_id || ''
-  if (!videoId) throw new Error('HeyGen não retornou um identificador de vídeo (verifique avatar_id e voice_id).')
+  if (!videoId) throw new Error('O HeyGen aceitou a requisição mas não devolveu um ID de vídeo. Verifique se VITE_HEYGEN_AVATAR_ID e VITE_HEYGEN_VOICE_ID estão corretos.')
 
   notify(onProgress, 'preparing', 'Vídeo enfileirado, renderizando...')
   return pollVideoStatusV1(videoId, onProgress)
@@ -101,19 +101,19 @@ async function generateWithAvatarV2({ text, onProgress }) {
 async function pollVideoStatusV1(videoId, onProgress) {
   const deadline = Date.now() + POLL_TIMEOUT_MS
   while (true) {
-    if (Date.now() > deadline) throw new Error('Tempo limite ao esperar o vídeo ficar pronto.')
+    if (Date.now() > deadline) throw new Error(`Tempo esgotado (${Math.round(POLL_TIMEOUT_MS / 60_000)} min) esperando o HeyGen renderizar o vídeo. Tente um roteiro mais curto.`)
     const result = await getJson(`${BASE_URL}/v1/video_status.get?video_id=${encodeURIComponent(videoId)}`)
     const data = result?.data || result
     const status = String(data?.status || '').toLowerCase()
     if (status === 'completed' || status === 'success' || status === 'ready') {
       const videoUrl = data?.video_url || data?.video_url_caption || data?.url || ''
-      if (!videoUrl) throw new Error('Vídeo concluído sem URL retornada pelo HeyGen.')
+      if (!videoUrl) throw new Error('O HeyGen marcou o vídeo como pronto, mas não devolveu uma URL para baixá-lo.')
       notify(onProgress, 'completed', 'Vídeo pronto.')
       return { videoUrl, videoId }
     }
     if (status === 'failed' || status === 'error') {
-      const message = data?.error?.message || data?.error?.detail || data?.error || data?.message || 'falha desconhecida'
-      throw new Error(`HeyGen falhou na geração: ${message}`)
+      const message = data?.error?.message || data?.error?.detail || data?.error || data?.message || 'sem detalhes adicionais'
+      throw new Error(`O HeyGen rejeitou a renderização do vídeo: ${message}`)
     }
     notify(onProgress, 'rendering', `Renderizando vídeo (${status || 'pending'})...`)
     await delay(POLL_INTERVAL_MS)
@@ -127,35 +127,37 @@ async function generateWithVideoAgentV3({ text, onProgress }) {
 
   const session = await postJson(`${BASE_URL}/v3/video-agents`, { prompt: text })
   const sessionId = session?.data?.session_id || session?.session_id || ''
-  if (!sessionId) throw new Error('HeyGen não retornou um identificador de sessão.')
+  if (!sessionId) throw new Error('O HeyGen aceitou o roteiro mas não devolveu um ID de sessão para acompanhar a renderização.')
 
   let videoId = session?.data?.video_id || ''
   const deadline = Date.now() + POLL_TIMEOUT_MS
 
   while (!videoId) {
-    if (Date.now() > deadline) throw new Error('Tempo limite ao esperar o HeyGen iniciar o vídeo.')
+    if (Date.now() > deadline) throw new Error(`Tempo esgotado (${Math.round(POLL_TIMEOUT_MS / 60_000)} min) esperando o HeyGen escolher o avatar e iniciar a renderização.`)
     await delay(POLL_INTERVAL_MS)
     notify(onProgress, 'preparing', 'Preparando avatar e cenas...')
     const status = await getJson(`${BASE_URL}/v3/video-agents/${encodeURIComponent(sessionId)}`)
     videoId = status?.data?.video_id || status?.video_id || ''
     if (status?.data?.status === 'failed' || status?.status === 'failed') {
-      throw new Error('HeyGen sinalizou falha na geração do vídeo.')
+      const message = status?.data?.error || status?.error || status?.data?.message || status?.message || 'sem detalhes adicionais'
+      throw new Error(`O HeyGen falhou ao iniciar a renderização: ${message}`)
     }
   }
 
   while (true) {
-    if (Date.now() > deadline) throw new Error('Tempo limite ao esperar o vídeo ficar pronto.')
+    if (Date.now() > deadline) throw new Error(`Tempo esgotado (${Math.round(POLL_TIMEOUT_MS / 60_000)} min) esperando o HeyGen terminar o vídeo. Tente um roteiro mais curto.`)
     const result = await getJson(`${BASE_URL}/v3/videos/${encodeURIComponent(videoId)}`)
     const data = result?.data || result
     const status = String(data?.status || '').toLowerCase()
     if (status === 'completed' || status === 'success' || status === 'ready') {
       const videoUrl = data?.video_url || data?.url || ''
-      if (!videoUrl) throw new Error('Vídeo concluído sem URL retornada pelo HeyGen.')
+      if (!videoUrl) throw new Error('O HeyGen marcou o vídeo como pronto, mas não devolveu uma URL para baixá-lo.')
       notify(onProgress, 'completed', 'Vídeo pronto.')
       return { videoUrl, videoId, sessionId }
     }
     if (status === 'failed' || status === 'error') {
-      throw new Error(data?.error || data?.message || 'HeyGen retornou erro na geração.')
+      const message = data?.error || data?.message || 'sem detalhes adicionais'
+      throw new Error(`O HeyGen rejeitou a renderização do vídeo: ${message}`)
     }
     notify(onProgress, 'rendering', 'Renderizando vídeo...')
     await delay(POLL_INTERVAL_MS)
@@ -174,7 +176,7 @@ async function postJson(url, body) {
     },
     body: JSON.stringify(body),
   })
-  return parseResponse(response, 'Falha ao chamar o HeyGen')
+  return parseResponse(response, 'Não foi possível enviar a requisição para o HeyGen')
 }
 
 async function getJson(url) {
@@ -184,19 +186,32 @@ async function getJson(url) {
       accept: 'application/json',
     },
   })
-  return parseResponse(response, 'Falha ao consultar o HeyGen')
+  return parseResponse(response, 'Não foi possível consultar o status no HeyGen')
 }
 
 async function parseResponse(response, prefix) {
   if (!response.ok) {
     const detail = await response.text().catch(() => '')
-    throw new Error(`${prefix} (${response.status}): ${detail.slice(0, 200) || response.statusText}`)
+    throw new Error(`${prefix}. ${describeHeygenError(response.status, detail || response.statusText)}`)
   }
   try {
     return await response.json()
   } catch {
     return null
   }
+}
+
+// Traduz códigos HTTP do HeyGen em mensagens claras para o usuário final.
+function describeHeygenError(status, detail) {
+  const snippet = String(detail || '').slice(0, 160).trim()
+  if (status === 400) return `O HeyGen recusou a requisição (parâmetros inválidos).${snippet ? ` Detalhe: ${snippet}` : ''}`
+  if (status === 401 || status === 403) return 'A chave VITE_HEYGEN_API_KEY parece inválida ou sem permissão para esta API.'
+  if (status === 402) return 'Sua conta do HeyGen está sem créditos disponíveis para gerar vídeos.'
+  if (status === 404) return 'Recurso do HeyGen não encontrado — confira VITE_HEYGEN_AVATAR_ID e VITE_HEYGEN_VOICE_ID.'
+  if (status === 429) return 'Limite de uso da API do HeyGen atingido. Aguarde alguns minutos antes de tentar de novo.'
+  if (status === 503 || status === 502 || status === 504) return 'O HeyGen está sobrecarregado no momento. Tente novamente em instantes.'
+  if (status >= 500) return 'O HeyGen está com instabilidade. Tente novamente em instantes.'
+  return snippet || `Erro inesperado da API (HTTP ${status}).`
 }
 
 function notify(onProgress, status, message) {

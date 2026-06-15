@@ -694,7 +694,7 @@ function HistoryTab({ allowedChannelKeys, channelFilter, messages, search, setCh
               <th className="px-5 py-4">Template</th>
               <th className="px-5 py-4">Enviado em</th>
               <th className="px-5 py-4">Status</th>
-              <th className="px-5 py-4">Resposta</th>
+              <th className="px-5 py-4">ID do envio</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border-default-v2 bg-surface-card">

@@ -474,7 +474,20 @@ export function PatientSchedulingDetailPage({ navigate, professionalId }) {
         'O servidor demorou para confirmar o agendamento. Tente novamente.',
       )
 
-      setMyAppointments((current) => sortAppointmentsByDateTime([...current, createdAppointment]))
+      // O POST não retorna o JOIN de doctors(full_name) — preenche manualmente com
+      // o profissional e o paciente que já temos em memória para a UI não cair no
+      // fallback "Médico" / "Paciente" do mapper.
+      const enrichedAppointment = {
+        ...createdAppointment,
+        professional: createdAppointment.professional && createdAppointment.professional !== 'Médico'
+          ? createdAppointment.professional
+          : professional?.name || createdAppointment.professional,
+        patient: createdAppointment.patient && createdAppointment.patient !== 'Paciente'
+          ? createdAppointment.patient
+          : currentPatient?.name || createdAppointment.patient,
+      }
+
+      setMyAppointments((current) => sortAppointmentsByDateTime([...current, enrichedAppointment]))
       sendAppointmentConfirmationMessages(payload, {
         patients: [currentPatient],
         professionals: [professional],

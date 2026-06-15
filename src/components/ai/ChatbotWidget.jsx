@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { aiClient } from '../../lib/ai/aiClient.js'
 import { runAssistant } from '../../lib/ai/agent/runAgent.js'
+import { agentIsLive } from '../../lib/ai/agent/providers.js'
 import { AUTH_SESSION_CHANGED_EVENT, getAuthSession } from '../../config/api.js'
 import { canAccess, normalizeRole } from '../../config/permissions.js'
 import { createSpeechRecognizer, isVoiceCaptureAvailable } from '../../lib/ai/speechRecognition.js'
+import { ConfirmationCard } from './ConfirmationCard.jsx'
 
 const SESSION_KEY_PREFIX = 'mediconnect.chatbot.history.v1'
 const ANON_SCOPE = 'anon'
@@ -52,6 +53,10 @@ export function ChatbotWidget({ navigate, role }) {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [agentStatus, setAgentStatus] = useState('')
+  // Confirmação de escrita fora do fluxo de mensagens: o loop do agente pausa
+  // aguardando o clique e a Promise é resolvida em resolveConfirm.
+  const [pendingConfirm, setPendingConfirm] = useState(null)
+  const confirmResolverRef = useRef(null)
   const scrollRef = useRef(null)
 
   // Reage a troca de usuário recarregando o histórico isolado por perfil.
@@ -84,6 +89,15 @@ export function ChatbotWidget({ navigate, role }) {
 
   const quickActions = QUICK_ACTIONS[normalizedRole] || []
 
+  // Resolve o card de confirmação (Aceitar/Recusar) e retoma o loop do agente.
+  const resolveConfirm = useCallback((accepted) => {
+    const resolve = confirmResolverRef.current
+    confirmResolverRef.current = null
+    setPendingConfirm(null)
+    setAgentStatus('')
+    if (resolve) resolve(accepted)
+  }, [])
+
   const send = useCallback(async (overrideText) => {
     const trimmed = (overrideText ?? input).trim()
     if (!trimmed || loading) return
@@ -92,13 +106,14 @@ export function ChatbotWidget({ navigate, role }) {
     setMessages(nextMessages)
     setInput('')
 
-    // Agente 100% function calling. Sem API key não há fallback de contexto estático.
-    if (!aiClient.isLive()) {
+    // Agente 100% function calling. Sem chave do provider não há fallback.
+    if (!agentIsLive()) {
       setMessages((current) => [
         ...current,
         {
           role: 'assistant',
-          content: 'Assistente de IA indisponível: configure a VITE_GEMINI_API_KEY no .env e reinicie o servidor.',
+          content:
+            'Assistente de IA indisponível: configure a chave do provider (VITE_OPENAI_API_KEY ou VITE_GEMINI_API_KEY) no .env e reinicie o servidor.',
         },
       ])
       return
@@ -107,13 +122,21 @@ export function ChatbotWidget({ navigate, role }) {
     setLoading(true)
     try {
       // O modelo decide quais ferramentas chamar; nós executamos nos repositórios.
-      // onStep alimenta o status ao vivo enquanto o loop roda.
+      // onStep alimenta o status ao vivo; onConfirm mostra o card de escrita e
+      // resolve no clique do usuário (o loop pausa até lá).
       const reply = await runAssistant({
         messages: nextMessages,
         role,
         onStep: (step) => {
           if (step.kind === 'call') setAgentStatus(step.label)
+          else if (step.kind === 'retry') setAgentStatus('A IA está ocupada, tentando de novo…')
         },
+        onConfirm: (request) =>
+          new Promise((resolve) => {
+            confirmResolverRef.current = resolve
+            setAgentStatus('Aguardando sua confirmação…')
+            setPendingConfirm(request)
+          }),
       })
       setMessages((current) => [
         ...current,
@@ -127,6 +150,9 @@ export function ChatbotWidget({ navigate, role }) {
     } finally {
       setLoading(false)
       setAgentStatus('')
+      // Garante que um card pendente não fique órfão se o loop terminar.
+      confirmResolverRef.current = null
+      setPendingConfirm(null)
     }
   }, [input, loading, messages, role])
 
@@ -184,6 +210,8 @@ export function ChatbotWidget({ navigate, role }) {
     handleNavigation(action.route)
   }
 
+  const live = agentIsLive()
+
   return (
     <>
       {open ? (
@@ -191,7 +219,7 @@ export function ChatbotWidget({ navigate, role }) {
           <div className="flex items-center justify-between border-b border-border-default-v2 px-4 py-3">
             <div>
               <p className="text-sm font-bold text-text-heading">Assistente MediConnect</p>
-              <p className="text-[11px] text-text-muted-v2">{aiClient.isLive() ? 'IA conectada' : 'Modo assistente'}</p>
+              <p className="text-[11px] text-text-muted-v2">{live ? 'IA conectada' : 'Modo assistente'}</p>
             </div>
             <button
               aria-label="Fechar assistente"
@@ -270,6 +298,15 @@ export function ChatbotWidget({ navigate, role }) {
             {loading ? <p className="text-xs text-text-muted-v2">{agentStatus || 'Pensando...'}</p> : null}
           </div>
 
+          {pendingConfirm ? (
+            <ConfirmationCard
+              resumo={pendingConfirm.resumo}
+              label={pendingConfirm.label}
+              onAccept={() => resolveConfirm(true)}
+              onReject={() => resolveConfirm(false)}
+            />
+          ) : null}
+
           <div className="flex items-end gap-2 border-t border-border-default-v2 p-3">
             <textarea
               className="max-h-24 min-h-[2.5rem] flex-1 resize-none rounded-lg border border-border-default-v2 bg-surface-inset px-3 py-2 text-sm text-text-body outline-none transition placeholder:text-text-muted-v2 focus:border-accent-primary"
@@ -318,8 +355,7 @@ export function ChatbotWidget({ navigate, role }) {
   )
 }
 
-// Renderiza um passo do trace do agente (raciocínio / chamada / resultado).
-// Discreto, sem emoji — o tipo do passo é indicado por estilo/prefixo textual.
+// Renderiza um passo do trace do agente (raciocínio / chamada / retry / confirmação / resultado).
 function renderStep(step) {
   if (step.kind === 'thought') {
     return <span className="italic">{step.text}</span>
@@ -332,6 +368,12 @@ function renderStep(step) {
         {argsText ? <span> — {argsText}</span> : null}
       </span>
     )
+  }
+  if (step.kind === 'retry') {
+    return <span className="italic">a IA ficou ocupada — tentando de novo (tentativa {step.attempt})…</span>
+  }
+  if (step.kind === 'confirm') {
+    return <span>confirmação solicitada: {step.resumo}</span>
   }
   if (step.kind === 'result') {
     return <span>→ {step.summary}</span>

@@ -380,15 +380,15 @@ function resolveRoute(pathname, navigate, role, profile, user, isAuthenticated) 
     }
   }
 
-  if (pathname === '/relatorios') {
+  if (pathname === '/laudos') {
     return {
       element: <ReportsPage navigate={navigate} role={role} />,
-      title: 'Relatórios',
+      title: 'Laudos',
       withShell: true,
     }
   }
 
-  if (pathname === '/laudos') {
+  if (pathname === '/analytics' || pathname === '/relatorios') {
     return {
       element: <AnalyticsPage />,
       title: 'Analytics',

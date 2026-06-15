@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 import { runAssistant } from '../../lib/ai/agent/runAgent.js'
 import { agentIsLive } from '../../lib/ai/agent/providers.js'
@@ -41,6 +43,40 @@ const QUICK_ACTIONS = {
     { label: 'Meus laudos', route: '/laudos' },
     { label: 'Meu perfil', route: '/perfil' },
   ],
+}
+
+// Renderização do Markdown das respostas do agente, estilizada para caber na
+// bolha estreita do widget. Sem HTML cru (react-markdown ignora por padrão).
+const MD_COMPONENTS = {
+  p: ({ children }) => <p className="mb-2 whitespace-pre-wrap last:mb-0">{children}</p>,
+  ul: ({ children }) => <ul className="mb-2 list-disc space-y-0.5 pl-4">{children}</ul>,
+  ol: ({ children }) => <ol className="mb-2 list-decimal space-y-0.5 pl-4">{children}</ol>,
+  li: ({ children }) => <li className="leading-5">{children}</li>,
+  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+  em: ({ children }) => <em className="italic">{children}</em>,
+  a: ({ href, children }) => (
+    <a className="text-accent-primary underline" href={href} target="_blank" rel="noreferrer">
+      {children}
+    </a>
+  ),
+  code: ({ children }) => (
+    <code className="rounded bg-surface-card px-1 py-0.5 text-[12px]">{children}</code>
+  ),
+  pre: ({ children }) => <pre className="mb-2 overflow-x-auto">{children}</pre>,
+  h1: ({ children }) => <h3 className="mb-1 mt-1 text-sm font-bold">{children}</h3>,
+  h2: ({ children }) => <h3 className="mb-1 mt-1 text-sm font-bold">{children}</h3>,
+  h3: ({ children }) => <h3 className="mb-1 mt-1 text-sm font-bold">{children}</h3>,
+  table: ({ children }) => (
+    <div className="mb-2 overflow-x-auto">
+      <table className="w-full border-collapse text-[12px]">{children}</table>
+    </div>
+  ),
+  th: ({ children }) => (
+    <th className="border border-border-default-v2 px-1.5 py-0.5 text-left font-semibold">{children}</th>
+  ),
+  td: ({ children }) => (
+    <td className="border border-border-default-v2 px-1.5 py-0.5 text-left">{children}</td>
+  ),
 }
 
 export function ChatbotWidget({ navigate, role }) {
@@ -267,7 +303,13 @@ export function ChatbotWidget({ navigate, role }) {
                       : 'border border-border-default-v2 bg-surface-inset text-text-body'
                   }`}
                 >
-                  <p className="whitespace-pre-wrap">{message.content}</p>
+                  {message.role === 'user' ? (
+                    <p className="whitespace-pre-wrap">{message.content}</p>
+                  ) : (
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
+                      {message.content || ''}
+                    </ReactMarkdown>
+                  )}
                   {message.steps?.length ? (
                     <details className="mt-1.5">
                       <summary className="cursor-pointer select-none list-none text-[10px] text-text-muted-v2 opacity-50 transition-opacity duration-150 hover:!opacity-100">

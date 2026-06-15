@@ -11,9 +11,9 @@ import { maskHeight, sanitizeFieldValue, sanitizePersonName } from '../utils/inp
 const ITEMS_PER_PAGE = 25
 
 const darkInput =
-  'h-10 w-full rounded-lg border border-border-default-v2 bg-surface-inset px-3 text-sm text-text-heading outline-none transition placeholder:text-text-muted-v2 focus:border-[#3b82f6] focus:ring-1 focus:ring-[#3b82f6]'
-const darkLabel = 'mb-1.5 block text-xs font-medium text-text-heading'
-const darkCard = 'rounded-2xl border border-border-default-v2 bg-surface-card p-6 shadow-sm'
+  'h-10 w-full rounded-md border border-border-default-v2 bg-surface-card-hover px-3 text-sm text-text-body outline-none transition placeholder:text-text-muted-v2 focus:border-accent-primary focus:ring-2 focus:ring-accent-primary/20'
+const darkLabel = 'mb-1.5 block text-xs font-semibold text-text-body'
+const darkCard = 'rounded-2xl border border-border-default-v2 bg-surface-card p-6 shadow-card'
 const MAX_PATIENT_ATTACHMENT_SIZE = 10 * 1024 * 1024
 
 const patientTabs = [
@@ -404,11 +404,31 @@ async function uploadPatientAttachments(patientId, files = []) {
   }
 
   if (loading) {
-    return <p className="p-8 text-center text-text-muted-v2">Carregando pacientes...</p>
+    return (
+      <div className="mx-auto grid max-w-7xl gap-5 page-enter">
+        <div className="skeleton h-28 rounded-2xl" />
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div className="skeleton h-24 rounded-2xl" />
+          <div className="skeleton h-24 rounded-2xl" />
+          <div className="skeleton h-24 rounded-2xl" />
+        </div>
+        <div className="skeleton h-96 rounded-2xl" />
+      </div>
+    )
   }
 
   if (error) {
-    return <p className="p-8 text-center text-red-400">Erro ao carregar pacientes: {error}</p>
+    return (
+      <div className="mx-auto max-w-2xl">
+        <div className="flex items-start gap-3 rounded-2xl border border-red-500/40 bg-red-500/10 px-5 py-4 text-sm text-red-300">
+          <svg className="mt-0.5 size-5 shrink-0" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 8v4M12 16h.01" />
+          </svg>
+          <p>Erro ao carregar pacientes: {error}</p>
+        </div>
+      </div>
+    )
   }
 
   if (view === 'form') {
@@ -426,59 +446,105 @@ async function uploadPatientAttachments(patientId, files = []) {
     )
   }
 
+  const totalPatients = rows.length
+  const vipPatients = rows.filter((patient) => patient.vip).length
+  const withInsurance = rows.filter((patient) => patient.insurance).length
+
   return (
-    <div className="mx-auto max-w-7xl space-y-6 text-text-heading">
-      <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
-        <div>
-          <h1 className="text-[32px] font-bold leading-8 tracking-[-0.02em] text-text-heading">Pacientes</h1>
-          <p className="mt-1 text-sm text-text-muted-v2">Gerencie as informações de seus pacientes</p>
-        </div>
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-          <button
-            className={`inline-flex h-10 items-center justify-center gap-2 rounded-lg border px-4 text-sm font-medium shadow-sm transition ${
-              hasAdvancedFilters
-                ? 'border-[#3b82f6] bg-[#3b82f6]/10 text-[#3b82f6]'
-                : 'border-border-default-v2 bg-surface-card-hover text-text-heading hover:bg-surface-card-hover'
-            }`}
-            onClick={() => setAdvancedOpen(true)}
-            type="button"
-          >
-            <PatientIcon className="size-4" name="filter" />
-            Filtro avançado
-          </button>
-          {canEditPatients ? (
+    <div className="page-enter mx-auto grid max-w-7xl gap-5 text-text-heading">
+      {/* HERO */}
+      <header className="relative overflow-hidden rounded-2xl border border-border-default-v2 bg-surface-card shadow-card">
+        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-accent-primary/30 via-accent-primary to-accent-primary/30" aria-hidden="true" />
+        <div className="grid gap-5 px-5 py-5 sm:px-7 md:grid-cols-[1fr_auto] md:items-end">
+          <div className="flex items-start gap-4">
+            <div className="metric-tone-blue flex size-12 items-center justify-center rounded-2xl shadow-card">
+              <svg className="size-6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent-primary">Cadastro · Pacientes</p>
+              <h1 className="mt-1 text-2xl font-bold leading-tight tracking-tight text-text-heading md:text-3xl">
+                Pacientes da clínica
+              </h1>
+              <p className="mt-1 max-w-xl text-sm leading-6 text-text-muted-v2">
+                Cadastre novos pacientes, busque por nome ou documento e abra a ficha completa para confirmar dados de contato e convênio.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 self-start md:self-end">
             <button
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#3b82f6] px-4 text-sm font-medium text-white shadow-sm transition hover:bg-[#2563eb]"
-              onClick={() => openForm()}
+              className={`inline-flex h-10 items-center gap-2 rounded-md border px-3.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/40 ${
+                hasAdvancedFilters
+                  ? 'border-accent-primary/50 bg-accent-primary/10 text-accent-primary'
+                  : 'border-border-default-v2 bg-surface-card-hover text-text-body hover:border-border-strong hover:bg-surface-card'
+              }`}
+              onClick={() => setAdvancedOpen(true)}
               type="button"
             >
-              <PatientIcon name="user-plus" />
-              Adicionar
+              <PatientIcon className="size-4" name="filter" />
+              Filtro avançado
+              {hasAdvancedFilters ? (
+                <span className="ml-1 rounded-full bg-accent-primary px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                  {[city, state, ageMin, ageMax, lastVisitSince].filter(Boolean).length}
+                </span>
+              ) : null}
             </button>
-          ) : null}
+            {canEditPatients ? (
+              <button
+                className="inline-flex h-10 items-center gap-2 rounded-md bg-accent-primary px-4 text-sm font-bold text-white shadow-card transition hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/40"
+                onClick={() => openForm()}
+                type="button"
+              >
+                <PatientIcon className="size-4" name="user-plus" />
+                Adicionar paciente
+              </button>
+            ) : null}
+          </div>
         </div>
-      </div>
 
-      <section className="rounded-2xl border border-border-default-v2 bg-surface-card px-6 py-8 shadow-sm xl:py-14">
-        <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
-          <div className="relative md:col-span-2">
-            <span className="absolute inset-y-0 left-0 flex items-center pl-3">
-              <PatientIcon className="size-4 text-text-muted-v2" name="search" />
+        <div className="grid gap-3 border-t border-border-subtle bg-surface-inset/40 px-5 py-4 sm:grid-cols-3 sm:px-7">
+          <PatientHeroMetric tone="blue" label="Cadastrados" value={totalPatients} hint={totalPatients === 1 ? 'paciente no sistema' : 'pacientes no sistema'} />
+          <PatientHeroMetric tone="violet" label="Pacientes VIP" value={vipPatients} hint={vipPatients === 0 ? 'nenhum marcado como VIP' : vipPatients === 1 ? 'paciente com prioridade' : 'pacientes com prioridade'} />
+          <PatientHeroMetric tone="green" label="Com convênio" value={withInsurance} hint={withInsurance === totalPatients && totalPatients > 0 ? 'todos com convênio cadastrado' : 'possuem convênio vinculado'} />
+        </div>
+      </header>
+
+      {/* Toolbar de busca + filtros */}
+      <section className="overflow-hidden rounded-2xl border border-border-default-v2 bg-surface-card shadow-card">
+        <div className="grid gap-3 border-b border-border-subtle px-5 py-4 sm:px-6 md:grid-cols-[1fr_220px_180px]">
+          <div className="relative">
+            <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-text-muted-v2">
+              <PatientIcon className="size-4" name="search" />
             </span>
             <input
-              className="h-11 w-full rounded-lg border border-border-default-v2 bg-surface-card-hover py-2.5 pl-10 pr-4 text-sm text-text-heading outline-none transition placeholder:text-text-muted-v2 focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20"
+              className="h-11 w-full rounded-md border border-border-default-v2 bg-surface-card-hover pl-10 pr-3 text-sm text-text-body outline-none transition placeholder:text-text-muted-v2 focus:border-accent-primary focus:ring-2 focus:ring-accent-primary/20"
               onChange={(event) => {
                 setSearch(event.target.value)
                 setPage(1)
               }}
-              placeholder="Buscar por nome ou documento..."
+              placeholder="Buscar por nome, CPF, telefone ou e-mail..."
               value={search}
             />
+            {search ? (
+              <button
+                aria-label="Limpar busca"
+                className="absolute inset-y-0 right-2 my-auto flex size-7 items-center justify-center rounded-md text-text-muted-v2 transition hover:bg-surface-card hover:text-text-body"
+                onClick={() => { setSearch(''); setPage(1) }}
+                type="button"
+              >
+                <svg className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </button>
+            ) : null}
           </div>
 
           <PatientSelect
             icon="file"
-            label="Selecione o Convenio"
+            label="Convênio"
             onChange={(value) => {
               setInsurance(value)
               setPage(1)
@@ -489,7 +555,7 @@ async function uploadPatientAttachments(patientId, files = []) {
 
           <PatientSelect
             icon="star"
-            label="Selecione (VIP)"
+            label="VIP"
             onChange={(value) => {
               setVip(value)
               setPage(1)
@@ -500,60 +566,88 @@ async function uploadPatientAttachments(patientId, files = []) {
         </div>
 
         {hasAdvancedFilters ? (
-          <div className="mb-4 flex flex-wrap items-center gap-2">
-            <span className="text-xs text-text-muted-v2">Filtros ativos:</span>
+          <div className="flex flex-wrap items-center gap-2 border-b border-border-subtle px-5 py-3 sm:px-6">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted-v2">Filtros ativos</span>
             {city ? <FilterChip label={`Cidade: ${city}`} onClear={() => setCity('')} /> : null}
             {state ? <FilterChip label={`Estado: ${state}`} onClear={() => setState('')} /> : null}
-            {ageMin ? <FilterChip label={`Idade min: ${ageMin}`} onClear={() => setAgeMin('')} /> : null}
-            {ageMax ? <FilterChip label={`Idade max: ${ageMax}`} onClear={() => setAgeMax('')} /> : null}
-            {lastVisitSince ? (
-              <FilterChip label={`Desde: ${lastVisitSince}`} onClear={() => setLastVisitSince('')} />
-            ) : null}
-            <button className="text-xs text-[#ef4444] hover:underline" onClick={resetAdvancedFilters} type="button">
+            {ageMin ? <FilterChip label={`Idade ≥ ${ageMin}`} onClear={() => setAgeMin('')} /> : null}
+            {ageMax ? <FilterChip label={`Idade ≤ ${ageMax}`} onClear={() => setAgeMax('')} /> : null}
+            {lastVisitSince ? <FilterChip label={`Atendido desde ${lastVisitSince}`} onClear={() => setLastVisitSince('')} /> : null}
+            <button className="ml-1 text-xs font-semibold text-red-400 hover:underline" onClick={resetAdvancedFilters} type="button">
               Limpar todos
             </button>
           </div>
         ) : null}
 
-        <div className="overflow-x-auto rounded-lg border border-border-default-v2">
+        <div className="overflow-x-auto">
           <table className="w-full min-w-full table-fixed text-left text-sm">
-            <thead className="bg-surface-page text-xs font-semibold uppercase text-text-muted-v2">
+            <thead className="bg-surface-inset/60 text-[11px] font-bold uppercase tracking-[0.12em] text-text-muted-v2">
               <tr>
-                <th className="w-[24%] px-6 py-4">Nome</th>
-                <th className="w-[14%] px-6 py-4">Telefone</th>
-                <th className="w-[12%] px-6 py-4">Cidade</th>
-                <th className="w-[8%] px-6 py-4">Estado</th>
-                <th className="w-[16%] px-6 py-4">Ultimo atendimento</th>
-                <th className="w-[18%] px-6 py-4">Proximo atendimento</th>
-                <th className="sticky right-0 w-[8.5rem] bg-surface-page px-6 py-4 text-right">Ações</th>
+                <th className="w-[26%] px-5 py-3">Paciente</th>
+                <th className="w-[14%] px-5 py-3">Telefone</th>
+                <th className="w-[14%] px-5 py-3">Cidade/UF</th>
+                <th className="w-[16%] px-5 py-3">Último atendimento</th>
+                <th className="w-[18%] px-5 py-3">Próximo atendimento</th>
+                <th className="sticky right-0 w-[7rem] bg-surface-inset/60 px-5 py-3 text-right">Ações</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border-default-v2 bg-surface-card">
+            <tbody className="divide-y divide-border-subtle bg-surface-card">
               {paginatedPatients.length ? (
                 paginatedPatients.map((patient) => (
-                  <tr className="transition hover:bg-surface-card-hover" key={patient.id}>
-                    <td className="px-6 py-4 align-top">
-                      <button className="flex items-center gap-3 text-left" onClick={() => openDetail(patient)} type="button">
-                        <PatientAvatar className="size-8" patient={patient} />
+                  <tr className="group transition hover:bg-surface-card-hover" key={patient.id}>
+                    <td className="px-5 py-3.5 align-middle">
+                      <button className="flex w-full items-center gap-3 text-left focus-visible:outline-none" onClick={() => openDetail(patient)} type="button">
+                        <PatientAvatar className="size-10" patient={patient} />
                         <span className="min-w-0">
-                          <span className="block whitespace-normal break-words font-medium text-text-heading transition hover:text-[#3b82f6]">
-                            {patient.name}
+                          <span className="flex flex-wrap items-center gap-1.5">
+                            <span className="truncate font-semibold text-text-heading transition group-hover:text-accent-primary">
+                              {patient.name}
+                            </span>
+                            {patient.vip ? (
+                              <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-amber-300">
+                                VIP
+                              </span>
+                            ) : null}
                           </span>
-                          <span className="mt-0.5 block whitespace-normal break-words text-xs text-text-muted-v2">
-                            {patient.insurance || missingValue('Convênio')} {patient.vip ? ' | VIP' : ''}
+                          <span className="mt-0.5 block truncate text-xs text-text-muted-v2">
+                            {patient.insurance || 'Sem convênio'}
+                            {patient.cpf ? ` · CPF ${patient.cpf}` : ''}
                           </span>
                         </span>
                       </button>
                     </td>
-                    <td className="px-6 py-4 align-top whitespace-normal break-words text-text-muted-v2">{patient.phone || missingValue('Telefone')}</td>
-                    <td className="px-6 py-4 align-top whitespace-normal break-words text-text-muted-v2">{patient.city || missingValue('Cidade')}</td>
-                    <td className="px-6 py-4 align-top text-text-muted-v2">{patient.state || missingValue('Estado')}</td>
-                    <td className="px-6 py-4 align-top whitespace-normal break-words text-text-muted-v2">{patient.lastVisit || 'Ainda não houve atendimento'}</td>
-                    <td className="px-6 py-4 align-top whitespace-normal break-words text-text-muted-v2">{patient.nextVisit || 'Nenhum atendimento agendado'}</td>
-                    <td className="sticky right-0 bg-surface-card px-4 py-4 text-right shadow-[-10px_0_12px_-12px_rgba(0,0,0,0.75)]">
+                    <td className="px-5 py-3.5 align-middle text-text-body">{patient.phone || <span className="text-text-muted-v2">—</span>}</td>
+                    <td className="px-5 py-3.5 align-middle text-text-body">
+                      {patient.city ? (
+                        <span>
+                          {patient.city}
+                          {patient.state ? <span className="text-text-muted-v2"> / {patient.state}</span> : null}
+                        </span>
+                      ) : <span className="text-text-muted-v2">—</span>}
+                    </td>
+                    <td className="px-5 py-3.5 align-middle text-sm">
+                      {patient.lastVisit ? (
+                        <span className="text-text-body">{patient.lastVisit}</span>
+                      ) : (
+                        <span className="text-text-muted-v2">Sem atendimentos</span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3.5 align-middle text-sm">
+                      {patient.nextVisit ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-md border border-accent-primary/30 bg-accent-primary/5 px-2 py-0.5 text-xs font-medium text-accent-primary">
+                          <svg className="size-3" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+                            <rect height="18" rx="2" width="18" x="3" y="4" /><path d="M16 2v4M8 2v4M3 10h18" />
+                          </svg>
+                          {patient.nextVisit}
+                        </span>
+                      ) : (
+                        <span className="text-text-muted-v2">Nenhum agendado</span>
+                      )}
+                    </td>
+                    <td className="sticky right-0 bg-surface-card px-3 py-3.5 text-right group-hover:bg-surface-card-hover">
                       <button
                         aria-label={`Ações de ${patient.name}`}
-                        className="rounded p-1 text-text-muted-v2 transition hover:bg-surface-card-hover hover:text-text-heading"
+                        className="inline-flex size-9 items-center justify-center rounded-md border border-transparent text-text-muted-v2 transition hover:border-border-default-v2 hover:bg-surface-inset hover:text-text-body focus-visible:outline-none focus-visible:border-accent-primary"
                         onClick={(event) => toggleActionMenu(event, patient)}
                         type="button"
                       >
@@ -564,8 +658,16 @@ async function uploadPatientAttachments(patientId, files = []) {
                 ))
               ) : (
                 <tr>
-                  <td className="px-6 py-10 text-center text-text-muted-v2" colSpan={7}>
-                    Nenhum paciente encontrado.
+                  <td colSpan={6}>
+                    <div className="px-6 py-14 text-center">
+                      <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-surface-inset text-text-muted-v2">
+                        <PatientIcon className="size-7" name="search" />
+                      </div>
+                      <p className="mt-3 text-base font-semibold text-text-heading">Nenhum paciente encontrado</p>
+                      <p className="mx-auto mt-1 max-w-sm text-sm leading-6 text-text-muted-v2">
+                        Ajuste os filtros ou cadastre um novo paciente com o botão "Adicionar paciente".
+                      </p>
+                    </div>
                   </td>
                 </tr>
               )}
@@ -573,33 +675,36 @@ async function uploadPatientAttachments(patientId, files = []) {
           </table>
         </div>
 
-        <div className="mt-4 flex flex-col gap-4 border-t border-border-default-v2 pt-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 border-t border-border-subtle px-5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <p className="text-xs text-text-muted-v2">
-            Mostrando {filteredPatients.length ? startIndex + 1 : 0}-
-            {Math.min(startIndex + ITEMS_PER_PAGE, filteredPatients.length)} de {filteredPatients.length} pacientes
+            {filteredPatients.length === 0
+              ? 'Nenhum resultado'
+              : <>Mostrando <strong className="text-text-body tabular-nums">{startIndex + 1}–{Math.min(startIndex + ITEMS_PER_PAGE, filteredPatients.length)}</strong> de <strong className="text-text-body tabular-nums">{filteredPatients.length}</strong> {filteredPatients.length === 1 ? 'paciente' : 'pacientes'}</>}
           </p>
-          <div className="flex items-center gap-2">
-            <PageButton disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>
-              <PatientIcon className="size-4" name="chevron-left" />
-            </PageButton>
-            {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
-              <button
-                className={`grid size-8 place-items-center rounded-lg text-xs font-medium transition ${
-                  pageNumber === currentPage
-                    ? 'bg-[#3b82f6] text-white'
-                    : 'border border-border-default-v2 bg-surface-inset text-text-muted-v2 hover:bg-surface-card-hover'
-                }`}
-                key={pageNumber}
-                onClick={() => setPage(pageNumber)}
-                type="button"
-              >
-                {pageNumber}
-              </button>
-            ))}
-            <PageButton disabled={currentPage === totalPages} onClick={() => setPage(currentPage + 1)}>
-              <PatientIcon className="size-4" name="chevron-right" />
-            </PageButton>
-          </div>
+          {totalPages > 1 ? (
+            <div className="flex items-center gap-1.5">
+              <PageButton disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>
+                <PatientIcon className="size-4" name="chevron-left" />
+              </PageButton>
+              {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
+                <button
+                  className={`grid size-9 place-items-center rounded-md text-xs font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/40 ${
+                    pageNumber === currentPage
+                      ? 'bg-accent-primary text-white shadow-card'
+                      : 'border border-border-default-v2 bg-surface-card-hover text-text-body hover:border-border-strong hover:bg-surface-card'
+                  }`}
+                  key={pageNumber}
+                  onClick={() => setPage(pageNumber)}
+                  type="button"
+                >
+                  {pageNumber}
+                </button>
+              ))}
+              <PageButton disabled={currentPage === totalPages} onClick={() => setPage(currentPage + 1)}>
+                <PatientIcon className="size-4" name="chevron-right" />
+              </PageButton>
+            </div>
+          ) : null}
         </div>
       </section>
 
@@ -612,11 +717,11 @@ async function uploadPatientAttachments(patientId, files = []) {
             type="button"
           />
           <div
-            className="fixed z-50 w-48 rounded-md border border-border-default-v2 bg-surface-card p-1 text-left shadow-lg"
+            className="fixed z-50 w-52 rounded-xl border border-border-default-v2 bg-surface-card p-1.5 text-left shadow-elevated"
             style={{ left: `${menuPosition.left}px`, top: `${menuPosition.top}px` }}
           >
             <ActionItem icon="file" label="Ver detalhes" onClick={() => openDetail(menuPatient)} />
-            {canEditPatients ? <ActionItem icon="edit" label="Editar" onClick={() => openForm(menuPatient.id)} /> : null}
+            {canEditPatients ? <ActionItem icon="edit" label="Editar paciente" onClick={() => openForm(menuPatient.id)} /> : null}
             <ActionItem
               icon="calendar"
               label="Marcar consulta"
@@ -626,7 +731,10 @@ async function uploadPatientAttachments(patientId, files = []) {
               }}
             />
             {canHardDeletePatients ? (
-              <ActionItem danger icon="trash" label="Excluir" onClick={() => deletePatient(menuPatient)} />
+              <>
+                <div className="my-1 h-px bg-border-subtle" />
+                <ActionItem danger icon="trash" label="Excluir" onClick={() => deletePatient(menuPatient)} />
+              </>
             ) : null}
           </div>
         </>
@@ -914,25 +1022,54 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
   }
 
   return (
-    <div className={`relative text-text-heading ${voiceMode === 'guided' ? 'pb-56' : 'pb-20'}`}>
-      <div className="mb-6 flex flex-col items-start justify-between gap-4 border-b border-border-default-v2 pb-6 md:flex-row">
-        <div className="flex items-start gap-4">
-          <button
-            className="mt-1 grid size-10 place-items-center rounded-lg border border-border-default-v2 bg-surface-card text-text-heading transition hover:bg-surface-card-hover"
-            onClick={onCancel}
-            type="button"
-          >
-            <PatientIcon className="size-5" name="arrow-left" />
-          </button>
-          <div>
-            <h1 className="text-[32px] font-bold leading-8 tracking-[-0.02em] text-text-heading">Paciente</h1>
-            <p className="mt-1 text-sm text-text-muted-v2">Gerencie as informações de seus pacientes</p>
+    <div className={`page-enter mx-auto max-w-7xl text-text-heading ${voiceMode === 'guided' ? 'pb-56' : 'pb-28'}`}>
+      {/* Voltar */}
+      <button
+        className="mb-4 inline-flex h-9 w-fit items-center gap-1.5 rounded-md border border-border-default-v2 bg-surface-card-hover px-3 text-xs font-semibold text-text-muted-v2 transition hover:bg-surface-card hover:text-text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/40"
+        onClick={onCancel}
+        type="button"
+      >
+        <svg className="size-3.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+          <path d="m15 6-6 6 6 6" />
+        </svg>
+        Voltar para a lista
+      </button>
+
+      {/* HERO do formulário */}
+      <header className="relative mb-5 overflow-hidden rounded-2xl border border-border-default-v2 bg-surface-card shadow-card">
+        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-accent-primary/40 via-accent-primary to-accent-primary/40" aria-hidden="true" />
+        <div className="grid gap-4 px-5 py-5 sm:px-7 md:grid-cols-[1fr_auto] md:items-center">
+          <div className="flex items-start gap-4">
+            <div className="metric-tone-blue flex size-12 items-center justify-center rounded-2xl shadow-card">
+              <PatientIcon className="size-6" name={isNewPatient ? 'user-plus' : 'edit'} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent-primary">
+                {isNewPatient ? 'Novo cadastro' : 'Edição de cadastro'}
+              </p>
+              <h1 className="mt-1 text-2xl font-bold leading-tight tracking-tight text-text-heading md:text-3xl">
+                {isNewPatient ? 'Adicionar paciente' : (patient?.name || 'Editar paciente')}
+              </h1>
+              <p className="mt-1 max-w-xl text-sm leading-6 text-text-muted-v2">
+                {isNewPatient
+                  ? 'Preencha os dados pessoais, contato, endereço e convênio. Os campos marcados com * são obrigatórios.'
+                  : 'Atualize as informações do paciente. As alterações são salvas ao clicar em "Salvar alterações".'}
+              </p>
+            </div>
           </div>
+          {isNewPatient ? (
+            <div className="flex flex-wrap items-center gap-2 self-start md:self-center">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-300">
+                <span className="size-1.5 rounded-full bg-amber-400" />
+                12 campos obrigatórios
+              </span>
+            </div>
+          ) : null}
         </div>
-      </div>
+      </header>
 
       {isNewPatient ? (
-        <div className={`${darkCard} mb-6`}>
+        <div className={`${darkCard} mb-5`}>
           <VoiceFormFiller
             schema={PATIENT_VOICE_SCHEMA}
             onFill={applyVoiceFill}
@@ -951,23 +1088,28 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
         />
       ) : null}
 
-      <form className="space-y-6" onSubmit={handleSubmit}>
+      <form className="space-y-5" id="patient-editor-form" onSubmit={handleSubmit}>
           <section className={darkCard}>
-            <h2 className="mb-6 text-lg font-semibold text-text-heading">Dados do Paciente</h2>
-            <div className="mb-8 flex flex-col items-start gap-4 md:flex-row">
+            <SectionHeading icon="user" tone="blue">Dados do paciente</SectionHeading>
+            <div className="mb-8 flex flex-col items-center gap-5 rounded-xl border border-border-subtle bg-surface-inset/40 p-5 sm:flex-row sm:items-center sm:p-4">
               {avatarPreview ? (
-                <img alt="" className="size-20 shrink-0 rounded-full border border-[#3b82f6]/30 object-cover" src={avatarPreview} />
+                <img alt="" className="size-20 shrink-0 rounded-full border-2 border-accent-primary/40 object-cover" src={avatarPreview} />
               ) : (
-                <div className="grid size-20 shrink-0 place-items-center rounded-full border border-[#3b82f6]/30 bg-[#3b82f6]/20 text-[#3b82f6]">
+                <div className="grid size-20 shrink-0 place-items-center rounded-full border-2 border-accent-primary/30 bg-accent-primary/15 text-accent-primary">
                   <PatientIcon className="size-10" name="user" />
                 </div>
               )}
+              <div className="flex flex-1 flex-col items-center text-center sm:items-start sm:text-left">
+                <p className="text-sm font-semibold text-text-heading">Foto do paciente</p>
+                <p className="mt-0.5 text-xs text-text-muted-v2">Opcional. PNG ou JPG, até 5MB.</p>
+              </div>
               <button
-                className="mt-2 rounded-lg border border-border-default-v2 bg-surface-inset px-4 py-1.5 text-sm font-medium text-text-heading transition hover:bg-surface-card-hover"
+                className="inline-flex h-10 items-center gap-2 rounded-md border border-border-default-v2 bg-surface-card px-4 text-sm font-semibold text-text-body transition hover:border-border-strong hover:bg-surface-card-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/40"
                 onClick={() => fileInputRef.current?.click()}
                 type="button"
               >
-                Carregar
+                <PatientIcon className="size-4" name="upload" />
+                {avatarPreview ? 'Trocar foto' : 'Carregar foto'}
               </button>
               <input
                 accept="image/*"
@@ -1084,7 +1226,13 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
               </DarkField>
               {isMinorPatient ? (
                 <>
-                  <p className="md:col-span-12 text-xs font-semibold uppercase tracking-wide text-[#51a2ff]">Campos somente para menores de idade</p>
+                  <div className="md:col-span-12 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2">
+                    <svg className="size-4 text-amber-300" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
+                      <path d="M12 9v4M12 17h.01" />
+                      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                    </svg>
+                    <p className="text-xs font-semibold text-amber-200">Campos obrigatórios para pacientes menores de idade</p>
+                  </div>
               <DarkField className="md:col-span-6" label="Profissão da mãe">
                 <input className={darkInput} name="motherProfession" onChange={handleChange} value={formData.motherProfession} />
               </DarkField>
@@ -1125,7 +1273,7 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
           </section>
 
           <section className={darkCard}>
-            <h2 className="mb-6 text-lg font-semibold text-text-heading">Informações Médicas</h2>
+            <SectionHeading icon="heart" tone="violet">Informações médicas</SectionHeading>
             <div className="grid grid-cols-1 gap-x-6 gap-y-6 md:grid-cols-12">
               <DarkField className="md:col-span-6" label="Condição principal">
                 <input className={darkInput} name="condition" onChange={handleChange} value={formData.condition} />
@@ -1157,7 +1305,7 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
           </section>
 
           <section className={darkCard}>
-            <h2 className="mb-6 text-lg font-semibold text-text-heading">Contato</h2>
+            <SectionHeading icon="phone" tone="green">Contato</SectionHeading>
             <div className="grid grid-cols-1 gap-x-6 gap-y-6 md:grid-cols-12">
               <DarkField className="md:col-span-3" label={requiredLabel('E-mail')}>
                 <input className={darkInput} name="email" onChange={handleChange} required={isNewPatient} type="email" value={formData.email} />
@@ -1175,7 +1323,7 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
           </section>
 
           <section className={darkCard}>
-            <h2 className="mb-6 text-lg font-semibold text-text-heading">Endereço</h2>
+            <SectionHeading icon="map-pin" tone="blue">Endereço</SectionHeading>
             <div className="grid grid-cols-1 gap-x-6 gap-y-6 md:grid-cols-12">
               <DarkField className="md:col-span-3" label={requiredLabel('CEP')}>
                 <input className={darkInput} maxLength={9} name="zipCode" onChange={handleChange} placeholder="_____-___" required={isNewPatient} value={formData.zipCode} />
@@ -1206,7 +1354,7 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
           </section>
 
           <section className={darkCard}>
-            <h2 className="mb-6 text-lg font-semibold text-text-heading">Convênio</h2>
+            <SectionHeading icon="file" tone="violet">Convênio</SectionHeading>
             <div className="grid grid-cols-1 gap-x-6 gap-y-6 md:grid-cols-12">
               <DarkField className="md:col-span-6" label="Convênio">
                 <select className={darkInput} name="insurance" onChange={handleChange} value={formData.insurance}>
@@ -1234,19 +1382,24 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
                   value={formData.insuranceCardValidUntil}
                 />
               </DarkField>
-              <label className="flex h-10 items-center gap-2 self-end text-sm text-text-heading md:col-span-4">
-                <input className="size-4 accent-[#3b82f6]" checked={formData.insuranceIndefiniteValidity} name="insuranceIndefiniteValidity" onChange={handleChange} type="checkbox" />
+              <label className="flex h-10 cursor-pointer items-center gap-2 self-end text-sm text-text-body md:col-span-4">
+                <input className="size-4 accent-accent-primary" checked={formData.insuranceIndefiniteValidity} name="insuranceIndefiniteValidity" onChange={handleChange} type="checkbox" />
                 Validade indeterminada
               </label>
-              <label className="flex w-fit cursor-pointer items-center gap-2 text-sm text-text-heading md:col-span-12">
-                <input className="size-4 accent-[#3b82f6]" checked={formData.vip} name="vip" onChange={handleChange} type="checkbox" />
-                Paciente VIP
+              <label className="md:col-span-12 flex w-fit cursor-pointer items-center gap-3 rounded-lg border border-border-default-v2 bg-surface-inset px-4 py-2.5 text-sm font-medium text-text-body transition hover:border-amber-500/50 has-[:checked]:border-amber-500/60 has-[:checked]:bg-amber-500/10 has-[:checked]:text-amber-200">
+                <input className="size-4 accent-amber-400" checked={formData.vip} name="vip" onChange={handleChange} type="checkbox" />
+                <span className="inline-flex items-center gap-1.5">
+                  <svg className="size-4" fill="currentColor" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" viewBox="0 0 24 24">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                  </svg>
+                  Marcar como paciente VIP
+                </span>
               </label>
             </div>
           </section>
 
           <section className={darkCard}>
-            <h2 className="mb-6 text-lg font-semibold text-text-heading">Informações do SUS</h2>
+            <SectionHeading icon="file" tone="green">Informações do SUS</SectionHeading>
             <div className="grid grid-cols-1 gap-x-6 gap-y-6 md:grid-cols-12">
               <DarkField className="md:col-span-6" label="CNS">
                 <input className={darkInput} maxLength={15} name="cns" onChange={handleChange} value={formData.cns} />
@@ -1255,19 +1408,40 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
           </section>
 
           <section className={darkCard}>
-            <h2 className="mb-6 text-lg font-semibold text-text-heading">Observações</h2>
+            <SectionHeading icon="edit" tone="blue">Observações</SectionHeading>
             <DarkField label="Observações gerais">
               <textarea className={`${darkInput} min-h-32 py-2`} name="notesText" onChange={handleChange} value={formData.notesText} />
             </DarkField>
-            <label className="mt-4 flex min-h-12 items-center justify-between gap-4 rounded-lg border border-border-default-v2 bg-surface-inset px-4 text-sm font-medium text-text-heading">
-              <span>Autoriza o recebimento de mensagens conforme LGPD</span>
-              <input className="size-4 accent-[#3b82f6]" checked={Boolean(formData.lgpdOptIn)} name="lgpdOptIn" onChange={handleChange} type="checkbox" />
+            <label className="mt-4 flex min-h-12 cursor-pointer items-center justify-between gap-4 rounded-lg border border-border-default-v2 bg-surface-inset px-4 py-2 text-sm font-medium text-text-body transition hover:border-border-strong has-[:checked]:border-accent-primary/60 has-[:checked]:bg-accent-primary/5">
+              <span className="inline-flex items-center gap-2">
+                <svg className="size-4 text-accent-primary" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+                Autoriza o recebimento de mensagens conforme LGPD
+              </span>
+              <input className="size-4 accent-accent-primary" checked={Boolean(formData.lgpdOptIn)} name="lgpdOptIn" onChange={handleChange} type="checkbox" />
             </label>
           </section>
 
-          <div className="flex justify-end gap-3 pt-4">
+      </form>
+
+      {/* Action bar sticky */}
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border-default-v2 bg-surface-card/95 shadow-elevated backdrop-blur">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-5 py-3 sm:px-7">
+          <div className="hidden items-center gap-2 text-xs text-text-muted-v2 sm:flex">
+            <svg className="size-4 text-accent-primary" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M9 12l2 2 4-4" />
+            </svg>
+            <span>
+              {isNewPatient
+                ? <>Cadastrando novo paciente — confira os campos antes de salvar.</>
+                : <>Editando <strong className="text-text-body">{patient?.name}</strong></>}
+            </span>
+          </div>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
             <button
-              className="rounded-lg border border-border-default-v2 bg-surface-card px-5 py-2.5 text-sm font-medium text-text-heading transition hover:bg-surface-card-hover"
+              className="inline-flex h-10 items-center gap-1.5 rounded-md border border-border-default-v2 bg-surface-card-hover px-4 text-sm font-semibold text-text-body transition hover:bg-surface-card disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/40"
               disabled={saving}
               onClick={onCancel}
               type="button"
@@ -1275,14 +1449,30 @@ function PatientEditor({ existingIds, onCancel, onSave, patient, saving }) {
               Cancelar
             </button>
             <button
-              className="rounded-lg bg-[#3b82f6] px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-[#2563eb] disabled:opacity-60"
+              className="inline-flex h-10 items-center gap-2 rounded-md bg-accent-primary px-5 text-sm font-bold text-white shadow-card transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/40"
               disabled={saving}
+              form="patient-editor-form"
               type="submit"
             >
-              {saving ? 'Salvando...' : 'Salvar alterações'}
+              {saving ? (
+                <>
+                  <svg className="size-4 animate-spin" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                  </svg>
+                  Salvando...
+                </>
+              ) : (
+                <>
+                  <svg className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" viewBox="0 0 24 24">
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                  {isNewPatient ? 'Cadastrar paciente' : 'Salvar alterações'}
+                </>
+              )}
             </button>
           </div>
-      </form>
+        </div>
+      </div>
     </div>
   )
 }
@@ -1886,11 +2076,13 @@ function resolvePatientFilterAge(patient) {
 function PatientSelect({ className = '', icon, label, onChange, options, value }) {
   return (
     <div className={`relative ${className}`}>
-      <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+      <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
         <PatientIcon className="size-4 text-text-muted-v2" name={icon} />
       </div>
       <select
-        className="h-11 w-full cursor-pointer appearance-none rounded-lg border border-border-default-v2 bg-surface-card-hover py-2.5 pl-10 pr-8 text-sm text-text-muted-v2 outline-none transition focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20"
+        className={`h-11 w-full cursor-pointer appearance-none rounded-md border bg-surface-card-hover py-2 pl-10 pr-8 text-sm outline-none transition focus:border-accent-primary focus:ring-2 focus:ring-accent-primary/20 ${
+          value ? 'border-accent-primary/40 text-text-body' : 'border-border-default-v2 text-text-muted-v2'
+        }`}
         onChange={(event) => onChange(event.target.value)}
         value={value}
       >
@@ -1906,11 +2098,39 @@ function PatientSelect({ className = '', icon, label, onChange, options, value }
   )
 }
 
+function PatientHeroMetric({ tone, label, value, hint }) {
+  const tones = {
+    blue: 'metric-tone-blue',
+    violet: 'metric-tone-violet',
+    green: 'metric-tone-green',
+  }
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-border-subtle bg-surface-card px-4 py-3">
+      <div className={`flex size-10 items-center justify-center rounded-lg ${tones[tone] || tones.blue}`}>
+        <svg className="size-5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+        </svg>
+      </div>
+      <div className="min-w-0">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted-v2">{label}</p>
+        <p className="mt-0.5 text-xl font-bold leading-none tabular-nums text-text-heading">{value}</p>
+        {hint ? <p className="mt-1 truncate text-[11px] text-text-muted-v2">{hint}</p> : null}
+      </div>
+    </div>
+  )
+}
+
 function FilterChip({ label, onClear }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-lg bg-[#3b82f6]/10 px-2 py-1 text-xs text-[#3b82f6]">
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-accent-primary/30 bg-accent-primary/10 px-2.5 py-1 text-xs font-semibold text-accent-primary">
       {label}
-      <button aria-label={`Remover ${label}`} onClick={onClear} type="button">
+      <button
+        aria-label={`Remover ${label}`}
+        className="inline-flex size-4 items-center justify-center rounded-full transition hover:bg-accent-primary/20"
+        onClick={onClear}
+        type="button"
+      >
         <PatientIcon className="size-3" name="x" />
       </button>
     </span>
@@ -1920,7 +2140,7 @@ function FilterChip({ label, onClear }) {
 function PageButton({ children, disabled, onClick }) {
   return (
     <button
-      className="grid size-8 place-items-center rounded-lg border border-border-default-v2 bg-surface-inset text-text-heading transition hover:bg-surface-card-hover disabled:cursor-not-allowed disabled:opacity-30"
+      className="grid size-9 place-items-center rounded-md border border-border-default-v2 bg-surface-card-hover text-text-body transition hover:border-border-strong hover:bg-surface-card disabled:cursor-not-allowed disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/40"
       disabled={disabled}
       onClick={onClick}
       type="button"
@@ -1933,8 +2153,10 @@ function PageButton({ children, disabled, onClick }) {
 function ActionItem({ danger = false, icon, label, onClick }) {
   return (
     <button
-      className={`flex w-full items-center gap-2 rounded-sm px-3 py-2 text-left text-sm font-medium transition ${
-        danger ? 'text-[#f87171] hover:bg-surface-card-hover' : 'text-text-heading hover:bg-surface-card-hover'
+      className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/40 ${
+        danger
+          ? 'text-red-400 hover:bg-red-500/10'
+          : 'text-text-body hover:bg-surface-card-hover hover:text-text-heading'
       }`}
       onClick={onClick}
       type="button"
@@ -1962,44 +2184,66 @@ function DarkField({ children, className = '', label }) {
   )
 }
 
+function SectionHeading({ children, icon, tone = 'blue' }) {
+  const tones = {
+    blue: 'metric-tone-blue',
+    violet: 'metric-tone-violet',
+    green: 'metric-tone-green',
+  }
+  return (
+    <div className="mb-6 flex items-center gap-3 border-b border-border-subtle pb-4">
+      <div className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${tones[tone] || tones.blue}`}>
+        <PatientIcon className="size-4" name={icon} />
+      </div>
+      <h2 className="text-base font-bold text-text-heading">{children}</h2>
+    </div>
+  )
+}
+
 function UploadDropzone({ attachmentInputRef, existingAttachments = [], files = [], onFileChange, onRemoveFile }) {
   return (
     <div
-      className="mt-4 cursor-pointer rounded-lg border-2 border-dashed border-border-default-v2 bg-surface-inset p-8 text-center transition hover:bg-surface-card-hover"
+      className="mt-4 cursor-pointer rounded-xl border-2 border-dashed border-border-default-v2 bg-surface-inset px-6 py-8 text-center transition hover:border-accent-primary/40 hover:bg-surface-card-hover focus-visible:outline-none focus-visible:border-accent-primary"
       onClick={() => attachmentInputRef.current?.click()}
       role="button"
       tabIndex={0}
     >
-      <PatientIcon className="mx-auto mb-3 size-6 text-text-muted-v2" name="upload" />
-      <p className="text-sm font-medium text-text-heading">Clique para selecionar arquivos ou arraste-os aqui</p>
-      <p className="mt-1 text-xs text-text-muted-v2">Imagens e documentos ate 10MB</p>
+      <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-2xl bg-accent-primary/10 text-accent-primary">
+        <PatientIcon className="size-6" name="upload" />
+      </div>
+      <p className="text-sm font-semibold text-text-heading">Clique para selecionar arquivos ou arraste-os aqui</p>
+      <p className="mt-1 text-xs text-text-muted-v2">Imagens e documentos até 10MB cada</p>
       <input className="hidden" multiple onChange={onFileChange} ref={attachmentInputRef} type="file" />
       {files.length || existingAttachments.length ? (
-        <ul className="mt-4 grid gap-2 text-left text-xs text-text-muted-v2">
+        <ul className="mt-5 grid gap-2 text-left text-xs">
           {existingAttachments.map((attachment) => (
-            <li className="rounded border border-border-default-v2 bg-surface-card px-3 py-2" key={attachment.path || attachment.url || attachment.name}>
+            <li className="flex items-center gap-2 rounded-lg border border-border-default-v2 bg-surface-card px-3 py-2" key={attachment.path || attachment.url || attachment.name}>
+              <PatientIcon className="size-4 shrink-0 text-text-muted-v2" name="paperclip" />
               {attachment.url ? (
-                <a className="font-semibold text-[#3b82f6]" href={attachment.url} rel="noreferrer" target="_blank">
+                <a className="min-w-0 truncate font-semibold text-accent-primary hover:underline" href={attachment.url} rel="noreferrer" target="_blank">
                   {attachment.name || 'Anexo cadastrado'}
                 </a>
               ) : (
-                attachment.name || 'Anexo cadastrado'
+                <span className="min-w-0 truncate text-text-body">{attachment.name || 'Anexo cadastrado'}</span>
               )}
             </li>
           ))}
           {files.map((file, index) => (
-            <li className="flex items-center justify-between gap-3 rounded border border-border-default-v2 bg-surface-card px-3 py-2" key={`${file.name}-${file.size}-${index}`}>
-              <span className="min-w-0 truncate">{file.name}</span>
+            <li className="flex items-center justify-between gap-3 rounded-lg border border-border-default-v2 bg-surface-card px-3 py-2" key={`${file.name}-${file.size}-${index}`}>
+              <span className="flex min-w-0 items-center gap-2">
+                <PatientIcon className="size-4 shrink-0 text-text-muted-v2" name="paperclip" />
+                <span className="min-w-0 truncate text-text-body">{file.name}</span>
+              </span>
               <button
                 aria-label={`Remover ${file.name}`}
-                className="grid size-5 shrink-0 place-items-center rounded-sm text-text-heading transition hover:bg-surface-card-hover"
+                className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-text-muted-v2 transition hover:bg-red-500/10 hover:text-red-400"
                 onClick={(event) => {
                   event.stopPropagation()
                   onRemoveFile?.(index)
                 }}
                 type="button"
               >
-                x
+                <PatientIcon className="size-3.5" name="x" />
               </button>
             </li>
           ))}
@@ -2026,25 +2270,35 @@ function AdvancedFilterModal({
   stateOptions,
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="w-full max-w-lg rounded-2xl border border-border-default-v2 bg-surface-card p-6 shadow-xl"
+        className="w-full max-w-lg overflow-hidden rounded-2xl border border-border-default-v2 bg-surface-card shadow-elevated"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="mb-6 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-text-heading">Filtro Avancado</h2>
-          <button className="rounded p-1 transition hover:bg-surface-card-hover" onClick={onClose} type="button">
-            <PatientIcon className="size-5 text-text-muted-v2" name="x" />
+        <header className="flex items-center justify-between border-b border-border-subtle px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="metric-tone-blue flex size-9 items-center justify-center rounded-lg">
+              <PatientIcon className="size-4" name="filter" />
+            </div>
+            <h2 className="text-base font-bold text-text-heading">Filtros avançados</h2>
+          </div>
+          <button
+            aria-label="Fechar"
+            className="inline-flex size-9 items-center justify-center rounded-md text-text-muted-v2 transition hover:bg-surface-card-hover hover:text-text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/40"
+            onClick={onClose}
+            type="button"
+          >
+            <PatientIcon className="size-5" name="x" />
           </button>
-        </div>
+        </header>
 
-        <div className="space-y-4">
+        <div className="space-y-4 px-6 py-5">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <DarkField label="Cidade">
               <input
                 className={darkInput}
                 onChange={(event) => setCity(event.target.value)}
-                placeholder="Ex: Recife"
+                placeholder="Ex.: Recife"
                 value={city}
               />
             </DarkField>
@@ -2060,26 +2314,28 @@ function AdvancedFilterModal({
             </DarkField>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <DarkField label="Idade minima">
+            <DarkField label="Idade mínima">
               <input
                 className={darkInput}
                 min="0"
                 onChange={(event) => setAgeMin(event.target.value)}
+                placeholder="0"
                 type="number"
                 value={ageMin}
               />
             </DarkField>
-            <DarkField label="Idade maxima">
+            <DarkField label="Idade máxima">
               <input
                 className={darkInput}
                 min="0"
                 onChange={(event) => setAgeMax(event.target.value)}
+                placeholder="120"
                 type="number"
                 value={ageMax}
               />
             </DarkField>
           </div>
-          <DarkField label="Ultimo atendimento desde">
+          <DarkField label="Último atendimento desde">
             <input
               className={`${darkInput} [color-scheme:dark]`}
               onChange={(event) => setLastVisitSince(event.target.value)}
@@ -2089,22 +2345,23 @@ function AdvancedFilterModal({
           </DarkField>
         </div>
 
-        <div className="mt-6 flex justify-end gap-3">
+        <footer className="flex items-center justify-end gap-2 border-t border-border-subtle bg-surface-inset/40 px-6 py-4">
           <button
-            className="rounded-lg border border-border-default-v2 bg-surface-card px-4 py-2 text-sm font-medium text-text-heading transition hover:bg-surface-card-hover"
+            className="inline-flex h-10 items-center rounded-md border border-border-default-v2 bg-surface-card-hover px-4 text-sm font-semibold text-text-body transition hover:bg-surface-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/40"
             onClick={onClear}
             type="button"
           >
             Limpar
           </button>
           <button
-            className="rounded-lg bg-[#3b82f6] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#2563eb]"
+            className="inline-flex h-10 items-center gap-2 rounded-md bg-accent-primary px-4 text-sm font-bold text-white shadow-card transition hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/40"
             onClick={onApply}
             type="button"
           >
-            Aplicar Filtros
+            <PatientIcon className="size-4" name="filter" />
+            Aplicar filtros
           </button>
-        </div>
+        </footer>
       </div>
     </div>
   )
@@ -2285,6 +2542,39 @@ function PatientIcon({ className = 'size-4', name }) {
     return (
       <svg {...common}>
         <path d="M12 3 5 6v5c0 4.5 3 8.5 7 10 4-1.5 7-5.5 7-10V6l-7-3Z" />
+      </svg>
+    )
+  }
+
+  if (name === 'heart') {
+    return (
+      <svg {...common}>
+        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z" />
+      </svg>
+    )
+  }
+
+  if (name === 'phone') {
+    return (
+      <svg {...common}>
+        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.86 19.86 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.86 19.86 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72a2 2 0 0 1 1.72 2.01z" />
+      </svg>
+    )
+  }
+
+  if (name === 'map-pin') {
+    return (
+      <svg {...common}>
+        <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z" />
+        <circle cx="12" cy="10" r="3" />
+      </svg>
+    )
+  }
+
+  if (name === 'chevron-down') {
+    return (
+      <svg {...common}>
+        <path d="m6 9 6 6 6-6" />
       </svg>
     )
   }

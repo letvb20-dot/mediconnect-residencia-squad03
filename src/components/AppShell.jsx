@@ -9,6 +9,7 @@ import {
   notificationRepository,
 } from '../repositories/notificationRepository.js'
 import { PROFILE_AVATAR_CHANGED_EVENT, profileRepository } from '../repositories/profileRepository.js'
+import { reportRepository } from '../repositories/reportRepository.js'
 import { useSocketEvent } from '../providers/socketContext.js'
 import { BrandLogo } from './Brand.jsx'
 import { ChatbotWidget } from './ai/ChatbotWidget.jsx'
@@ -177,6 +178,59 @@ export function AppShell({ children, currentPath, navigate, role, routeTitle }) 
     }
   }, [])
 
+  // Para o paciente, busca laudos finalizados recentes (últimos 7 dias) e injeta
+  // como notificações no sino. Sem isso, o paciente não saberia quando o médico
+  // envia um laudo/vídeo, já que o notificationRepository é por-browser.
+  useEffect(() => {
+    if (normalizedRole !== 'paciente') return undefined
+    let active = true
+
+    async function loadRecentReports() {
+      try {
+        const profile = await profileRepository.getCurrentUserProfile().catch(() => null)
+        const patientId = profile?.patientId
+        if (!patientId) return
+        const reports = await reportRepository.getInitialReports({
+          patientId,
+          status: 'finalized',
+          order: 'created_at.desc',
+        }).catch(() => [])
+        if (!active) return
+        const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000
+        const recent = (reports || []).filter((report) => {
+          const created = new Date(report.createdAt).getTime()
+          return Number.isFinite(created) && created >= cutoff
+        })
+        const seenKey = 'mediconnect.patient.reports.seen.v1'
+        const seenIds = JSON.parse(localStorage.getItem(seenKey) || '[]')
+        const reportNotifications = recent.map((report) => ({
+          id: `report:${report.id}`,
+          title: 'Novo conteúdo do seu médico',
+          detail: report.exam ? `${report.exam}` : 'Toque para abrir',
+          domain: 'relatorios',
+          route: '/laudos',
+          read: seenIds.includes(report.id),
+          createdAt: report.createdAt || new Date().toISOString(),
+        }))
+        setNotifications((prev) => {
+          const existingIds = new Set(prev.map((n) => n.id))
+          const fresh = reportNotifications.filter((n) => !existingIds.has(n.id))
+          if (!fresh.length) return prev
+          return [...fresh, ...prev].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        })
+      } catch {
+        /* falha de fetch é não-fatal pro sino */
+      }
+    }
+
+    loadRecentReports()
+    const intervalId = window.setInterval(loadRecentReports, 60_000)
+    return () => {
+      active = false
+      window.clearInterval(intervalId)
+    }
+  }, [normalizedRole])
+
   function goTo(path) {
     setMenuOpen(false)
     setProfileMenuOpen(false)
@@ -189,6 +243,19 @@ export function AppShell({ children, currentPath, navigate, role, routeTitle }) 
     const action = notification.action || null
 
     setNotificationsOpen(false)
+
+    // Marca notificações de laudo como vistas localmente para não voltar a piscar.
+    if (typeof notification.id === 'string' && notification.id.startsWith('report:')) {
+      try {
+        const seenKey = 'mediconnect.patient.reports.seen.v1'
+        const seenIds = JSON.parse(localStorage.getItem(seenKey) || '[]')
+        const reportId = notification.id.slice('report:'.length)
+        if (!seenIds.includes(reportId)) {
+          localStorage.setItem(seenKey, JSON.stringify([reportId, ...seenIds].slice(0, 50)))
+        }
+      } catch { /* não-fatal */ }
+      setNotifications((prev) => prev.map((n) => n.id === notification.id ? { ...n, read: true } : n))
+    }
 
     if (action) {
       sessionStorage.setItem(PENDING_NOTIFICATION_ACTION_KEY, JSON.stringify(action))

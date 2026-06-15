@@ -4,9 +4,11 @@ import { RichTextEditor } from '../components/RichTextEditor.jsx'
 import { aiClient } from '../lib/ai/aiClient.js'
 import { heygenClient } from '../lib/ai/heygenClient.js'
 import { appointmentRepository } from '../repositories/appointmentRepository.js'
+import { communicationRepository } from '../repositories/communicationRepository.js'
 import { patientRepository } from '../repositories/patientRepository.js'
 import { professionalRepository } from '../repositories/professionalRepository.js'
 import { profileRepository } from '../repositories/profileRepository.js'
+import { reportRepository } from '../repositories/reportRepository.js'
 import { translateErrorMessage } from '../repositories/repositoryUtils.js'
 import { formatLocalDateInput } from '../utils/agendaDate.js'
 
@@ -89,6 +91,19 @@ function buildMediConnectLaudoHtml({ patient, appointment, doctor, draft, transc
     '<hr>',
     `<p style="text-align: center"><em>${escapeHtml(CLINIC_FOOTER)}</em></p>`,
   ].filter(Boolean).join('\n')
+}
+
+function buildVideoBlockHtml(videoUrl, patientName) {
+  if (!videoUrl) return ''
+  const safeUrl = escapeHtml(videoUrl)
+  const safeName = escapeHtml(patientName || 'Paciente')
+  return [
+    '<hr>',
+    '<h3 style="text-align: center"><strong>Mensagem em vídeo</strong></h3>',
+    `<p style="text-align: center"><em>Gravado pelo médico para ${safeName}.</em></p>`,
+    `<p style="text-align: center"><video controls preload="metadata" style="max-width: 100%; border-radius: 8px" src="${safeUrl}"></video></p>`,
+    `<p style="text-align: center"><a href="${safeUrl}" target="_blank" rel="noopener noreferrer">Abrir vídeo em uma nova aba</a></p>`,
+  ].join('\n')
 }
 
 async function resolveDoctorIdForViewer() {
@@ -408,6 +423,15 @@ export function ConsultaPage({ navigate, appointmentId }) {
 
   const [finishing, setFinishing] = useState(false)
 
+  // Envio do laudo/vídeo para o paciente
+  const [sendModalOpen, setSendModalOpen] = useState(false)
+  const [sendIncludeLaudo, setSendIncludeLaudo] = useState(true)
+  const [sendIncludeVideo, setSendIncludeVideo] = useState(false)
+  const [sendNotifySms, setSendNotifySms] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [sendError, setSendError] = useState('')
+  const [sendSuccess, setSendSuccess] = useState('')
+
   const recorderRef = useRef(null)
   const streamRef = useRef(null)
   const chunksRef = useRef([])
@@ -615,6 +639,81 @@ export function ConsultaPage({ navigate, appointmentId }) {
       try { recorderRef.current.stop() } catch { /* ignora */ }
     }
   }, [])
+
+  const canSendToPatient = (sendIncludeLaudo && (exam || diagnosis || conclusion || contentHtml)) || (sendIncludeVideo && videoUrl)
+
+  const handleSendToPatient = useCallback(async () => {
+    if (!appointment) return
+    if (!sendIncludeLaudo && !sendIncludeVideo) {
+      setSendError('Escolha pelo menos uma coisa para enviar (laudo ou vídeo).')
+      return
+    }
+    if (sendIncludeVideo && !videoUrl) {
+      setSendError('Você marcou para enviar o vídeo, mas ainda não há um vídeo gerado.')
+      return
+    }
+    if (sendIncludeLaudo && !(exam || diagnosis || conclusion || contentHtml)) {
+      setSendError('Você marcou para enviar o laudo, mas ele está vazio.')
+      return
+    }
+    setSending(true)
+    setSendError('')
+    setSendSuccess('')
+    try {
+      const fallbackDraft = { exam, cidCode, diagnosis, conclusion }
+      const baseHtml = sendIncludeLaudo
+        ? (contentHtml || buildMediConnectLaudoHtml({ patient, appointment, doctor, draft: fallbackDraft, transcript }))
+        : ''
+      const videoBlock = sendIncludeVideo
+        ? buildVideoBlockHtml(videoUrl, patient?.name || appointment.patient)
+        : ''
+      const finalHtml = [baseHtml, videoBlock].filter(Boolean).join('\n')
+
+      const reportTitle = sendIncludeLaudo && sendIncludeVideo
+        ? 'Laudo médico e mensagem em vídeo'
+        : sendIncludeLaudo ? 'Laudo médico' : 'Mensagem em vídeo'
+
+      await reportRepository.create({
+        patientId: appointment.patientId,
+        status: 'finalized',
+        exam: sendIncludeLaudo ? (exam || appointment.type || 'Consulta') : reportTitle,
+        cidCode: sendIncludeLaudo ? cidCode : '',
+        diagnosis: sendIncludeLaudo ? diagnosis : '',
+        conclusion: sendIncludeLaudo ? conclusion : (sendIncludeVideo ? 'Mensagem em vídeo do seu médico — assista no documento abaixo.' : ''),
+        requestedBy: doctor?.name || '',
+        contentHtml: finalHtml,
+      })
+
+      if (sendNotifySms && patient?.phone) {
+        const what = sendIncludeLaudo && sendIncludeVideo
+          ? 'um laudo e um vídeo'
+          : sendIncludeLaudo ? 'um laudo médico' : 'uma mensagem em vídeo'
+        await communicationRepository.sendSms({
+          patientId: appointment.patientId,
+          patientName: patient?.name || appointment.patient,
+          phone: patient.phone,
+          content: `Olá! Seu médico enviou ${what} pra você. Acesse o MediConnect em Laudos para visualizar.`,
+        }).catch((smsError) => {
+          // SMS falha não impede o envio do laudo — só registra
+          console.warn('Falha no SMS de notificação:', smsError?.message)
+          setSendError(`Laudo enviado, mas o SMS de aviso falhou: ${smsError?.message || 'erro do Twilio'}`)
+        })
+      }
+
+      const successMsg = sendIncludeLaudo && sendIncludeVideo
+        ? 'Laudo e vídeo enviados ao paciente.'
+        : sendIncludeLaudo ? 'Laudo enviado ao paciente.' : 'Vídeo enviado ao paciente.'
+      setSendSuccess(successMsg)
+      window.dispatchEvent(new CustomEvent('app:show_toast', {
+        detail: { title: 'Envio concluído', description: successMsg, type: 'success' },
+      }))
+      setTimeout(() => setSendModalOpen(false), 1200)
+    } catch (sendErr) {
+      setSendError(translateErrorMessage(sendErr?.message, 'Não foi possível enviar ao paciente.'))
+    } finally {
+      setSending(false)
+    }
+  }, [appointment, patient, doctor, exam, cidCode, diagnosis, conclusion, contentHtml, videoUrl, transcript, sendIncludeLaudo, sendIncludeVideo, sendNotifySms])
 
   const handleFinish = useCallback(async () => {
     if (!appointment) return
@@ -1097,6 +1196,23 @@ export function ConsultaPage({ navigate, appointmentId }) {
               Gerar laudo
             </button>
             <button
+              className="inline-flex h-10 items-center gap-2 rounded-md border border-fuchsia-500/50 bg-fuchsia-500/10 px-4 text-sm font-bold text-fuchsia-300 transition hover:bg-fuchsia-500/20 disabled:cursor-not-allowed disabled:border-border-default-v2 disabled:bg-surface-card-hover disabled:text-text-muted-v2 disabled:opacity-60"
+              disabled={!(exam || diagnosis || conclusion || contentHtml || videoUrl)}
+              onClick={() => {
+                setSendError('')
+                setSendSuccess('')
+                setSendIncludeLaudo(Boolean(exam || diagnosis || conclusion || contentHtml))
+                setSendIncludeVideo(Boolean(videoUrl))
+                setSendModalOpen(true)
+              }}
+              type="button"
+            >
+              <svg className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
+                <path d="M12 3v12m0 0 5-5m-5 5-5-5M5 21h14" />
+              </svg>
+              Enviar ao paciente
+            </button>
+            <button
               className="inline-flex h-10 items-center gap-2 rounded-md bg-emerald-600 px-4 text-sm font-bold text-white shadow-card transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
               disabled={finishing}
               onClick={handleFinish}
@@ -1109,6 +1225,176 @@ export function ConsultaPage({ navigate, appointmentId }) {
             </button>
           </div>
         </div>
+      </div>
+
+      {sendModalOpen ? (
+        <SendToPatientModal
+          canSend={canSendToPatient}
+          error={sendError}
+          hasLaudo={Boolean(exam || diagnosis || conclusion || contentHtml)}
+          hasVideo={Boolean(videoUrl)}
+          includeLaudo={sendIncludeLaudo}
+          includeVideo={sendIncludeVideo}
+          notifySms={sendNotifySms}
+          onClose={() => setSendModalOpen(false)}
+          onConfirm={handleSendToPatient}
+          onToggleLaudo={() => setSendIncludeLaudo((value) => !value)}
+          onToggleSms={() => setSendNotifySms((value) => !value)}
+          onToggleVideo={() => setSendIncludeVideo((value) => !value)}
+          patientName={patient?.name || appointment.patient}
+          patientPhone={patient?.phone || ''}
+          sending={sending}
+          success={sendSuccess}
+        />
+      ) : null}
+    </div>
+  )
+}
+
+// Modal para enviar laudo e/ou vídeo ao paciente.
+function SendToPatientModal({ canSend, error, hasLaudo, hasVideo, includeLaudo, includeVideo, notifySms, onClose, onConfirm, onToggleLaudo, onToggleSms, onToggleVideo, patientName, patientPhone, sending, success }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="w-full max-w-md overflow-hidden rounded-2xl border border-border-default-v2 bg-surface-card shadow-elevated"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="flex items-start justify-between gap-3 border-b border-border-subtle px-5 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-lg bg-fuchsia-500/15 text-fuchsia-400">
+              <svg className="size-5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
+                <path d="M12 3v12m0 0 5-5m-5 5-5-5M5 21h14" />
+              </svg>
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-text-heading">Enviar ao paciente</h2>
+              <p className="text-xs text-text-muted-v2">Para <strong className="text-text-body">{patientName}</strong></p>
+            </div>
+          </div>
+          <button
+            aria-label="Fechar"
+            className="inline-flex size-8 items-center justify-center rounded-md text-text-muted-v2 transition hover:bg-surface-card-hover hover:text-text-body"
+            onClick={onClose}
+            type="button"
+          >
+            <svg className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </header>
+
+        <div className="grid gap-3 px-5 py-5">
+          <p className="text-xs text-text-muted-v2">O paciente verá o conteúdo na aba <strong className="text-text-body">Laudos</strong> dele.</p>
+
+          <label className={`flex cursor-pointer items-start gap-3 rounded-lg border px-4 py-3 transition has-[:checked]:border-accent-primary/60 has-[:checked]:bg-accent-primary/5 ${
+            !hasLaudo ? 'border-border-subtle bg-surface-inset/40 opacity-60 cursor-not-allowed' : 'border-border-default-v2 hover:border-border-strong'
+          }`}>
+            <input
+              checked={includeLaudo && hasLaudo}
+              className="mt-0.5 size-4 accent-accent-primary"
+              disabled={!hasLaudo}
+              onChange={onToggleLaudo}
+              type="checkbox"
+            />
+            <div className="min-w-0 flex-1">
+              <p className="flex items-center gap-2 text-sm font-semibold text-text-heading">
+                <svg className="size-4 text-accent-primary" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M8 13h8M8 17h5" />
+                </svg>
+                Laudo médico
+              </p>
+              <p className="mt-0.5 text-xs text-text-muted-v2">
+                {hasLaudo ? 'Inclui exame, CID, diagnóstico, conclusão e o corpo do relatório.' : 'Preencha algum campo do laudo primeiro para incluí-lo.'}
+              </p>
+            </div>
+          </label>
+
+          <label className={`flex cursor-pointer items-start gap-3 rounded-lg border px-4 py-3 transition has-[:checked]:border-fuchsia-500/60 has-[:checked]:bg-fuchsia-500/5 ${
+            !hasVideo ? 'border-border-subtle bg-surface-inset/40 opacity-60 cursor-not-allowed' : 'border-border-default-v2 hover:border-border-strong'
+          }`}>
+            <input
+              checked={includeVideo && hasVideo}
+              className="mt-0.5 size-4 accent-fuchsia-500"
+              disabled={!hasVideo}
+              onChange={onToggleVideo}
+              type="checkbox"
+            />
+            <div className="min-w-0 flex-1">
+              <p className="flex items-center gap-2 text-sm font-semibold text-text-heading">
+                <svg className="size-4 text-fuchsia-400" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
+                  <polygon points="6 4 20 12 6 20 6 4" />
+                </svg>
+                Mensagem em vídeo
+              </p>
+              <p className="mt-0.5 text-xs text-text-muted-v2">
+                {hasVideo ? 'O vídeo fica embedado no laudo, com player nativo para o paciente assistir.' : 'Gere a mensagem em vídeo primeiro para incluí-la.'}
+              </p>
+            </div>
+          </label>
+
+          <div className="mt-2 border-t border-border-subtle pt-3">
+            <label className={`flex cursor-pointer items-start gap-3 rounded-lg px-2 py-1 ${!patientPhone ? 'opacity-60 cursor-not-allowed' : 'hover:bg-surface-card-hover'}`}>
+              <input
+                checked={notifySms && Boolean(patientPhone)}
+                className="mt-0.5 size-4 accent-emerald-500"
+                disabled={!patientPhone}
+                onChange={onToggleSms}
+                type="checkbox"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="flex items-center gap-2 text-sm font-semibold text-text-body">
+                  <svg className="size-4 text-emerald-400" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
+                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.86 19.86 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.86 19.86 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72a2 2 0 0 1 1.72 2.01z" />
+                  </svg>
+                  Avisar por SMS
+                </p>
+                <p className="mt-0.5 text-xs text-text-muted-v2">
+                  {patientPhone ? <>Envia um SMS via Twilio para <span className="text-text-body">{patientPhone}</span>.</> : 'O paciente não tem telefone cadastrado.'}
+                </p>
+              </div>
+            </label>
+          </div>
+
+          {error ? (
+            <p className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">{error}</p>
+          ) : null}
+          {success ? (
+            <p className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">{success}</p>
+          ) : null}
+        </div>
+
+        <footer className="flex items-center justify-end gap-2 border-t border-border-subtle bg-surface-inset/40 px-5 py-4">
+          <button
+            className="inline-flex h-10 items-center rounded-md border border-border-default-v2 bg-surface-card-hover px-4 text-sm font-semibold text-text-body transition hover:bg-surface-card disabled:opacity-60"
+            disabled={sending}
+            onClick={onClose}
+            type="button"
+          >
+            Cancelar
+          </button>
+          <button
+            className="inline-flex h-10 items-center gap-2 rounded-md bg-accent-primary px-4 text-sm font-bold text-white shadow-card transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={!canSend || sending || Boolean(success)}
+            onClick={onConfirm}
+            type="button"
+          >
+            {sending ? (
+              <>
+                <svg className="size-4 animate-spin" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                </svg>
+                Enviando...
+              </>
+            ) : (
+              <>
+                <svg className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+                  <path d="M12 3v12m0 0 5-5m-5 5-5-5M5 21h14" />
+                </svg>
+                Enviar agora
+              </>
+            )}
+          </button>
+        </footer>
       </div>
     </div>
   )

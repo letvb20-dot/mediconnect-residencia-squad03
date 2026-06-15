@@ -1,50 +1,59 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
-import { aiClient } from '../../lib/ai/aiClient.js'
+import { runAssistant } from '../../lib/ai/agent/runAgent.js'
+import { agentIsLive } from '../../lib/ai/agent/providers.js'
 import { AUTH_SESSION_CHANGED_EVENT, getAuthSession } from '../../config/api.js'
-import { canAccess, normalizeRole } from '../../config/permissions.js'
-import { buildContext } from '../../utils/chatbotContext.js'
+import { canAccess } from '../../config/permissions.js'
 import { createSpeechRecognizer, isVoiceCaptureAvailable } from '../../lib/ai/speechRecognition.js'
-import { appointmentRepository } from '../../repositories/appointmentRepository.js'
+import { ConfirmationCard } from './ConfirmationCard.jsx'
 
 const SESSION_KEY_PREFIX = 'mediconnect.chatbot.history.v1'
 const ANON_SCOPE = 'anon'
 
-// Ações rápidas exibidas como chips no chat, por perfil.
-const QUICK_ACTIONS = {
-  admin: [
-    { label: 'Ver agenda', route: '/agenda' },
-    { label: 'Pacientes', route: '/pacientes' },
-    { label: 'Lista de espera', route: '/lista-espera' },
-    { label: 'Relatórios', route: '/laudos' },
-  ],
-  gestor: [
-    { label: 'Painel', route: '/inicio' },
-    { label: 'Agenda', route: '/agenda' },
-    { label: 'Analytics', route: '/relatorios' },
-    { label: 'Lista de espera', route: '/lista-espera' },
-  ],
-  medico: [
-    { label: 'Minha agenda', route: '/agenda' },
-    { label: 'Pacientes', route: '/pacientes' },
-    { label: 'Lista de espera', route: '/lista-espera' },
-    { label: 'Relatórios', route: '/laudos' },
-  ],
-  secretaria: [
-    { label: 'Cadastrar paciente', route: '/pacientes?new=1' },
-    { label: 'Agenda', route: '/agenda' },
-    { label: 'Pacientes', route: '/pacientes' },
-    { label: 'Lista de espera', route: '/lista-espera' },
-  ],
-  paciente: [
-    { label: 'Agendar consulta', route: '/agendamento' },
-    { label: 'Meus laudos', route: '/laudos' },
-    { label: 'Meu perfil', route: '/perfil' },
-  ],
+// Renderização do Markdown das respostas do agente, estilizada para caber na
+// bolha estreita do widget. Sem HTML cru (react-markdown ignora por padrão).
+// Links param a propagação para não acionar a seleção da mensagem ao clicar.
+const MD_COMPONENTS = {
+  p: ({ children }) => <p className="mb-2 whitespace-pre-wrap last:mb-0">{children}</p>,
+  ul: ({ children }) => <ul className="mb-2 list-disc space-y-0.5 pl-4">{children}</ul>,
+  ol: ({ children }) => <ol className="mb-2 list-decimal space-y-0.5 pl-4">{children}</ol>,
+  li: ({ children }) => <li className="leading-5">{children}</li>,
+  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+  em: ({ children }) => <em className="italic">{children}</em>,
+  a: ({ href, children }) => (
+    <a
+      className="text-accent-primary underline"
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      onClick={(event) => event.stopPropagation()}
+    >
+      {children}
+    </a>
+  ),
+  code: ({ children }) => (
+    <code className="rounded bg-surface-card px-1 py-0.5 text-[12px]">{children}</code>
+  ),
+  pre: ({ children }) => <pre className="mb-2 overflow-x-auto">{children}</pre>,
+  h1: ({ children }) => <h3 className="mb-1 mt-1 text-sm font-bold">{children}</h3>,
+  h2: ({ children }) => <h3 className="mb-1 mt-1 text-sm font-bold">{children}</h3>,
+  h3: ({ children }) => <h3 className="mb-1 mt-1 text-sm font-bold">{children}</h3>,
+  table: ({ children }) => (
+    <div className="mb-2 overflow-x-auto">
+      <table className="w-full border-collapse text-[12px]">{children}</table>
+    </div>
+  ),
+  th: ({ children }) => (
+    <th className="border border-border-default-v2 px-1.5 py-0.5 text-left font-semibold">{children}</th>
+  ),
+  td: ({ children }) => (
+    <td className="border border-border-default-v2 px-1.5 py-0.5 text-left">{children}</td>
+  ),
 }
 
 export function ChatbotWidget({ navigate, role }) {
-  const normalizedRole = normalizeRole(role)
   const [userScope, setUserScope] = useState(() => resolveUserScope())
   const sessionKey = useMemo(() => `${SESSION_KEY_PREFIX}.${userScope}`, [userScope])
 
@@ -52,7 +61,16 @@ export function ChatbotWidget({ navigate, role }) {
   const [messages, setMessages] = useState(() => readHistory(sessionKey))
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [agentStatus, setAgentStatus] = useState('')
+  // Confirmação de escrita fora do fluxo de mensagens: o loop do agente pausa
+  // aguardando o clique e a Promise é resolvida em resolveConfirm.
+  const [pendingConfirm, setPendingConfirm] = useState(null)
+  const confirmResolverRef = useRef(null)
   const scrollRef = useRef(null)
+  const textareaRef = useRef(null)
+  // Seleção de mensagem (mostra a barra de ações) + feedback de "Copiado!".
+  const [selectedIndex, setSelectedIndex] = useState(null)
+  const [copiedIndex, setCopiedIndex] = useState(null)
 
   // Reage a troca de usuário recarregando o histórico isolado por perfil.
   useEffect(() => {
@@ -66,6 +84,7 @@ export function ChatbotWidget({ navigate, role }) {
 
   useEffect(() => {
     setMessages(readHistory(sessionKey))
+    setSelectedIndex(null)
   }, [sessionKey])
 
   useEffect(() => {
@@ -82,29 +101,37 @@ export function ChatbotWidget({ navigate, role }) {
     }
   }, [messages, open, loading])
 
-  const quickActions = QUICK_ACTIONS[normalizedRole] || []
+  // Resolve o card de confirmação (Aceitar/Recusar) e retoma o loop do agente.
+  const resolveConfirm = useCallback((accepted) => {
+    const resolve = confirmResolverRef.current
+    confirmResolverRef.current = null
+    setPendingConfirm(null)
+    setAgentStatus('')
+    if (resolve) resolve(accepted)
+  }, [])
 
-  const send = useCallback(async (overrideText) => {
-    const trimmed = (overrideText ?? input).trim()
-    if (!trimmed || loading) return
-
-    const nextMessages = [...messages, { role: 'user', content: trimmed }]
-    setMessages(nextMessages)
-    setInput('')
+  // Núcleo que fala com o agente a partir de um histórico já montado. Reusado
+  // por send (novo turno), regenerar e editar.
+  const runTurn = useCallback(async (historyMessages) => {
     setLoading(true)
-
     try {
-      const data = await buildContext(role)
-      const reply = await aiClient.chat({ messages: nextMessages, role, data })
+      const reply = await runAssistant({
+        messages: historyMessages,
+        role,
+        onStep: (step) => {
+          if (step.kind === 'call') setAgentStatus(step.label)
+          else if (step.kind === 'retry') setAgentStatus('A IA está ocupada, tentando de novo…')
+        },
+        onConfirm: (request) =>
+          new Promise((resolve) => {
+            confirmResolverRef.current = resolve
+            setAgentStatus('Aguardando sua confirmação…')
+            setPendingConfirm(request)
+          }),
+      })
       setMessages((current) => [
         ...current,
-        {
-          role: 'assistant',
-          content: reply.text,
-          route: reply.route || '',
-          action: reply.action || null,
-          appointmentData: reply.appointmentData || null,
-        },
+        { role: 'assistant', content: reply.text, route: reply.route || '', steps: reply.steps || [] },
       ])
     } catch {
       setMessages((current) => [
@@ -113,8 +140,65 @@ export function ChatbotWidget({ navigate, role }) {
       ])
     } finally {
       setLoading(false)
+      setAgentStatus('')
+      confirmResolverRef.current = null
+      setPendingConfirm(null)
     }
-  }, [input, loading, messages, role])
+  }, [role])
+
+  const send = useCallback(async (overrideText) => {
+    const trimmed = (overrideText ?? input).trim()
+    if (!trimmed || loading) return
+
+    const nextMessages = [...messages, { role: 'user', content: trimmed }]
+    setMessages(nextMessages)
+    setInput('')
+    setSelectedIndex(null)
+
+    // Agente 100% function calling. Sem chave do provider não há fallback.
+    if (!agentIsLive()) {
+      setMessages((current) => [
+        ...current,
+        {
+          role: 'assistant',
+          content:
+            'Assistente de IA indisponível: configure a chave do provider (VITE_OPENAI_API_KEY ou VITE_GEMINI_API_KEY) no .env e reinicie o servidor.',
+        },
+      ])
+      return
+    }
+
+    await runTurn(nextMessages)
+  }, [input, loading, messages, runTurn])
+
+  // Refaz a resposta do bot a partir do último pedido do usuário.
+  const regenerar = useCallback((index) => {
+    if (loading) return
+    const base = messages.slice(0, index)
+    setMessages(base)
+    setSelectedIndex(null)
+    runTurn(base)
+  }, [loading, messages, runTurn])
+
+  // Carrega a mensagem do usuário no input para edição e remove dela em diante;
+  // ao reenviar, o turno é refeito a partir dali.
+  const editar = useCallback((index) => {
+    if (loading) return
+    setInput(messages[index]?.content || '')
+    setMessages(messages.slice(0, index))
+    setSelectedIndex(null)
+    setTimeout(() => textareaRef.current?.focus(), 0)
+  }, [loading, messages])
+
+  const copiar = useCallback(async (index) => {
+    try {
+      await navigator.clipboard.writeText(messages[index]?.content || '')
+    } catch {
+      // ignora indisponibilidade de clipboard
+    }
+    setCopiedIndex(index)
+    setTimeout(() => setCopiedIndex((current) => (current === index ? null : current)), 1500)
+  }, [messages])
 
   const voiceAvailable = useMemo(() => isVoiceCaptureAvailable(), [])
   const [recording, setRecording] = useState(false)
@@ -148,105 +232,16 @@ export function ChatbotWidget({ navigate, role }) {
     }
   }, [recording])
 
-  const handleNavigation = useCallback(async (route) => {
+  const handleNavigation = useCallback((route) => {
     const authorized = canAccess(role, route)
     if (!authorized) {
       alert('Você não tem permissão para acessar esta funcionalidade.')
       return
     }
 
-    if (String(route || '').startsWith('/prontuario/')) {
-      const patientIdFromRoute = route.split('/').pop()
-      const data = await buildContext(role)
-      const hasPatientAccess = data.patients?.some(
-        (p) => String(p.id) === String(patientIdFromRoute)
-      )
-      if (!hasPatientAccess) {
-        alert('Você não tem permissão para acessar o prontuário de pacientes que não são seus.')
-        return
-      }
-    }
-
     setOpen(false)
     navigate(route)
   }, [role, navigate])
-
-  const handleExecuteAction = useCallback(async (message) => {
-    if (!message.appointmentData) return
-    setLoading(true)
-    try {
-      const data = await buildContext(role)
-      
-      if (message.action === 'confirm_appointment') {
-        const { patientId, doctorId, scheduledAt } = message.appointmentData
-        
-        // Ownership checks
-        if (role === 'paciente' && String(patientId) !== String(data.currentPatientId)) {
-          throw new Error('Você só pode agendar consultas para si mesmo.')
-        }
-        if (role === 'medico' && String(doctorId) !== String(data.currentDoctorId)) {
-          throw new Error('Você só pode agendar consultas para si mesmo.')
-        }
-
-        const datePart = scheduledAt.split('T')[0]
-        const timePart = scheduledAt.split('T')[1]?.substring(0, 5) || '09:00'
-
-        const payload = {
-          patientId,
-          professionalId: doctorId,
-          date: datePart,
-          time: timePart,
-          status: 'Agendado',
-        }
-
-        await appointmentRepository.create(payload)
-
-        setMessages((current) =>
-          current.map((msg) =>
-            msg === message ? { ...msg, action: null, appointmentData: null } : msg
-          )
-        )
-
-        setMessages((current) => [
-          ...current,
-          { role: 'assistant', content: '✓ Consulta agendada com sucesso no MediConnect!' },
-        ])
-      } else if (message.action === 'cancel_appointment') {
-        const { id } = message.appointmentData
-        if (!id) throw new Error('ID do agendamento não informado.')
-
-        // Resolve details from activeAppointmentsList to check ownership
-        const appToCancel = data.activeAppointmentsList?.find((a) => String(a.id) === String(id))
-
-        if (role === 'paciente' && appToCancel && String(appToCancel.patientId) !== String(data.currentPatientId)) {
-          throw new Error('Você só pode cancelar suas próprias consultas.')
-        }
-        if (role === 'medico' && appToCancel && String(appToCancel.doctorId) !== String(data.currentDoctorId)) {
-          throw new Error('Você só pode cancelar consultas da sua própria agenda.')
-        }
-
-        await appointmentRepository.cancel(id, { status: 'Cancelado' })
-
-        setMessages((current) =>
-          current.map((msg) =>
-            msg === message ? { ...msg, action: null, appointmentData: null } : msg
-          )
-        )
-
-        setMessages((current) => [
-          ...current,
-          { role: 'assistant', content: '✓ Consulta cancelada com sucesso no MediConnect!' },
-        ])
-      }
-    } catch (error) {
-      setMessages((current) => [
-        ...current,
-        { role: 'assistant', content: `Falha ao realizar ação: ${error.message}` },
-      ])
-    } finally {
-      setLoading(false)
-    }
-  }, [role])
 
   function handleKeyDown(event) {
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -255,9 +250,7 @@ export function ChatbotWidget({ navigate, role }) {
     }
   }
 
-  function handleQuickAction(action) {
-    handleNavigation(action.route)
-  }
+  const live = agentIsLive()
 
   return (
     <>
@@ -266,7 +259,7 @@ export function ChatbotWidget({ navigate, role }) {
           <div className="flex items-center justify-between border-b border-border-default-v2 px-4 py-3">
             <div>
               <p className="text-sm font-bold text-text-heading">Assistente MediConnect</p>
-              <p className="text-[11px] text-text-muted-v2">{aiClient.isLive() ? 'IA conectada' : 'Modo assistente'}</p>
+              <p className="text-[11px] text-text-muted-v2">{live ? 'IA conectada' : 'Modo assistente'}</p>
             </div>
             <button
               aria-label="Fechar assistente"
@@ -278,81 +271,97 @@ export function ChatbotWidget({ navigate, role }) {
             </button>
           </div>
 
-          {quickActions.length ? (
-            <div className="border-b border-border-default-v2 px-3 py-2">
-              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-muted-v2">
-                Ações rápidas
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {quickActions.map((action) => (
-                  <button
-                    className="rounded-full border border-accent-primary/40 bg-accent-primary/10 px-2.5 py-1 text-xs font-semibold text-accent-primary transition hover:bg-accent-primary/20"
-                    key={action.route}
-                    onClick={() => handleQuickAction(action)}
-                    type="button"
-                  >
-                    {action.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
           <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3" ref={scrollRef}>
             {messages.length === 0 ? (
               <p className="text-sm leading-6 text-text-muted-v2">
-                Olá! Posso ajudar com agenda, lista de espera, relatórios e navegação. Use os atalhos acima ou escreva sua dúvida.
+                Olá! Posso ajudar com agenda, pacientes, lista de espera, relatórios e navegação. Escreva sua dúvida ou peça uma ação.
               </p>
             ) : null}
 
-            {messages.map((message, index) => (
-              <div key={index} className={message.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
-                <div
-                  className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-6 ${
-                    message.role === 'user'
-                      ? 'bg-accent-primary text-white'
-                      : 'border border-border-default-v2 bg-surface-inset text-text-body'
-                  }`}
-                >
-                  <p className="whitespace-pre-wrap">{message.content}</p>
-                  {message.route ? (
-                    <button
-                      className="mt-2 inline-flex items-center gap-1 rounded-lg bg-accent-primary/10 px-2.5 py-1 text-xs font-semibold text-accent-primary transition hover:bg-accent-primary/20"
-                      onClick={() => handleNavigation(message.route)}
-                      type="button"
-                    >
-                      Abrir →
-                    </button>
-                  ) : null}
-                  {message.action === 'confirm_appointment' && message.appointmentData ? (
-                    <button
-                      className="mt-2 flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
-                      disabled={loading}
-                      onClick={() => handleExecuteAction(message)}
-                      type="button"
-                    >
-                      ✓ Confirmar Agendamento
-                    </button>
-                  ) : null}
-                  {message.action === 'cancel_appointment' && message.appointmentData ? (
-                    <button
-                      className="mt-2 flex items-center gap-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
-                      disabled={loading}
-                      onClick={() => handleExecuteAction(message)}
-                      type="button"
-                    >
-                      ✗ Cancelar Agendamento
-                    </button>
+            {messages.map((message, index) => {
+              const isUser = message.role === 'user'
+              const selected = selectedIndex === index
+              return (
+                <div key={index} className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
+                  <div
+                    className={`max-w-[85%] cursor-pointer rounded-2xl px-3 py-2 text-sm leading-6 transition ${
+                      isUser
+                        ? 'bg-accent-primary text-white'
+                        : 'border border-border-default-v2 bg-surface-inset text-text-body'
+                    } ${selected ? 'ring-2 ring-accent-primary/60' : ''}`}
+                    onClick={() => setSelectedIndex(selected ? null : index)}
+                  >
+                    {isUser ? (
+                      <p className="whitespace-pre-wrap">{message.content}</p>
+                    ) : (
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
+                        {message.content || ''}
+                      </ReactMarkdown>
+                    )}
+                    {message.steps?.length ? (
+                      <details className="mt-1.5" onClick={(event) => event.stopPropagation()}>
+                        <summary className="cursor-pointer select-none list-none text-[10px] text-text-muted-v2 opacity-50 transition-opacity duration-150 hover:!opacity-100">
+                          Como cheguei nisso · {message.steps.length} {message.steps.length === 1 ? 'passo' : 'passos'}
+                        </summary>
+                        <ol className="mt-1 space-y-0.5 border-l border-border-default-v2 pl-2 text-[10px] text-text-muted-v2">
+                          {message.steps.map((step, stepIndex) => (
+                            <li key={stepIndex} className="leading-4">
+                              {renderStep(step)}
+                            </li>
+                          ))}
+                        </ol>
+                      </details>
+                    ) : null}
+                    {message.route ? (
+                      <button
+                        className="mt-2 inline-flex items-center gap-1 rounded-lg bg-accent-primary/10 px-2.5 py-1 text-xs font-semibold text-accent-primary transition hover:bg-accent-primary/20"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          handleNavigation(message.route)
+                        }}
+                        type="button"
+                      >
+                        Abrir →
+                      </button>
+                    ) : null}
+                  </div>
+
+                  {selected ? (
+                    <div className="mt-1 flex gap-1">
+                      <ActionButton onClick={() => copiar(index)}>
+                        <CopyIcon /> {copiedIndex === index ? 'Copiado!' : 'Copiar'}
+                      </ActionButton>
+                      {!isUser ? (
+                        <ActionButton onClick={() => regenerar(index)} disabled={loading}>
+                          <RegenerateIcon /> Gerar novamente
+                        </ActionButton>
+                      ) : null}
+                      {isUser ? (
+                        <ActionButton onClick={() => editar(index)} disabled={loading}>
+                          <EditIcon /> Editar
+                        </ActionButton>
+                      ) : null}
+                    </div>
                   ) : null}
                 </div>
-              </div>
-            ))}
+              )
+            })}
 
-            {loading ? <p className="text-xs text-text-muted-v2">Pensando...</p> : null}
+            {loading ? <p className="text-xs text-text-muted-v2">{agentStatus || 'Pensando...'}</p> : null}
           </div>
+
+          {pendingConfirm ? (
+            <ConfirmationCard
+              resumo={pendingConfirm.resumo}
+              label={pendingConfirm.label}
+              onAccept={() => resolveConfirm(true)}
+              onReject={() => resolveConfirm(false)}
+            />
+          ) : null}
 
           <div className="flex items-end gap-2 border-t border-border-default-v2 p-3">
             <textarea
+              ref={textareaRef}
               className="max-h-24 min-h-[2.5rem] flex-1 resize-none rounded-lg border border-border-default-v2 bg-surface-inset px-3 py-2 text-sm text-text-body outline-none transition placeholder:text-text-muted-v2 focus:border-accent-primary"
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={handleKeyDown}
@@ -399,6 +408,54 @@ export function ChatbotWidget({ navigate, role }) {
   )
 }
 
+// Botão compacto da barra de ações da mensagem selecionada.
+function ActionButton({ children, onClick, disabled }) {
+  return (
+    <button
+      className="inline-flex items-center gap-1 rounded-md border border-border-default-v2 bg-surface-card px-2 py-0.5 text-[11px] text-text-muted-v2 transition hover:text-text-body disabled:opacity-50"
+      disabled={disabled}
+      onClick={onClick}
+      type="button"
+    >
+      {children}
+    </button>
+  )
+}
+
+// Renderiza um passo do trace do agente (raciocínio / chamada / retry / confirmação / resultado).
+function renderStep(step) {
+  if (step.kind === 'thought') {
+    return <span className="italic">{step.text}</span>
+  }
+  if (step.kind === 'call') {
+    const argsText = formatArgs(step.args)
+    return (
+      <span>
+        <span className="text-text-body">{step.label || step.tool}</span>
+        {argsText ? <span> — {argsText}</span> : null}
+      </span>
+    )
+  }
+  if (step.kind === 'retry') {
+    return <span className="italic">a IA ficou ocupada — tentando de novo (tentativa {step.attempt})…</span>
+  }
+  if (step.kind === 'confirm') {
+    return <span>confirmação solicitada: {step.resumo}</span>
+  }
+  if (step.kind === 'result') {
+    return <span>→ {step.summary}</span>
+  }
+  return null
+}
+
+// Transforma os argumentos da ferramenta em "chave: valor" legível.
+function formatArgs(args) {
+  if (!args || typeof args !== 'object') return ''
+  const entries = Object.entries(args).filter(([, value]) => value !== undefined && value !== '')
+  if (!entries.length) return 'sem filtros'
+  return entries.map(([key, value]) => `${key}: ${value}`).join(', ')
+}
+
 function readHistory(key) {
   try {
     const stored = JSON.parse(sessionStorage.getItem(key) || '[]')
@@ -426,6 +483,34 @@ function ChatIcon() {
   return (
     <svg className="size-6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  )
+}
+
+function CopyIcon() {
+  return (
+    <svg className="size-3.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+      <rect x="9" y="9" width="13" height="13" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  )
+}
+
+function RegenerateIcon() {
+  return (
+    <svg className="size-3.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+      <polyline points="23 4 23 10 17 10" />
+      <polyline points="1 20 1 14 7 14" />
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+    </svg>
+  )
+}
+
+function EditIcon() {
+  return (
+    <svg className="size-3.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
     </svg>
   )
 }

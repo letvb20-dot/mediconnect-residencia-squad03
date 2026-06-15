@@ -1,4 +1,3 @@
-import { runChatEngine } from './chatEngine.js'
 import { buildReportDraft } from './reportGenerator.js'
 import { predictCancellations as predictLocal, rankWaitlistForSlot } from './waitlistEngine.js'
 
@@ -13,56 +12,6 @@ const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MO
 export const aiClient = {
   isLive() {
     return Boolean(API_KEY)
-  },
-
-  // Conversa do chatbot. Retorna { text, route?, action?, appointmentData? }.
-  async chat({ messages = [], role, data = {} } = {}) {
-    const local = runChatEngine({ messages, role, data, hasAi: Boolean(API_KEY) })
-
-    if (local.matched || !API_KEY) return local
-
-    try {
-      const system =
-        `Você é o assistente virtual do MediConnect, um sistema de gestão de clínica.\n` +
-        `O usuário tem o perfil "${role}". Responda em português do Brasil, de forma curta, objetiva e simpática.\n` +
-        `Use estes dados de contexto para responder: ${JSON.stringify(data).slice(0, 4000)}.\n` +
-        `Não invente IDs, nomes, datas ou horários que não estejam no contexto.\n\n` +
-        `Sua resposta deve ser obrigatoriamente um JSON válido contendo as seguintes chaves:\n` +
-        `- "text": A resposta de texto curta para o usuário.\n` +
-        `- "route": Uma rota de navegação do sistema (ex: "/agenda", "/pacientes", "/laudos", "/perfil", "/prontuario/ID_DO_PACIENTE") ou null.\n` +
-        `- "action": A ação a ser tomada ("confirm_appointment", "cancel_appointment", ou null).\n` +
-        `- "appointmentData": Um objeto com dados ou null. Se action for "confirm_appointment", deve conter: "patientId", "doctorId", "scheduledAt" (formato ISO YYYY-MM-DDTHH:mm:ss). Se action for "cancel_appointment", deve conter "id" (o ID da consulta a ser cancelada de data.activeAppointmentsList).\n\n` +
-        `Regras de Segurança e Acesso por Perfil:\n` +
-        `1. PERFIL PACIENTE:\n` +
-        `   - Só pode agendar consultas para si mesmo (patientId deve ser data.currentPatientId). Se tentar agendar para outro, recuse.\n` +
-        `   - Só pode cancelar suas próprias consultas (presentes em data.activeAppointmentsList com patientId igual a data.currentPatientId). Se tentar cancelar outra, recuse.\n` +
-        `   - Rotas permitidas: "/agendamento", "/laudos", "/perfil", "/configuracoes". Bloqueie qualquer outra rota.\n` +
-        `2. PERFIL MEDICO:\n` +
-        `   - Só pode agendar ou gerenciar consultas na sua própria agenda (doctorId deve ser data.currentDoctorId). Se tentar para outro médico, recuse.\n` +
-        `   - Só pode visualizar, buscar ou gerenciar dados de pacientes que são dele (listados em data.patients). Se o médico perguntar ou tentar abrir prontuário ("/prontuario/ID") de um paciente que não está em data.patients, recuse dizendo que não tem acesso a pacientes que não são dele.\n` +
-        `3. PERFIL SECRETARIA:\n` +
-        `   - Pode gerenciar agendas e pacientes gerais.\n` +
-        `   - NÃO tem acesso a laudos clínicos ou prontuários médicos. Se ela pedir para ver laudos ou prontuários, recuse dizendo que seu perfil não possui acesso a informações clínicas.\n\n` +
-        `Exemplo de resposta para cancelamento:\n` +
-        `{\n` +
-        `  "text": "Entendi que deseja cancelar a consulta de João Silva do dia 10 às 14:00. Posso prosseguir?",\n` +
-        `  "route": null,\n` +
-        `  "action": "cancel_appointment",\n` +
-        `  "appointmentData": {\n` +
-        `    "id": "appointment-uuid-123"\n` +
-        `  }\n` +
-        `}`
-      const text = await callGemini({ system, messages, responseMimeType: 'application/json' })
-      const parsed = safeParseJson(text) || {}
-      return {
-        text: parsed.text || text,
-        route: parsed.route || null,
-        action: parsed.action || null,
-        appointmentData: parsed.appointmentData || null,
-      }
-    } catch {
-      return local
-    }
   },
 
   // Geração de laudo. Retorna { exam, cidCode, diagnosis, conclusion, contentHtml }.
@@ -329,6 +278,47 @@ async function callGemini({ system, messages, responseMimeType }) {
   const text = Array.isArray(parts) ? parts.map((part) => part.text || '').join('').trim() : ''
   if (!text) throw new Error('A IA respondeu sem nenhum conteúdo — tente reformular a pergunta.')
   return text
+}
+
+// Geração com function calling. Diferente de callGemini (que só extrai texto),
+// expõe as functionCalls do modelo para o loop do agente. NÃO engole erro:
+// quem chama (runAgent) decide o que fazer com a falha.
+export async function geminiGenerateContent({ system, contents, tools } = {}) {
+  if (!API_KEY) throw new Error('Gemini API key ausente — agente indisponível.')
+
+  const body = {
+    contents,
+    generationConfig: { maxOutputTokens: 1024 },
+  }
+  if (system) body.system_instruction = { parts: [{ text: system }] }
+  if (Array.isArray(tools) && tools.length) {
+    body.tools = [{ function_declarations: tools }]
+    body.tool_config = { function_calling_config: { mode: 'AUTO' } }
+  }
+
+  const response = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(API_KEY)}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '')
+    throw new Error(`Falha na chamada à API do Gemini (${response.status}). ${describeGeminiError(response.status, detail)}`)
+  }
+
+  const payload = await response.json()
+  const parts = payload?.candidates?.[0]?.content?.parts || []
+  const functionCalls = parts
+    .filter((part) => part.functionCall)
+    .map((part) => ({ name: part.functionCall.name, args: part.functionCall.args || {} }))
+  const text = parts
+    .filter((part) => typeof part.text === 'string')
+    .map((part) => part.text)
+    .join('')
+    .trim()
+
+  return { text, functionCalls }
 }
 
 // Traduz códigos HTTP do Gemini em mensagens claras para o usuário final.

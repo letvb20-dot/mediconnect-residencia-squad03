@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { RecordingToolbar } from '../components/RecordingToolbar.jsx'
 import { RichTextEditor } from '../components/RichTextEditor.jsx'
+import { SignatureToggle } from '../components/SignatureToggle.jsx'
+import { useLaudoRecorder } from '../hooks/useLaudoRecorder.js'
 import { aiClient } from '../lib/ai/aiClient.js'
 import { heygenClient } from '../lib/ai/heygenClient.js'
+import { buildMediConnectLaudoHtml, buildVideoBlockHtml, formatBrDate } from '../lib/laudoTemplate.js'
 import { appointmentRepository } from '../repositories/appointmentRepository.js'
 import { communicationRepository } from '../repositories/communicationRepository.js'
 import { patientRepository } from '../repositories/patientRepository.js'
@@ -12,98 +16,8 @@ import { reportRepository } from '../repositories/reportRepository.js'
 import { translateErrorMessage } from '../repositories/repositoryUtils.js'
 import { formatLocalDateInput } from '../utils/agendaDate.js'
 
-const DRAFT_REPORT_STORAGE_KEY = 'mediconnect.atendimento.draftReport'
-
-const CLINIC_FOOTER = 'MediConnect · Centro Médico Integrado · Av. Iguaçu, 1236 — Curitiba/PR · contato@mediconnect.com.br'
-
 function todayIso() {
   return formatLocalDateInput(new Date())
-}
-
-function formatBrDate(value) {
-  if (!value) return '___/___/______'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return String(value)
-  const dd = String(date.getDate()).padStart(2, '0')
-  const mm = String(date.getMonth() + 1).padStart(2, '0')
-  const yyyy = date.getFullYear()
-  return `${dd}/${mm}/${yyyy}`
-}
-
-function escapeHtml(value) {
-  return String(value || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-}
-
-function paragraphsFromText(text) {
-  return String(text || '')
-    .split(/\n{2,}|\r\n{2,}/)
-    .map((chunk) => chunk.trim())
-    .filter(Boolean)
-    .map((chunk) => `<p style="text-align: justify">${escapeHtml(chunk).replace(/\n/g, '<br>')}</p>`)
-    .join('')
-}
-
-function buildMediConnectLaudoHtml({ patient, appointment, doctor, draft, transcript }) {
-  const patientName = (patient?.name || appointment?.patient || 'Paciente não informado').toUpperCase()
-  const patientDoc = patient?.cpf || patient?.document || 'Não informado'
-  const patientBirth = formatBrDate(patient?.birthDate || patient?.birth_date)
-  const visitDate = formatBrDate(appointment?.date || todayIso())
-  const visitTime = appointment?.time || new Date().toTimeString().slice(0, 5)
-  const exam = draft?.exam || appointment?.type || 'Consulta médica'
-  const diagnosis = draft?.diagnosis || ''
-  const conclusion = draft?.conclusion || ''
-  const cid = draft?.cidCode || ''
-  const doctorName = doctor?.name || 'Médico Responsável'
-  const doctorCrm = doctor?.crm ? `CRM ${doctor.crm}` : ''
-  const doctorSpecialty = doctor?.specialty || ''
-
-  const findingsSource = [diagnosis, conclusion, transcript].filter(Boolean).join('\n\n').trim()
-  const findingsBlock = findingsSource
-    ? paragraphsFromText(findingsSource)
-    : '<p style="text-align: justify">Paciente avaliado conforme queixa apresentada. Conduta orientada após exame clínico.</p>'
-
-  return [
-    '<h2 style="text-align: center"><strong>MEDICONNECT</strong></h2>',
-    '<p style="text-align: center"><em>Centro Médico Integrado</em></p>',
-    '<p style="text-align: center">&nbsp;</p>',
-    '<h2 style="text-align: center"><strong>LAUDO MÉDICO</strong></h2>',
-    '<p style="text-align: center">&nbsp;</p>',
-    `<p style="text-align: justify">DECLARO PARA OS DEVIDOS FINS, A PEDIDO, QUE O(A) SR.(A) <u><strong>${escapeHtml(patientName)}</strong></u></p>`,
-    `<p style="text-align: justify"><strong>DOCUMENTO:</strong> ${escapeHtml(patientDoc)} &nbsp;&nbsp; <strong>NASC:</strong> ${escapeHtml(patientBirth)}</p>`,
-    `<p style="text-align: justify"><strong>FOI ATENDIDO(A) NO DIA ${escapeHtml(visitDate)}</strong>, às <strong>${escapeHtml(visitTime)}</strong>.</p>`,
-    `<p style="text-align: justify"><strong>Motivo / Exame:</strong> ${escapeHtml(exam)}</p>`,
-    '<p>&nbsp;</p>',
-    findingsBlock,
-    cid ? `<p style="text-align: justify"><strong>CID ${escapeHtml(cid)}</strong></p>` : '',
-    '<p>&nbsp;</p>',
-    `<p style="text-align: justify"><strong>MÉDICO RESPONSÁVEL:</strong> ${escapeHtml(doctorName)}${doctorSpecialty ? ` — ${escapeHtml(doctorSpecialty)}` : ''}${doctorCrm ? ` — ${escapeHtml(doctorCrm)}` : ''}</p>`,
-    '<p>&nbsp;</p>',
-    '<p>&nbsp;</p>',
-    '<p style="text-align: center">_______________________________________</p>',
-    `<p style="text-align: center"><em>${escapeHtml(doctorName)}</em></p>`,
-    doctorCrm ? `<p style="text-align: center"><em>${escapeHtml(doctorCrm)}</em></p>` : '',
-    '<p>&nbsp;</p>',
-    '<hr>',
-    `<p style="text-align: center"><em>${escapeHtml(CLINIC_FOOTER)}</em></p>`,
-  ].filter(Boolean).join('\n')
-}
-
-function buildVideoBlockHtml(videoUrl, patientName) {
-  if (!videoUrl) return ''
-  const safeUrl = escapeHtml(videoUrl)
-  const safeName = escapeHtml(patientName || 'Paciente')
-  return [
-    '<hr>',
-    '<h3 style="text-align: center"><strong>Mensagem em vídeo</strong></h3>',
-    `<p style="text-align: center"><em>Gravado pelo médico para ${safeName}.</em></p>`,
-    `<p style="text-align: center"><video controls preload="metadata" style="max-width: 100%; border-radius: 8px" src="${safeUrl}"></video></p>`,
-    `<p style="text-align: center"><a href="${safeUrl}" target="_blank" rel="noopener noreferrer">Abrir vídeo em uma nova aba</a></p>`,
-  ].join('\n')
 }
 
 async function resolveDoctorIdForViewer() {
@@ -381,19 +295,6 @@ function calculateAge(birthDate) {
   return age >= 0 ? age : null
 }
 
-function formatElapsed(ms) {
-  if (!ms || ms < 0) return '00:00'
-  const totalSeconds = Math.floor(ms / 1000)
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
-}
-
-function pickRecorderMimeType() {
-  if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') return ''
-  const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4']
-  return candidates.find((mime) => MediaRecorder.isTypeSupported(mime)) || ''
-}
 
 export function ConsultaPage({ navigate, appointmentId }) {
   const [appointment, setAppointment] = useState(null)
@@ -402,17 +303,20 @@ export function ConsultaPage({ navigate, appointmentId }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const [recordingState, setRecordingState] = useState('idle') // idle | recording | transcribing | ready | error
-  const [recordingError, setRecordingError] = useState('')
-  const [elapsedMs, setElapsedMs] = useState(0)
-  const [transcript, setTranscript] = useState('')
-
   const [exam, setExam] = useState('')
   const [cidCode, setCidCode] = useState('')
   const [diagnosis, setDiagnosis] = useState('')
   const [conclusion, setConclusion] = useState('')
   const [contentHtml, setContentHtml] = useState('')
   const [showTranscript, setShowTranscript] = useState(false)
+  // Toggle: quando ON, o nome do médico aparece na linha de assinatura. OFF =
+  // linha em branco para assinar manualmente após imprimir.
+  const [signDigitally, setSignDigitally] = useState(true)
+  // Última versão do corpo do laudo que NÓS geramos (a partir dos campos ou da
+  // transcrição). Se o editor estiver com esse conteúdo, podemos sobrescrever ao
+  // mudar campos. Se o médico editou manualmente, o conteúdo difere e paramos
+  // de auto-gerar para não perder a edição dele.
+  const lastAutoLaudoHtmlRef = useRef('')
 
   const [videoScript, setVideoScript] = useState('')
   const [videoState, setVideoState] = useState('idle') // idle | generating | ready | error
@@ -432,11 +336,41 @@ export function ConsultaPage({ navigate, appointmentId }) {
   const [sendError, setSendError] = useState('')
   const [sendSuccess, setSendSuccess] = useState('')
 
-  const recorderRef = useRef(null)
-  const streamRef = useRef(null)
-  const chunksRef = useRef([])
-  const startedAtRef = useRef(0)
-  const tickerRef = useRef(0)
+  // Hook compartilhado de gravação por voz → transcrição → rascunho IA.
+  // Quando a IA termina, recebemos os campos e construímos o HTML aqui
+  // (para respeitar o toggle de assinatura digital).
+  const handleDraftReady = useCallback((draft) => {
+    setExam(draft.exam)
+    setCidCode(draft.cidCode)
+    setDiagnosis(draft.diagnosis)
+    setConclusion(draft.conclusion)
+    const recordedHtml = buildMediConnectLaudoHtml({
+      patient,
+      appointment,
+      doctor,
+      draft,
+      transcript: draft.transcript,
+      signDigitally,
+    })
+    lastAutoLaudoHtmlRef.current = recordedHtml
+    setContentHtml(recordedHtml)
+  }, [patient, appointment, doctor, signDigitally])
+
+  const getReportContext = useCallback(() => ({
+    patientName: patient?.name || appointment?.patient || '',
+    complaint: appointment?.notes || '',
+    exam: appointment?.type || 'Consulta',
+  }), [patient, appointment])
+
+  const {
+    recordingState,
+    recordingError,
+    elapsedMs,
+    transcript,
+    recordingSupported,
+    startRecording,
+    stopRecording,
+  } = useLaudoRecorder({ getReportContext, onDraftReady: handleDraftReady })
 
   useEffect(() => {
     let active = true
@@ -485,160 +419,6 @@ export function ConsultaPage({ navigate, appointmentId }) {
     fetchData()
     return () => { active = false }
   }, [appointmentId])
-
-  useEffect(() => {
-    return () => {
-      stopRecorderInstance(recorderRef.current, streamRef.current)
-      if (tickerRef.current) {
-        window.clearInterval(tickerRef.current)
-        tickerRef.current = 0
-      }
-    }
-  }, [])
-
-  const recordingSupported = useMemo(
-    () =>
-      typeof window !== 'undefined' &&
-      Boolean(window.MediaRecorder) &&
-      Boolean(navigator?.mediaDevices?.getUserMedia) &&
-      aiClient.isLive(),
-    [],
-  )
-
-  const startRecording = useCallback(async () => {
-    if (!recordingSupported) {
-      setRecordingError(
-        !aiClient.isLive()
-          ? 'Gravação indisponível: a chave VITE_GEMINI_API_KEY não está configurada no .env. Sem ela a IA não consegue transcrever o áudio.'
-          : 'Este navegador não suporta gravação de áudio. Tente em uma versão recente do Chrome, Edge ou Firefox.',
-      )
-      return
-    }
-    setRecordingError('')
-    let stream
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-    } catch (mediaError) {
-      let message
-      if (mediaError?.name === 'NotAllowedError') {
-        message = 'Permissão de microfone negada pelo navegador. Libere o acesso ao microfone nas configurações do site e tente de novo.'
-      } else if (mediaError?.name === 'NotFoundError') {
-        message = 'Nenhum microfone foi encontrado neste computador. Conecte um dispositivo de áudio e tente novamente.'
-      } else if (mediaError?.name === 'NotReadableError') {
-        message = 'O microfone está sendo usado por outro programa. Feche o aplicativo que está com ele aberto e tente novamente.'
-      } else {
-        message = `Não foi possível acessar o microfone: ${mediaError?.message || 'erro desconhecido do navegador'}.`
-      }
-      setRecordingError(message)
-      return
-    }
-
-    const mimeType = pickRecorderMimeType()
-    let recorder
-    try {
-      recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
-    } catch (recorderError) {
-      stream.getTracks().forEach((track) => track.stop())
-      setRecordingError(`Não foi possível iniciar o gravador de áudio do navegador: ${recorderError?.message || 'erro desconhecido'}.`)
-      return
-    }
-
-    chunksRef.current = []
-    recorder.ondataavailable = (event) => {
-      if (event.data && event.data.size > 0) chunksRef.current.push(event.data)
-    }
-    recorder.onstart = () => {
-      startedAtRef.current = Date.now()
-      setElapsedMs(0)
-      if (tickerRef.current) window.clearInterval(tickerRef.current)
-      tickerRef.current = window.setInterval(() => {
-        setElapsedMs(Date.now() - startedAtRef.current)
-      }, 500)
-      setRecordingState('recording')
-    }
-    recorder.onerror = (event) => {
-      setRecordingError(`Falha durante a gravação do áudio: ${event?.error?.message || 'erro desconhecido do gravador'}.`)
-    }
-    recorder.onstop = async () => {
-      if (tickerRef.current) {
-        window.clearInterval(tickerRef.current)
-        tickerRef.current = 0
-      }
-      stream.getTracks().forEach((track) => track.stop())
-      streamRef.current = null
-      recorderRef.current = null
-
-      const chunks = chunksRef.current
-      chunksRef.current = []
-      if (!chunks.length) {
-        setRecordingState('idle')
-        return
-      }
-
-      const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || 'audio/webm' })
-      setRecordingState('transcribing')
-
-      let text
-      try {
-        text = await aiClient.transcribeLongAudio({ blob, mimeType: blob.type })
-      } catch (transcribeError) {
-        setRecordingError(`Etapa de transcrição falhou. ${transcribeError?.message || 'A IA não conseguiu converter o áudio em texto.'}`)
-        setRecordingState('error')
-        return
-      }
-
-      setTranscript(text || '')
-
-      let draft
-      try {
-        draft = await aiClient.generateReport({
-          patientName: patient?.name || appointment?.patient || '',
-          complaint: text || appointment?.notes || '',
-          exam: appointment?.type || 'Consulta',
-        })
-      } catch (draftError) {
-        setRecordingError(`O áudio foi transcrito, mas o rascunho do laudo falhou. ${draftError?.message || 'A IA não conseguiu gerar o rascunho.'}`)
-        setRecordingState('error')
-        return
-      }
-
-      const resolvedDraft = {
-        exam: draft?.exam || appointment?.type || 'Consulta',
-        cidCode: draft?.cidCode || '',
-        diagnosis: draft?.diagnosis || '',
-        conclusion: draft?.conclusion || '',
-      }
-      setExam(resolvedDraft.exam)
-      setCidCode(resolvedDraft.cidCode)
-      setDiagnosis(resolvedDraft.diagnosis)
-      setConclusion(resolvedDraft.conclusion)
-      setContentHtml(buildMediConnectLaudoHtml({
-        patient,
-        appointment,
-        doctor,
-        draft: resolvedDraft,
-        transcript: text,
-      }))
-      setRecordingState('ready')
-    }
-
-    streamRef.current = stream
-    recorderRef.current = recorder
-    try {
-      recorder.start()
-    } catch (startError) {
-      stream.getTracks().forEach((track) => track.stop())
-      streamRef.current = null
-      recorderRef.current = null
-      setRecordingError(`Não foi possível iniciar a gravação: ${startError?.message || 'erro desconhecido do navegador'}.`)
-    }
-  }, [appointment, patient, doctor, recordingSupported])
-
-  const stopRecording = useCallback(() => {
-    if (recorderRef.current) {
-      try { recorderRef.current.stop() } catch { /* ignora */ }
-    }
-  }, [])
 
   const canSendToPatient = (sendIncludeLaudo && (exam || diagnosis || conclusion || contentHtml)) || (sendIncludeVideo && videoUrl)
 
@@ -733,30 +513,6 @@ export function ConsultaPage({ navigate, appointmentId }) {
     }
   }, [appointment, navigate])
 
-  const handleGenerateLaudo = useCallback(() => {
-    if (!appointment) return
-    const draft = {
-      patientId: appointment.patientId,
-      patientName: patient?.name || appointment.patient,
-      exam,
-      cidCode,
-      diagnosis,
-      conclusion,
-      contentHtml: contentHtml || buildMediConnectLaudoHtml({
-        patient,
-        appointment,
-        doctor,
-        draft: { exam, cidCode, diagnosis, conclusion },
-        transcript,
-      }),
-      sourceAppointmentId: appointment.id,
-    }
-    try {
-      sessionStorage.setItem(DRAFT_REPORT_STORAGE_KEY, JSON.stringify(draft))
-    } catch { /* sessionStorage indisponível */ }
-    navigate('/laudos')
-  }, [appointment, patient, doctor, exam, cidCode, diagnosis, conclusion, contentHtml, transcript, navigate])
-
   // Pré-popula o roteiro do vídeo a partir da Conclusão sempre que ela mudar,
   // exceto se o médico já editou manualmente.
   useEffect(() => {
@@ -767,6 +523,28 @@ export function ConsultaPage({ navigate, appointmentId }) {
       : ''
     setVideoScript(message)
   }, [conclusion, patient?.name, appointment?.patient])
+
+  // Auto-popula o corpo do laudo (RichTextEditor) a partir dos campos preenchidos,
+  // enquanto o médico não editou manualmente o editor. Comparar com o último HTML
+  // que geramos deixa essa "edição manual" detectável sem flag extra. Também
+  // re-renderiza quando o toggle de assinatura muda.
+  useEffect(() => {
+    if (!appointment) return
+    const editorIsPristine = contentHtml === '' || contentHtml === lastAutoLaudoHtmlRef.current
+    if (!editorIsPristine) return
+    if (!(exam || cidCode || diagnosis || conclusion)) return
+    const html = buildMediConnectLaudoHtml({
+      patient,
+      appointment,
+      doctor,
+      draft: { exam, cidCode, diagnosis, conclusion },
+      transcript,
+      signDigitally,
+    })
+    if (html === contentHtml) return
+    lastAutoLaudoHtmlRef.current = html
+    setContentHtml(html)
+  }, [exam, cidCode, diagnosis, conclusion, patient, appointment, doctor, transcript, contentHtml, signDigitally])
 
   const videoSupported = useMemo(() => heygenClient.isLive(), [])
 
@@ -868,7 +646,6 @@ export function ConsultaPage({ navigate, appointmentId }) {
   const ageLabel = age !== null ? `${age} anos` : 'Idade não informada'
   const birthDateLabel = formatBrDate(patient?.birthDate || patient?.birth_date)
   const initials = initialsOf(patient?.name || appointment.patient)
-  const canGenerateLaudo = Boolean(exam || diagnosis || conclusion || contentHtml)
 
   return (
     <div className="page-enter grid gap-5 pb-28">
@@ -967,14 +744,17 @@ export function ConsultaPage({ navigate, appointmentId }) {
                   <p className="text-xs text-text-muted-v2">Preencha manualmente ou pelo ditado de voz</p>
                 </div>
               </div>
-              <RecordingToolbar
-                aiAvailable={aiClient.isLive()}
-                elapsedMs={elapsedMs}
-                onStart={startRecording}
-                onStop={stopRecording}
-                recordingState={recordingState}
-                supported={recordingSupported}
-              />
+              <div className="flex flex-wrap items-center gap-2">
+                <SignatureToggle checked={signDigitally} onChange={setSignDigitally} />
+                <RecordingToolbar
+                  aiAvailable={aiClient.isLive()}
+                  elapsedMs={elapsedMs}
+                  onStart={startRecording}
+                  onStop={stopRecording}
+                  recordingState={recordingState}
+                  supported={recordingSupported}
+                />
+              </div>
             </header>
 
             <div className="grid gap-5 px-5 py-5 sm:px-6">
@@ -1184,18 +964,6 @@ export function ConsultaPage({ navigate, appointmentId }) {
               Cancelar
             </button>
             <button
-              className="inline-flex h-10 items-center gap-2 rounded-md border border-accent-primary bg-surface-card-hover px-4 text-sm font-semibold text-accent-primary transition hover:bg-accent-muted disabled:cursor-not-allowed disabled:border-border-default-v2 disabled:text-text-muted-v2 disabled:opacity-60"
-              disabled={!canGenerateLaudo}
-              onClick={handleGenerateLaudo}
-              type="button"
-            >
-              <svg className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <path d="M14 2v6h6M8 13h8M8 17h5" />
-              </svg>
-              Gerar laudo
-            </button>
-            <button
               className="inline-flex h-10 items-center gap-2 rounded-md border border-fuchsia-500/50 bg-fuchsia-500/10 px-4 text-sm font-bold text-fuchsia-300 transition hover:bg-fuchsia-500/20 disabled:cursor-not-allowed disabled:border-border-default-v2 disabled:bg-surface-card-hover disabled:text-text-muted-v2 disabled:opacity-60"
               disabled={!(exam || diagnosis || conclusion || contentHtml || videoUrl)}
               onClick={() => {
@@ -1400,59 +1168,6 @@ function SendToPatientModal({ canSend, error, hasLaudo, hasVideo, includeLaudo, 
   )
 }
 
-// Botão compacto de gravação por voz exibido no cabeçalho do card de Laudo.
-function RecordingToolbar({ aiAvailable, elapsedMs, onStart, onStop, recordingState, supported }) {
-  const isRecording = recordingState === 'recording'
-  const isBusy = recordingState === 'transcribing'
-
-  if (isRecording) {
-    return (
-      <button
-        className="inline-flex h-10 items-center gap-2 rounded-md bg-red-600 px-3.5 text-xs font-bold text-white shadow-card transition hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
-        onClick={onStop}
-        type="button"
-      >
-        <span className="relative flex size-3 items-center justify-center">
-          <span className="absolute size-3 animate-ping rounded-full bg-white/40" />
-          <span className="size-2 rounded-sm bg-white" />
-        </span>
-        <span className="tabular-nums">Parar · {formatElapsed(elapsedMs)}</span>
-      </button>
-    )
-  }
-
-  if (isBusy) {
-    return (
-      <span className="inline-flex h-10 items-center gap-2 rounded-md border border-border-default-v2 bg-surface-card-hover px-3.5 text-xs font-semibold text-text-muted-v2">
-        <span className="size-2 animate-pulse rounded-full bg-accent-primary" />
-        Transcrevendo...
-      </span>
-    )
-  }
-
-  const isDone = recordingState === 'ready'
-  const isError = recordingState === 'error'
-  return (
-    <button
-      className={`inline-flex h-10 items-center gap-2 rounded-md border px-3.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/40 disabled:cursor-not-allowed disabled:border-border-subtle disabled:bg-surface-card-hover disabled:text-text-muted-v2 ${
-        isDone
-          ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/15'
-          : 'border-accent-primary/50 bg-accent-primary/10 text-accent-primary hover:bg-accent-primary/15'
-      }`}
-      disabled={!supported}
-      onClick={onStart}
-      title={!aiAvailable ? 'Configure VITE_GEMINI_API_KEY no .env para habilitar' : undefined}
-      type="button"
-    >
-      <svg className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
-        <rect height="14" rx="3" width="6" x="9" y="3" />
-        <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
-      </svg>
-      {isDone ? 'Gravar novamente' : isError ? 'Tentar de novo' : 'Preencher por voz'}
-    </button>
-  )
-}
-
 // Pílula de fato do paciente usada no hero da ConsultaPage.
 function PatientFact({ icon, label, value, mono }) {
   const icons = {
@@ -1516,14 +1231,5 @@ function InlineNotice({ tone = 'info', children }) {
       <div className="min-w-0 flex-1">{children}</div>
     </div>
   )
-}
-
-function stopRecorderInstance(recorder, stream) {
-  if (recorder) {
-    try { recorder.stop() } catch { /* ignora */ }
-  }
-  if (stream) {
-    try { stream.getTracks().forEach((track) => track.stop()) } catch { /* ignora */ }
-  }
 }
 

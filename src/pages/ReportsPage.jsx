@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 import { normalizeRole } from '../config/permissions.js'
 import { StethoscopeIcon } from '../components/Brand.jsx'
+import { RecordingToolbar } from '../components/RecordingToolbar.jsx'
 import { RichTextEditor } from '../components/RichTextEditor.jsx'
 import { DarkField, appCardClass as cardClass, appInputClass as inputClass, appLabelClass as labelClass, appTextareaClass as textareaClass } from '../components/ui.jsx'
-import { reportTemplates } from '../data/reportTemplates.js'
+import { useLaudoRecorder } from '../hooks/useLaudoRecorder.js'
 import { aiClient } from '../lib/ai/aiClient.js'
+import { buildMediConnectLaudoHtml } from '../lib/laudoTemplate.js'
 import { patientRepository } from '../repositories/patientRepository.js'
 import { notificationRepository } from '../repositories/notificationRepository.js'
 import { translateErrorMessage } from '../repositories/repositoryUtils.js'
@@ -790,11 +792,111 @@ function ReportEditorModalV3({
   const doctorRequesterName = currentProfessional?.name || viewerProfile?.name || ''
   const [patientSearch, setPatientSearch] = useState(selectedPatient?.name || '')
   const [requesterSearch, setRequesterSearch] = useState(editor.requestedBy || doctorRequesterName)
-  const [templateSearch, setTemplateSearch] = useState('')
-  const [templatesOpen, setTemplatesOpen] = useState(false)
-  const [aiComplaint, setAiComplaint] = useState('')
-  const [aiLoading, setAiLoading] = useState(false)
   const isValid = isReportEditorValid(editor)
+
+  // Estado auxiliar para o gerador automático de corpo do laudo (idêntico ao
+  // que roda na ConsultaPage do Atendimento). Guarda a última versão do
+  // contentHtml que NÓS geramos — se o editor diferir, presumimos edição
+  // manual do médico e paramos de auto-gerar.
+  const lastAutoLaudoHtmlRef = useRef('')
+
+  // Quando o médico está editando um relatório existente, o contentHtml carregado
+  // do banco também conta como "edição manual" — não queremos sobrescrever na
+  // primeira renderização. Marcamos como já-tocado para essa primeira carga.
+  useEffect(() => {
+    if (editor.id && editor.contentHtml) {
+      lastAutoLaudoHtmlRef.current = '' // diff != → effect respeita
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor.id])
+
+  // O template do laudo respeita o checkbox "Ocultar assinatura" já existente
+  // no editor (mais abaixo). signDigitally = !hideSignature.
+  const signDigitally = !editor.hideSignature
+
+  // "Appointment fake" para alimentar buildMediConnectLaudoHtml — a Page de
+  // Relatórios não tem consulta atrelada, então usamos a data de hoje.
+  const laudoAppointment = useMemo(() => ({
+    date: new Date().toISOString().slice(0, 10),
+    time: new Date().toTimeString().slice(0, 5),
+    type: editor.exam || 'Consulta médica',
+    patient: selectedPatient?.name || '',
+  }), [editor.exam, selectedPatient?.name])
+
+  const laudoPatient = useMemo(() => ({
+    name: selectedPatient?.name || '',
+    cpf: selectedPatient?.cpf || '',
+    birthDate: selectedPatient?.birthDate || selectedPatient?.birth_date || '',
+  }), [selectedPatient?.name, selectedPatient?.cpf, selectedPatient?.birthDate, selectedPatient?.birth_date])
+
+  const laudoDoctor = useMemo(() => ({
+    name: editor.requestedBy || currentProfessional?.name || viewerProfile?.name || '',
+    crm: currentProfessional?.crm || '',
+    specialty: currentProfessional?.specialty || '',
+  }), [editor.requestedBy, currentProfessional?.name, currentProfessional?.crm, currentProfessional?.specialty, viewerProfile?.name])
+
+  // Auto-popula o corpo do relatório a partir dos campos preenchidos
+  // (idem ConsultaPage). Re-renderiza ao alternar assinatura digital.
+  useEffect(() => {
+    if (!editor.patientId) return
+    const editorIsPristine = !editor.contentHtml || editor.contentHtml === lastAutoLaudoHtmlRef.current
+    if (!editorIsPristine) return
+    if (!(editor.exam || editor.cidCode || editor.diagnosis || editor.conclusion)) return
+    const html = buildMediConnectLaudoHtml({
+      patient: laudoPatient,
+      appointment: laudoAppointment,
+      doctor: laudoDoctor,
+      draft: {
+        exam: editor.exam,
+        cidCode: editor.cidCode,
+        diagnosis: editor.diagnosis,
+        conclusion: editor.conclusion,
+      },
+      signDigitally,
+    })
+    if (html === editor.contentHtml) return
+    lastAutoLaudoHtmlRef.current = html
+    onChange((current) => ({ ...current, contentHtml: html }))
+  }, [
+    editor.patientId,
+    editor.exam,
+    editor.cidCode,
+    editor.diagnosis,
+    editor.conclusion,
+    editor.contentHtml,
+    laudoPatient,
+    laudoAppointment,
+    laudoDoctor,
+    signDigitally,
+    onChange,
+  ])
+
+  // Gravação por voz com hook compartilhado
+  const handleDraftReady = useCallback((draft) => {
+    onChange((current) => ({
+      ...current,
+      exam: draft.exam || current.exam,
+      cidCode: draft.cidCode || current.cidCode,
+      diagnosis: draft.diagnosis || current.diagnosis,
+      conclusion: draft.conclusion || current.conclusion,
+    }))
+    // O corpo será auto-populado pelo effect acima quando os campos mudarem
+  }, [onChange])
+
+  const getReportContext = useCallback(() => ({
+    patientName: selectedPatient?.name || patientSearch,
+    complaint: '',
+    exam: editor.exam || 'Consulta',
+  }), [selectedPatient?.name, patientSearch, editor.exam])
+
+  const {
+    recordingState,
+    recordingError,
+    recordingSupported,
+    elapsedMs,
+    startRecording,
+    stopRecording,
+  } = useLaudoRecorder({ getReportContext, onDraftReady: handleDraftReady })
   const requesterQuery = normalizeSearch(requesterSearch)
   const selectedRequesterQuery = normalizeSearch(editor.requestedBy)
   const filteredPatients = patientOptions.filter((patient) => {
@@ -804,11 +906,6 @@ function ReportEditorModalV3({
   const filteredProfessionals = professionalOptions.filter((professional) => {
     const professionalName = normalizeSearch(professional.name)
     return requesterQuery && requesterQuery !== selectedRequesterQuery && professionalName.includes(requesterQuery)
-  })
-  const filteredTemplates = reportTemplates.filter((template) => {
-    const query = normalizeSearch(templateSearch)
-    const matchesSearch = !query || normalizeSearch([template.title, template.description, template.tags.join(' ')].join(' ')).includes(query)
-    return matchesSearch
   })
 
   function updateField(field, value) {
@@ -849,48 +946,6 @@ function ReportEditorModalV3({
     }))
   }
 
-  async function handleGenerateAI() {
-    if (aiLoading) return
-    setAiLoading(true)
-    try {
-      const draft = await aiClient.generateReport({
-        patientName: selectedPatient?.name || patientSearch,
-        exam: editor.exam,
-        complaint: aiComplaint,
-        templateTitle: editor.contentJson?.templateTitle,
-      })
-      onChange((current) => ({
-        ...current,
-        exam: draft.exam || current.exam,
-        cidCode: draft.cidCode || current.cidCode,
-        diagnosis: draft.diagnosis || current.diagnosis,
-        conclusion: draft.conclusion || current.conclusion,
-        contentHtml: current.contentHtml ? `${current.contentHtml}<hr>${draft.contentHtml}` : draft.contentHtml,
-      }))
-    } catch {
-      alert('Não foi possível gerar o rascunho com IA. Tente novamente.')
-    } finally {
-      setAiLoading(false)
-    }
-  }
-
-  function applyTemplate(template) {
-    setTemplatesOpen(false)
-    onChange((current) => ({
-      ...current,
-      exam: current.exam || template.exam,
-      cidCode: current.cidCode || template.cidCode,
-      diagnosis: current.diagnosis || template.diagnosis,
-      conclusion: current.conclusion || template.conclusion,
-      contentHtml: current.contentHtml ? `${current.contentHtml}<hr>${template.contentHtml}` : template.contentHtml,
-      contentJson: {
-        templateId: template.id,
-        templateTitle: template.title,
-        appliedAt: new Date().toISOString(),
-      },
-    }))
-  }
-
   return (
     <div className="report-editor-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3" onClick={onClose}>
       <div
@@ -922,76 +977,19 @@ function ReportEditorModalV3({
                 </select>
               </DarkField>
 
-              <div className="relative">
-                <button
-                  className="report-template-trigger inline-flex h-10 items-center gap-2 rounded-sm border border-border-default-v2 bg-surface-inset px-4 text-sm font-semibold text-text-body transition hover:bg-surface-card-hover"
-                  onClick={() => setTemplatesOpen((current) => !current)}
-                  type="button"
-                >
-                  <ReportIcon className="size-4" name="file" />
-                  Templates
-                  <ReportIcon className="size-4" name="chevron-right" />
-                </button>
-
-                {templatesOpen ? (
-                  <div className="report-template-menu absolute right-0 top-12 z-10 w-[min(28rem,calc(100vw-2rem))] rounded-md border border-border-default-v2 bg-surface-inset p-3 shadow-2xl">
-                    <div className="relative mb-3">
-                      <ReportIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-muted-v2" name="search" />
-                      <input
-                        className="h-10 w-full rounded-sm border border-border-default-v2 bg-surface-inset pl-10 pr-3 text-sm text-text-body outline-none transition placeholder:text-text-muted-v2 focus:border-accent-primary"
-                        onChange={(event) => setTemplateSearch(event.target.value)}
-                        placeholder="Buscar templates..."
-                        value={templateSearch}
-                      />
-                    </div>
-                    <div className="max-h-80 overflow-y-auto">
-                      {filteredTemplates.length ? (
-                        filteredTemplates.map((template) => (
-                          <button
-                            className="block w-full rounded-sm border border-transparent px-3 py-3 text-left transition hover:border-accent-primary/40 hover:bg-surface-card-hover"
-                            key={template.id}
-                            onClick={() => applyTemplate(template)}
-                            type="button"
-                          >
-                            <span className="flex items-center justify-between gap-3">
-                              <span className="font-semibold text-text-heading">{template.title}</span>
-                              {template.popular ? <span className="rounded bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-amber-300">Popular</span> : null}
-                            </span>
-                            <span className="mt-1 block text-xs leading-5 text-text-muted-v2">{template.description}</span>
-                          </button>
-                        ))
-                      ) : (
-                        <p className="px-3 py-4 text-sm text-text-muted-v2">Nenhum template encontrado.</p>
-                      )}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
+              <RecordingToolbar
+                aiAvailable={aiClient.isLive()}
+                elapsedMs={elapsedMs}
+                onStart={startRecording}
+                onStop={stopRecording}
+                recordingState={recordingState}
+                supported={recordingSupported}
+              />
             </div>
 
-            <div className="mb-5 rounded-xl border border-accent-primary/30 bg-accent-primary/5 p-4">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-text-heading">Assistente de IA {aiClient.isLive() ? '' : '(rascunho local)'}</p>
-              </div>
-              <p className="mb-3 text-xs text-text-muted-v2">Descreva a queixa/observação e gere um rascunho de exame, CID, diagnóstico e conclusão. Revise antes de salvar.</p>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <input
-                  className={`${inputClass} flex-1`}
-                  maxLength={255}
-                  onChange={(event) => setAiComplaint(sanitizePlainText(event.target.value))}
-                  placeholder="Ex.: febre e dor de garganta há 3 dias"
-                  value={aiComplaint}
-                />
-                <button
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-sm bg-accent-primary px-4 text-sm font-semibold text-white transition hover:bg-accent-hover disabled:opacity-50"
-                  disabled={aiLoading}
-                  onClick={handleGenerateAI}
-                  type="button"
-                >
-                  {aiLoading ? 'Gerando...' : 'Gerar com IA'}
-                </button>
-              </div>
-            </div>
+            {recordingError ? (
+              <p className="mb-5 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">{recordingError}</p>
+            ) : null}
 
             <div className="mb-5 grid gap-4 md:grid-cols-2">
               <DarkField label="Paciente *">
@@ -1124,11 +1122,6 @@ function ReportEditorModalV3({
                 value={editor.contentHtml}
               />
             </DarkField>
-
-            <div className="mt-5 rounded-xl border border-border-default-v2 bg-surface-inset p-5">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-text-muted-v2">Pré-visualização</p>
-              <div className="min-h-24 text-sm leading-6 text-text-body" dangerouslySetInnerHTML={{ __html: sanitizePreviewHtml(editor.contentHtml) || '<p>O conteúdo do relatório aparecerá aqui.</p>' }} />
-            </div>
           </main>
         </div>
 

@@ -1122,11 +1122,6 @@ function ReportEditorModalV3({
                 value={editor.contentHtml}
               />
             </DarkField>
-
-            <div className="mt-5 rounded-xl border border-border-default-v2 bg-surface-inset p-5">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-text-muted-v2">Pré-visualização</p>
-              <div className="min-h-24 text-sm leading-6 text-text-body" dangerouslySetInnerHTML={{ __html: sanitizePreviewHtml(editor.contentHtml) || '<p>O conteúdo do relatório aparecerá aqui.</p>' }} />
-            </div>
           </main>
         </div>
 

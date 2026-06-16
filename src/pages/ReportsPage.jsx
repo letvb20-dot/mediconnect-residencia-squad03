@@ -5,9 +5,7 @@ import { normalizeRole } from '../config/permissions.js'
 import { StethoscopeIcon } from '../components/Brand.jsx'
 import { RecordingToolbar } from '../components/RecordingToolbar.jsx'
 import { RichTextEditor } from '../components/RichTextEditor.jsx'
-import { SignatureToggle } from '../components/SignatureToggle.jsx'
 import { DarkField, appCardClass as cardClass, appInputClass as inputClass, appLabelClass as labelClass, appTextareaClass as textareaClass } from '../components/ui.jsx'
-import { reportTemplates } from '../data/reportTemplates.js'
 import { useLaudoRecorder } from '../hooks/useLaudoRecorder.js'
 import { aiClient } from '../lib/ai/aiClient.js'
 import { buildMediConnectLaudoHtml } from '../lib/laudoTemplate.js'
@@ -794,8 +792,6 @@ function ReportEditorModalV3({
   const doctorRequesterName = currentProfessional?.name || viewerProfile?.name || ''
   const [patientSearch, setPatientSearch] = useState(selectedPatient?.name || '')
   const [requesterSearch, setRequesterSearch] = useState(editor.requestedBy || doctorRequesterName)
-  const [templateSearch, setTemplateSearch] = useState('')
-  const [templatesOpen, setTemplatesOpen] = useState(false)
   const isValid = isReportEditorValid(editor)
 
   // Estado auxiliar para o gerador automático de corpo do laudo (idêntico ao
@@ -814,10 +810,9 @@ function ReportEditorModalV3({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor.id])
 
-  // Toggle "Assinar digitalmente" mapeado ao campo já existente `hideSignature`
-  // (inverso: assinar=true ⇔ hideSignature=false).
+  // O template do laudo respeita o checkbox "Ocultar assinatura" já existente
+  // no editor (mais abaixo). signDigitally = !hideSignature.
   const signDigitally = !editor.hideSignature
-  const setSignDigitally = (value) => updateField('hideSignature', !value)
 
   // "Appointment fake" para alimentar buildMediConnectLaudoHtml — a Page de
   // Relatórios não tem consulta atrelada, então usamos a data de hoje.
@@ -912,11 +907,6 @@ function ReportEditorModalV3({
     const professionalName = normalizeSearch(professional.name)
     return requesterQuery && requesterQuery !== selectedRequesterQuery && professionalName.includes(requesterQuery)
   })
-  const filteredTemplates = reportTemplates.filter((template) => {
-    const query = normalizeSearch(templateSearch)
-    const matchesSearch = !query || normalizeSearch([template.title, template.description, template.tags.join(' ')].join(' ')).includes(query)
-    return matchesSearch
-  })
 
   function updateField(field, value) {
     onChange((current) => ({ ...current, [field]: value }))
@@ -956,23 +946,6 @@ function ReportEditorModalV3({
     }))
   }
 
-  function applyTemplate(template) {
-    setTemplatesOpen(false)
-    onChange((current) => ({
-      ...current,
-      exam: current.exam || template.exam,
-      cidCode: current.cidCode || template.cidCode,
-      diagnosis: current.diagnosis || template.diagnosis,
-      conclusion: current.conclusion || template.conclusion,
-      contentHtml: current.contentHtml ? `${current.contentHtml}<hr>${template.contentHtml}` : template.contentHtml,
-      contentJson: {
-        templateId: template.id,
-        templateTitle: template.title,
-        appliedAt: new Date().toISOString(),
-      },
-    }))
-  }
-
   return (
     <div className="report-editor-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3" onClick={onClose}>
       <div
@@ -1004,75 +977,19 @@ function ReportEditorModalV3({
                 </select>
               </DarkField>
 
-              <div className="relative">
-                <button
-                  className="report-template-trigger inline-flex h-10 items-center gap-2 rounded-sm border border-border-default-v2 bg-surface-inset px-4 text-sm font-semibold text-text-body transition hover:bg-surface-card-hover"
-                  onClick={() => setTemplatesOpen((current) => !current)}
-                  type="button"
-                >
-                  <ReportIcon className="size-4" name="file" />
-                  Templates
-                  <ReportIcon className="size-4" name="chevron-right" />
-                </button>
-
-                {templatesOpen ? (
-                  <div className="report-template-menu absolute right-0 top-12 z-10 w-[min(28rem,calc(100vw-2rem))] rounded-md border border-border-default-v2 bg-surface-inset p-3 shadow-2xl">
-                    <div className="relative mb-3">
-                      <ReportIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-muted-v2" name="search" />
-                      <input
-                        className="h-10 w-full rounded-sm border border-border-default-v2 bg-surface-inset pl-10 pr-3 text-sm text-text-body outline-none transition placeholder:text-text-muted-v2 focus:border-accent-primary"
-                        onChange={(event) => setTemplateSearch(event.target.value)}
-                        placeholder="Buscar templates..."
-                        value={templateSearch}
-                      />
-                    </div>
-                    <div className="max-h-80 overflow-y-auto">
-                      {filteredTemplates.length ? (
-                        filteredTemplates.map((template) => (
-                          <button
-                            className="block w-full rounded-sm border border-transparent px-3 py-3 text-left transition hover:border-accent-primary/40 hover:bg-surface-card-hover"
-                            key={template.id}
-                            onClick={() => applyTemplate(template)}
-                            type="button"
-                          >
-                            <span className="flex items-center justify-between gap-3">
-                              <span className="font-semibold text-text-heading">{template.title}</span>
-                              {template.popular ? <span className="rounded bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-amber-300">Popular</span> : null}
-                            </span>
-                            <span className="mt-1 block text-xs leading-5 text-text-muted-v2">{template.description}</span>
-                          </button>
-                        ))
-                      ) : (
-                        <p className="px-3 py-4 text-sm text-text-muted-v2">Nenhum template encontrado.</p>
-                      )}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
+              <RecordingToolbar
+                aiAvailable={aiClient.isLive()}
+                elapsedMs={elapsedMs}
+                onStart={startRecording}
+                onStop={stopRecording}
+                recordingState={recordingState}
+                supported={recordingSupported}
+              />
             </div>
 
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-accent-primary/20 bg-accent-primary/5 p-4">
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-text-heading">Preenchimento por voz</p>
-                <p className="mt-0.5 text-xs text-text-muted-v2">
-                  Dite a consulta — a IA preenche Exame, CID, Diagnóstico e Conclusão automaticamente. O corpo do relatório abaixo se monta sozinho conforme você preenche.
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <SignatureToggle checked={signDigitally} onChange={setSignDigitally} />
-                <RecordingToolbar
-                  aiAvailable={aiClient.isLive()}
-                  elapsedMs={elapsedMs}
-                  onStart={startRecording}
-                  onStop={stopRecording}
-                  recordingState={recordingState}
-                  supported={recordingSupported}
-                />
-              </div>
-              {recordingError ? (
-                <p className="w-full rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">{recordingError}</p>
-              ) : null}
-            </div>
+            {recordingError ? (
+              <p className="mb-5 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">{recordingError}</p>
+            ) : null}
 
             <div className="mb-5 grid gap-4 md:grid-cols-2">
               <DarkField label="Paciente *">

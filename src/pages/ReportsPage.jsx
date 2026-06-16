@@ -1,12 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 import { normalizeRole } from '../config/permissions.js'
 import { StethoscopeIcon } from '../components/Brand.jsx'
+import { RecordingToolbar } from '../components/RecordingToolbar.jsx'
 import { RichTextEditor } from '../components/RichTextEditor.jsx'
+import { SignatureToggle } from '../components/SignatureToggle.jsx'
 import { DarkField, appCardClass as cardClass, appInputClass as inputClass, appLabelClass as labelClass, appTextareaClass as textareaClass } from '../components/ui.jsx'
 import { reportTemplates } from '../data/reportTemplates.js'
+import { useLaudoRecorder } from '../hooks/useLaudoRecorder.js'
 import { aiClient } from '../lib/ai/aiClient.js'
+import { buildMediConnectLaudoHtml } from '../lib/laudoTemplate.js'
 import { patientRepository } from '../repositories/patientRepository.js'
 import { notificationRepository } from '../repositories/notificationRepository.js'
 import { translateErrorMessage } from '../repositories/repositoryUtils.js'
@@ -792,9 +796,112 @@ function ReportEditorModalV3({
   const [requesterSearch, setRequesterSearch] = useState(editor.requestedBy || doctorRequesterName)
   const [templateSearch, setTemplateSearch] = useState('')
   const [templatesOpen, setTemplatesOpen] = useState(false)
-  const [aiComplaint, setAiComplaint] = useState('')
-  const [aiLoading, setAiLoading] = useState(false)
   const isValid = isReportEditorValid(editor)
+
+  // Estado auxiliar para o gerador automático de corpo do laudo (idêntico ao
+  // que roda na ConsultaPage do Atendimento). Guarda a última versão do
+  // contentHtml que NÓS geramos — se o editor diferir, presumimos edição
+  // manual do médico e paramos de auto-gerar.
+  const lastAutoLaudoHtmlRef = useRef('')
+
+  // Quando o médico está editando um relatório existente, o contentHtml carregado
+  // do banco também conta como "edição manual" — não queremos sobrescrever na
+  // primeira renderização. Marcamos como já-tocado para essa primeira carga.
+  useEffect(() => {
+    if (editor.id && editor.contentHtml) {
+      lastAutoLaudoHtmlRef.current = '' // diff != → effect respeita
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor.id])
+
+  // Toggle "Assinar digitalmente" mapeado ao campo já existente `hideSignature`
+  // (inverso: assinar=true ⇔ hideSignature=false).
+  const signDigitally = !editor.hideSignature
+  const setSignDigitally = (value) => updateField('hideSignature', !value)
+
+  // "Appointment fake" para alimentar buildMediConnectLaudoHtml — a Page de
+  // Relatórios não tem consulta atrelada, então usamos a data de hoje.
+  const laudoAppointment = useMemo(() => ({
+    date: new Date().toISOString().slice(0, 10),
+    time: new Date().toTimeString().slice(0, 5),
+    type: editor.exam || 'Consulta médica',
+    patient: selectedPatient?.name || '',
+  }), [editor.exam, selectedPatient?.name])
+
+  const laudoPatient = useMemo(() => ({
+    name: selectedPatient?.name || '',
+    cpf: selectedPatient?.cpf || '',
+    birthDate: selectedPatient?.birthDate || selectedPatient?.birth_date || '',
+  }), [selectedPatient?.name, selectedPatient?.cpf, selectedPatient?.birthDate, selectedPatient?.birth_date])
+
+  const laudoDoctor = useMemo(() => ({
+    name: editor.requestedBy || currentProfessional?.name || viewerProfile?.name || '',
+    crm: currentProfessional?.crm || '',
+    specialty: currentProfessional?.specialty || '',
+  }), [editor.requestedBy, currentProfessional?.name, currentProfessional?.crm, currentProfessional?.specialty, viewerProfile?.name])
+
+  // Auto-popula o corpo do relatório a partir dos campos preenchidos
+  // (idem ConsultaPage). Re-renderiza ao alternar assinatura digital.
+  useEffect(() => {
+    if (!editor.patientId) return
+    const editorIsPristine = !editor.contentHtml || editor.contentHtml === lastAutoLaudoHtmlRef.current
+    if (!editorIsPristine) return
+    if (!(editor.exam || editor.cidCode || editor.diagnosis || editor.conclusion)) return
+    const html = buildMediConnectLaudoHtml({
+      patient: laudoPatient,
+      appointment: laudoAppointment,
+      doctor: laudoDoctor,
+      draft: {
+        exam: editor.exam,
+        cidCode: editor.cidCode,
+        diagnosis: editor.diagnosis,
+        conclusion: editor.conclusion,
+      },
+      signDigitally,
+    })
+    if (html === editor.contentHtml) return
+    lastAutoLaudoHtmlRef.current = html
+    onChange((current) => ({ ...current, contentHtml: html }))
+  }, [
+    editor.patientId,
+    editor.exam,
+    editor.cidCode,
+    editor.diagnosis,
+    editor.conclusion,
+    editor.contentHtml,
+    laudoPatient,
+    laudoAppointment,
+    laudoDoctor,
+    signDigitally,
+    onChange,
+  ])
+
+  // Gravação por voz com hook compartilhado
+  const handleDraftReady = useCallback((draft) => {
+    onChange((current) => ({
+      ...current,
+      exam: draft.exam || current.exam,
+      cidCode: draft.cidCode || current.cidCode,
+      diagnosis: draft.diagnosis || current.diagnosis,
+      conclusion: draft.conclusion || current.conclusion,
+    }))
+    // O corpo será auto-populado pelo effect acima quando os campos mudarem
+  }, [onChange])
+
+  const getReportContext = useCallback(() => ({
+    patientName: selectedPatient?.name || patientSearch,
+    complaint: '',
+    exam: editor.exam || 'Consulta',
+  }), [selectedPatient?.name, patientSearch, editor.exam])
+
+  const {
+    recordingState,
+    recordingError,
+    recordingSupported,
+    elapsedMs,
+    startRecording,
+    stopRecording,
+  } = useLaudoRecorder({ getReportContext, onDraftReady: handleDraftReady })
   const requesterQuery = normalizeSearch(requesterSearch)
   const selectedRequesterQuery = normalizeSearch(editor.requestedBy)
   const filteredPatients = patientOptions.filter((patient) => {
@@ -847,31 +954,6 @@ function ReportEditorModalV3({
       ...current,
       [field]: (current[field] || []).filter((_, fileIndex) => fileIndex !== index),
     }))
-  }
-
-  async function handleGenerateAI() {
-    if (aiLoading) return
-    setAiLoading(true)
-    try {
-      const draft = await aiClient.generateReport({
-        patientName: selectedPatient?.name || patientSearch,
-        exam: editor.exam,
-        complaint: aiComplaint,
-        templateTitle: editor.contentJson?.templateTitle,
-      })
-      onChange((current) => ({
-        ...current,
-        exam: draft.exam || current.exam,
-        cidCode: draft.cidCode || current.cidCode,
-        diagnosis: draft.diagnosis || current.diagnosis,
-        conclusion: draft.conclusion || current.conclusion,
-        contentHtml: current.contentHtml ? `${current.contentHtml}<hr>${draft.contentHtml}` : draft.contentHtml,
-      }))
-    } catch {
-      alert('Não foi possível gerar o rascunho com IA. Tente novamente.')
-    } finally {
-      setAiLoading(false)
-    }
   }
 
   function applyTemplate(template) {
@@ -969,28 +1051,27 @@ function ReportEditorModalV3({
               </div>
             </div>
 
-            <div className="mb-5 rounded-xl border border-accent-primary/30 bg-accent-primary/5 p-4">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-text-heading">Assistente de IA {aiClient.isLive() ? '' : '(rascunho local)'}</p>
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-accent-primary/20 bg-accent-primary/5 p-4">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-text-heading">Preenchimento por voz</p>
+                <p className="mt-0.5 text-xs text-text-muted-v2">
+                  Dite a consulta — a IA preenche Exame, CID, Diagnóstico e Conclusão automaticamente. O corpo do relatório abaixo se monta sozinho conforme você preenche.
+                </p>
               </div>
-              <p className="mb-3 text-xs text-text-muted-v2">Descreva a queixa/observação e gere um rascunho de exame, CID, diagnóstico e conclusão. Revise antes de salvar.</p>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <input
-                  className={`${inputClass} flex-1`}
-                  maxLength={255}
-                  onChange={(event) => setAiComplaint(sanitizePlainText(event.target.value))}
-                  placeholder="Ex.: febre e dor de garganta há 3 dias"
-                  value={aiComplaint}
+              <div className="flex flex-wrap items-center gap-2">
+                <SignatureToggle checked={signDigitally} onChange={setSignDigitally} />
+                <RecordingToolbar
+                  aiAvailable={aiClient.isLive()}
+                  elapsedMs={elapsedMs}
+                  onStart={startRecording}
+                  onStop={stopRecording}
+                  recordingState={recordingState}
+                  supported={recordingSupported}
                 />
-                <button
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-sm bg-accent-primary px-4 text-sm font-semibold text-white transition hover:bg-accent-hover disabled:opacity-50"
-                  disabled={aiLoading}
-                  onClick={handleGenerateAI}
-                  type="button"
-                >
-                  {aiLoading ? 'Gerando...' : 'Gerar com IA'}
-                </button>
               </div>
+              {recordingError ? (
+                <p className="w-full rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">{recordingError}</p>
+              ) : null}
             </div>
 
             <div className="mb-5 grid gap-4 md:grid-cols-2">

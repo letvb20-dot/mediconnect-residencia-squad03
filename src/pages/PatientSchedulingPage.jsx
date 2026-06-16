@@ -581,7 +581,7 @@ export function PatientSchedulingDetailPage({ navigate, professionalId }) {
           patient={currentPatient}
         />
 
-        <div className="rounded-2xl border border-[#60a5fa]/20 bg-[#3b82f6]/5 p-3 shadow-sm shadow-[#3b82f6]/5">
+        <div className="rounded-2xl border border-[#60a5fa]/20 bg-[#3b82f6]/5 p-3 shadow-sm shadow-[#3b82f6]/5 lg:col-span-2">
           <div className="mb-2 flex items-center justify-between gap-3">
             <h2 className="text-base font-bold text-text-heading">Agenda Semanal</h2>
             {availabilityLoading ? <span className="text-xs font-semibold text-text-muted-v2">Carregando...</span> : null}

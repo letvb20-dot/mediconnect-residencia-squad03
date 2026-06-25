@@ -31,7 +31,7 @@ const ALL_NAV_ITEMS = [
     icon: 'message',
     activePaths: ['/comunicacao', '/mensagens'],
   },
-  { href: '/analytics', label: 'Analytics', icon: 'chart', activePaths: ['/analytics', '/relatorios'] },
+  { href: '/analytics', label: 'Analytics', icon: 'chart', activePaths: ['/analytics'] },
   { href: '/configuracoes', label: 'Configurações', icon: 'settings', activePaths: ['/configuracoes', '/config'] },
 ]
 
@@ -49,7 +49,6 @@ const titles = {
   '/profissionais': 'Profissionais',
   '/comunicacao': 'Comunicação',
   '/mensagens': 'Comunicação',
-  '/relatorios': 'Analytics',
   '/analytics': 'Analytics',
   '/perfil': 'Perfil',
   '/configuracoes': 'Configurações',
@@ -603,8 +602,8 @@ function getNotificationRoute(notification) {
     'medical-records': '/prontuario',
     medical_records: '/prontuario',
     prontuario: '/prontuario',
-    reports: '/relatorios',
-    relatorios: '/relatorios',
+    reports: '/analytics',
+    relatorios: '/analytics',
   }
 
   return domainRoutes[notification.domain] || ''
